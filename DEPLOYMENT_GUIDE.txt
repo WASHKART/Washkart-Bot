@@ -1,0 +1,69 @@
+WASHKART WHATSAPP BOT — DEPLOYMENT GUIDE
+==========================================
+
+STEP 1 — UPLOAD CODE TO GITHUB
+--------------------------------
+1. Go to github.com → Sign up free if you don't have account
+2. Click "New repository" → Name it "washkart-bot" → Create
+3. Click "uploading an existing file"
+4. Upload both files: index.js and package.json
+5. Click "Commit changes"
+
+
+STEP 2 — DEPLOY ON RENDER (FREE HOSTING)
+------------------------------------------
+1. Go to render.com → Sign up with your GitHub account
+2. Click "New +" → "Web Service"
+3. Connect your "washkart-bot" GitHub repo
+4. Fill in:
+   - Name: washkart-bot
+   - Runtime: Node
+   - Build Command: npm install
+   - Start Command: node index.js
+5. Click "Create Web Service"
+6. Wait 2-3 minutes — you'll get a URL like:
+   https://washkart-bot.onrender.com
+
+
+STEP 3 — SET UP WEBHOOK ON META
+---------------------------------
+1. Go back to developers.facebook.com
+2. Left sidebar → WhatsApp → Configuration
+3. Under "Webhook" click "Edit"
+4. Callback URL: https://washkart-bot.onrender.com/webhook
+5. Verify Token: washkart_verify_123
+6. Click "Verify and Save"
+7. Under "Webhook fields" → subscribe to "messages"
+
+
+STEP 4 — TEST IT!
+------------------
+Send "hi" or "pickup" to your WhatsApp test number.
+The bot should reply instantly!
+
+
+STEP 5 — ADD YOUR REAL BUSINESS NUMBER (when ready)
+-----------------------------------------------------
+1. In Meta dashboard → WhatsApp → Phone Numbers
+2. Click "Add phone number"
+3. Enter your real business WhatsApp number
+4. Verify via OTP
+Note: Your number will be removed from personal WhatsApp.
+Use a separate SIM for the business bot.
+
+
+IMPORTANT NOTES
+----------------
+- Access Token expires in 24hrs during testing.
+  Get a permanent token from: Meta dashboard → 
+  WhatsApp → Configuration → Generate permanent token
+- Current bot stores customers in memory (resets on restart).
+  For permanent storage, upgrade to Firebase (still free).
+- Meta gives 1000 free conversations/month on test number.
+
+
+YOUR CREDENTIALS (keep safe!)
+------------------------------
+Phone Number ID: 111939166779272
+Verify Token: washkart_verify_123
+App ID: 1288548412618173
