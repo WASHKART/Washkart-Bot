@@ -3,7 +3,7 @@ const axios = require("axios");
 const app = express();
 app.use(express.json());
 
-const TOKEN = "EAAST7Y5o9b0BRXJUG9smn9mZAWDFaxYPSvLSfesduUyiE0ugnsDn9AzfPYhjimmJCTQkrZBaM4xsLwCt4ev1Vac5CjZB6ZAfl5HG6GvhIu13YrUDXKhffPWAyru2Um2QnvV5LRTLuAy2vJFwUNaWcuPsFKaQtm2XJfvvmsbE1VN98mDrxzMHbDTG107kec6vmXPgVOTv0b0DuhQ824oTrcZCTxtTt9kdLFKKYCuQF3fcgPHsr3lTjGLMlwUuJwpV80FMSz7omh6LpwPyfyRPrqRJB";
+const TOKEN = "EAAST7Y5o9b0BRcZAK3PthGE5ly9uL3VhGo2dQzSSW3gAzNZC41BeDmrfPqPJePlZAp6mlifrs3rZCg193u3d88DWzsSSo0JUvU5bdxvWZBygBfWalBZA9QKV57AmNkGdJbGCOj7ZA6yicAavQGxrDXvfNMnxa3ZA6woccfZCdGw13f2wVtkmpwgMqqUaXjnpJ23tuzwZDZD";
 const PHONE_NUMBER_ID = "111939166779272";
 const VERIFY_TOKEN = "washkart_verify_123";
 
