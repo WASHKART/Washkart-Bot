@@ -4,7 +4,7 @@ const app = express();
 app.use(express.json());
 
 const TOKEN = "EAAST7Y5o9b0BRW88SOTRQqT2hJy62MgMRoTt0509KkEiRT8O74pSoOP8bmZBKTbfGEW8PhjIej3EP7JVZB1LKyM1ZCUGOwUeYck6HJbmDYviMWCKMPLLpA776ooDpTDWqMB5H2mnGhz635T7c31OxKGb7uQ4ZCZCrirw9ROQ2LIKRvq6GMGcAQqa1tQQxfsq2IwZDZD";
-const PHONE_NUMBER_ID = "111939166779272";
+const PHONE_NUMBER_ID = "1119391667920272";
 const VERIFY_TOKEN = "washkart_verify_123";
 
 // In-memory store (replace with Firebase for production)
