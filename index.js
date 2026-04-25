@@ -20,6 +20,7 @@ async function dbUpdate(t, f, d) { return (await axios.patch(`${DB}/${t}?${f}`, 
 
 // ── SESSIONS ─────────────────────────────────────────────────────
 const sessions = {};
+const processedMessages = new Set(); // Deduplication
 function getSession(p) {
   if (!sessions[p]) sessions[p] = { step: "idle", booking: {} };
   return sessions[p];
@@ -263,9 +264,9 @@ async function confirmBooking(phone, booking) {
     `📍 ${booking.address}\n` +
     `📅 ${booking.date}\n` +
     `🕐 ${booking.slot}\n\n` +
-    `Our team will reach you before pickup. 💚\n` +
-    `💰 Payment via UPI/Cash at pickup.\n\n` +
-    `Type *cancel ${orderId}* to cancel anytime.`
+    `Our team will arrive within your selected slot. 💚\n` +
+    `💰 Payment via UPI/Cash at delivery.\n\n` +
+    `To cancel: type *cancel ${orderId}*`
   );
   await notifyAdmin(booking);
 }
@@ -332,7 +333,7 @@ async function handleMessage(phone, rawText) {
       try {
         const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
         if (rows.length > 0) {
-          const statusMap = { pending: "⏳ Pending pickup", picked: "🚗 Picked up — being washed", washing: "🫧 Washing in progress", delivered: "✅ Delivered!", cancelled: "❌ Cancelled" };
+          const statusMap = { pending: "⏳ Pending pickup", picked: "🚗 Picked up", inprogress: "🫧 In Progress", outfordelivery: "🚚 Out for Delivery", delivered: "✅ Delivered!", cancelled: "❌ Cancelled" };
           await sendMessage(phone, `*${orderId}* — ${statusMap[rows[0].status] || rows[0].status}\n📅 ${rows[0].date} | 🕐 ${rows[0].slot}`);
         } else {
           await sendMessage(phone, "❌ Order not found. Please check the Order ID.");
@@ -350,7 +351,7 @@ async function handleMessage(phone, rawText) {
       try {
         const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
         if (rows.length > 0) {
-          const statusMap = { pending: "⏳ Pending pickup", picked: "🚗 Picked up — being washed", washing: "🫧 Washing in progress", delivered: "✅ Delivered!", cancelled: "❌ Cancelled" };
+          const statusMap = { pending: "⏳ Pending pickup", picked: "🚗 Picked up", inprogress: "🫧 In Progress", outfordelivery: "🚚 Out for Delivery", delivered: "✅ Delivered!", cancelled: "❌ Cancelled" };
           await sendMessage(phone, `*${orderId}* — ${statusMap[rows[0].status] || rows[0].status}\n📅 ${rows[0].date} | 🕐 ${rows[0].slot}`);
         } else {
           await sendMessage(phone, "❌ Order not found. Please check the Order ID.");
@@ -523,6 +524,10 @@ app.post("/webhook", async (req, res) => {
     const messages = req.body.entry?.[0]?.changes?.[0]?.value?.messages;
     if (!messages?.length) return res.sendStatus(200);
     const msg = messages[0];
+    // Deduplicate — ignore if already processed
+    if (processedMessages.has(msg.id)) return res.sendStatus(200);
+    processedMessages.add(msg.id);
+    setTimeout(() => processedMessages.delete(msg.id), 60000); // cleanup after 1 min
     const phone = msg.from;
     // Ignore voice notes gracefully
     if (msg.type === "audio") {
