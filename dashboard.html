@@ -166,7 +166,8 @@
         <div class="tab active" onclick="filterTab('all', this)">All</div>
         <div class="tab" onclick="filterTab('pending', this)">Pending</div>
         <div class="tab" onclick="filterTab('picked', this)">Picked Up</div>
-        <div class="tab" onclick="filterTab('washing', this)">Washing</div>
+        <div class="tab" onclick="filterTab('inprogress', this)">In Progress</div>
+        <div class="tab" onclick="filterTab('outfordelivery', this)">Out for Delivery</div>
         <div class="tab" onclick="filterTab('delivered', this)">Delivered</div>
       </div>
       <div class="table-wrap">
@@ -273,7 +274,8 @@ function renderBookings() {
         <select class="status-select" onchange="updateStatus('${b.id}', this.value)">
           <option value="pending" ${b.status==='pending'?'selected':''}>⏳ Pending</option>
           <option value="picked" ${b.status==='picked'?'selected':''}>🚗 Picked Up</option>
-          <option value="washing" ${b.status==='washing'?'selected':''}>🫧 Washing</option>
+          <option value="inprogress" ${b.status==='inprogress'?'selected':''}>🫧 In Progress</option>
+          <option value="outfordelivery" ${b.status==='outfordelivery'?'selected':''}>🚚 Out for Delivery</option>
           <option value="delivered" ${b.status==='delivered'?'selected':''}>✅ Delivered</option>
         </select>
       </td>
