@@ -554,6 +554,12 @@ app.get("/customers", async (req, res) => {
   try { res.json(await dbSelect("customers", "order=created_at.desc")); }
   catch(e) { res.status(500).json({ error: e.message }); }
 });
+const path = require("path");
+
+app.get("/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "dashboard.html"));
+});
+
 app.get("/", (req, res) => res.send("Washkart Bot is running! 🧺"));
 
 const PORT = process.env.PORT || 3000;
