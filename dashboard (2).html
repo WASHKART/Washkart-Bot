@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Washkart Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #1a7c4a;
+    --green-light: #e8f5ef;
+    --green-mid: #a8d5bc;
+    --dark: #0f1f17;
+    --text: #1a2e24;
+    --muted: #6b8f7a;
+    --bg: #f5f9f7;
+    --white: #ffffff;
+    --border: #d4e8dc;
+    --orange: #e07b39;
+    --blue: #2563eb;
+    --red: #dc2626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* HEADER */
+  .header { background: var(--dark); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { font-family: 'DM Mono', monospace; color: #fff; font-size: 15px; letter-spacing: 0.05em; }
+  .logo span { color: #4ade80; }
+  .live-badge { background: #4ade80; color: var(--dark); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; font-family: 'DM Mono', monospace; }
+  .header-right { font-family: 'DM Mono', monospace; color: var(--muted); font-size: 12px; }
+
+  /* LAYOUT */
+  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+
+  /* STATS ROW */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem 1.5rem; position: relative; overflow: hidden; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--green); }
+  .stat-card.orange::before { background: var(--orange); }
+  .stat-card.blue::before { background: var(--blue); }
+  .stat-card.red::before { background: var(--red); }
+  .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--text); }
+  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  /* MAIN GRID */
+  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; }
+
+  /* PANELS */
+  .panel { background: var(--white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .panel-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .panel-title { font-size: 14px; font-weight: 600; color: var(--text); }
+  .panel-body { padding: 0; }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 1.5rem; }
+  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+  .tab.active { color: var(--green); border-bottom-color: var(--green); }
+
+  /* BOOKINGS TABLE */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--bg); }
+  td { padding: 12px 16px; border-bottom: 1px solid #f0f7f3; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--green-light); }
+
+  /* STATUS BADGES */
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.pending { background: #fef3c7; color: #92400e; }
+  .badge.picked { background: #dbeafe; color: #1e40af; }
+  .badge.washing { background: #ede9fe; color: #5b21b6; }
+  .badge.delivered { background: #dcfce7; color: #166534; }
+
+  /* STATUS SELECT */
+  .status-select { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--white); color: var(--text); cursor: pointer; font-family: 'DM Sans', sans-serif; }
+
+  /* SLOT BADGE */
+  .slot-badge { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+  /* ORDER ID */
+  .order-id { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--green); font-weight: 500; }
+
+  /* TODAY PANEL */
+  .today-list { padding: 0; }
+  .today-item { padding: 12px 1.5rem; border-bottom: 1px solid #f0f7f3; display: flex; flex-direction: column; gap: 4px; }
+  .today-item:last-child { border-bottom: none; }
+  .today-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .today-address { font-size: 12px; color: var(--muted); }
+  .today-slot { font-size: 11px; font-family: 'DM Mono', monospace; }
+  .today-slot.morning { color: #d97706; }
+  .today-slot.evening { color: #2563eb; }
+  .today-phone { font-size: 12px; color: var(--green); font-family: 'DM Mono', monospace; }
+
+  /* CUSTOMER LIST */
+  .cust-item { padding: 12px 1.5rem; border-bottom: 1px solid #f0f7f3; display: flex; align-items: center; gap: 10px; }
+  .cust-item:last-child { border-bottom: none; }
+  .cust-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--green); flex-shrink: 0; }
+  .cust-info { flex: 1; min-width: 0; }
+  .cust-name { font-size: 13px; font-weight: 500; }
+  .cust-phone { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+  .cust-count { font-size: 11px; color: var(--muted); text-align: right; }
+
+  /* EMPTY STATE */
+  .empty { padding: 3rem; text-align: center; color: var(--muted); font-size: 13px; }
+  .empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+  /* REFRESH BTN */
+  .refresh-btn { background: var(--green-light); border: 1px solid var(--green-mid); color: var(--green); padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .refresh-btn:hover { background: var(--green-mid); }
+
+  @media (max-width: 900px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .main-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">WASH<span>KART</span> admin</div>
+    <div class="live-badge">LIVE</div>
+  </div>
+  <div class="header-right" id="clock"></div>
+</div>
+
+<div class="container">
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">Total Bookings</div>
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-sub">All time</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">Today's Pickups</div>
+      <div class="stat-value" id="stat-today">0</div>
+      <div class="stat-sub">Scheduled today</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Pending</div>
+      <div class="stat-value" id="stat-pending">0</div>
+      <div class="stat-sub">Awaiting pickup</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Customers</div>
+      <div class="stat-value" id="stat-customers">0</div>
+      <div class="stat-sub">Unique customers</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+
+    <!-- LEFT: BOOKINGS -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">All Bookings</div>
+        <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+      </div>
+      <div class="tabs">
+        <div class="tab active" onclick="filterTab('all', this)">All</div>
+        <div class="tab" onclick="filterTab('pending', this)">Pending</div>
+        <div class="tab" onclick="filterTab('picked', this)">Picked Up</div>
+        <div class="tab" onclick="filterTab('washing', this)">Washing</div>
+        <div class="tab" onclick="filterTab('delivered', this)">Delivered</div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Customer</th>
+              <th>Address</th>
+              <th>Date & Slot</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="bookings-table">
+            <tr><td colspan="5" class="empty"><div class="empty-icon">📋</div>No bookings yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RIGHT: TODAY + CUSTOMERS -->
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+
+      <!-- TODAY'S PICKUPS -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">📦 Today's Pickups</div>
+        </div>
+        <div class="today-list" id="today-list">
+          <div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>
+        </div>
+      </div>
+
+      <!-- CUSTOMERS -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">👥 Customers</div>
+        </div>
+        <div id="customers-list">
+          <div class="empty"><div class="empty-icon">👤</div>No customers yet</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────
+// Replace this with your actual Render bot URL
+const BOT_URL = 'https://washkart-bot.onrender.com';
+
+// ─── CLOCK ────────────────────────────────────────────
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+  });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ─── DEMO DATA (replace with real API call when backend ready) ─
+let allBookings = [];
+
+let currentFilter = 'all';
+
+function filterTab(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderBookings();
+}
+
+function statusBadge(status) {
+  const map = {
+    pending: '<span class="badge pending">⏳ Pending</span>',
+    picked: '<span class="badge picked">🚗 Picked Up</span>',
+    washing: '<span class="badge washing">🫧 Washing</span>',
+    delivered: '<span class="badge delivered">✅ Delivered</span>'
+  };
+  return map[status] || status;
+}
+
+function renderBookings() {
+  const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
+  const tbody = document.getElementById('bookings-table');
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty"><div class="empty-icon">📋</div>No bookings</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map(b => `
+    <tr>
+      <td><span class="order-id">${b.id}</span></td>
+      <td>
+        <div style="font-weight:500;font-size:13px">${b.name}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${b.phone}</div>
+      </td>
+      <td style="font-size:12px;color:var(--muted);max-width:160px">${b.address}</td>
+      <td>
+        <div style="font-size:12px;font-weight:500">${b.date}</div>
+        <div class="slot-badge">${b.slot.includes('Morning') ? '🌅' : '🌆'} ${b.slot}</div>
+      </td>
+      <td>
+        <select class="status-select" onchange="updateStatus('${b.id}', this.value)">
+          <option value="pending" ${b.status==='pending'?'selected':''}>⏳ Pending</option>
+          <option value="picked" ${b.status==='picked'?'selected':''}>🚗 Picked Up</option>
+          <option value="washing" ${b.status==='washing'?'selected':''}>🫧 Washing</option>
+          <option value="delivered" ${b.status==='delivered'?'selected':''}>✅ Delivered</option>
+        </select>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateStatus(id, newStatus) {
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: newStatus })
+  }).then(() => {
+    const booking = allBookings.find(b => b.id === id);
+    if (booking) { booking.status = newStatus; updateStats(); }
+  }).catch(() => alert('Failed to update status. Try again.'));
+}
+
+function renderToday() {
+  const today = allBookings.filter(b => b.date === 'Today');
+  const el = document.getElementById('today-list');
+  if (today.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; return; }
+  const morning = today.filter(b => b.slot.includes('Morning'));
+  const evening = today.filter(b => b.slot.includes('Evening'));
+  let html = '';
+  if (morning.length) {
+    html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning Slot</div>`;
+    morning.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+  }
+  if (evening.length) {
+    html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening Slot</div>`;
+    evening.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+  }
+  el.innerHTML = html;
+}
+
+function renderCustomers() {
+  const seen = {};
+  allBookings.forEach(b => {
+    if (!seen[b.phone]) seen[b.phone] = { name: b.name, phone: b.phone, count: 0 };
+    seen[b.phone].count++;
+  });
+  const customers = Object.values(seen);
+  const el = document.getElementById('customers-list');
+  if (!customers.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div>No customers yet</div>'; return; }
+  el.innerHTML = customers.map(c => `
+    <div class="cust-item">
+      <div class="cust-avatar">${c.name[0]}</div>
+      <div class="cust-info">
+        <div class="cust-name">${c.name}</div>
+        <div class="cust-phone">${c.phone}</div>
+      </div>
+      <div class="cust-count">${c.count} order${c.count>1?'s':''}</div>
+    </div>
+  `).join('');
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = allBookings.length;
+  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === 'Today').length;
+  document.getElementById('stat-pending').textContent = allBookings.filter(b => b.status === 'pending').length;
+  const phones = new Set(allBookings.map(b => b.phone));
+  document.getElementById('stat-customers').textContent = phones.size;
+  renderBookings();
+  renderToday();
+  renderCustomers();
+}
+
+function loadData() {
+  fetch(`${BOT_URL}/bookings`)
+    .then(r => r.json())
+    .then(data => {
+      allBookings = data.map(b => ({
+        id: b.order_id,
+        name: b.name || '',
+        phone: b.phone || '',
+        address: b.address || '',
+        date: b.date || '',
+        slot: b.slot || '',
+        status: b.status || 'pending'
+      }));
+      updateStats();
+    })
+    .catch(() => updateStats());
+}
+
+loadData();
+setInterval(loadData, 30000); // Auto refresh every 30 seconds
+</script>
+</body>
+</html>
