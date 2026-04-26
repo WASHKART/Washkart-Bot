@@ -277,7 +277,23 @@ function renderBookings() {
           <option value="inprogress" ${b.status==='inprogress'?'selected':''}>🫧 In Progress</option>
           <option value="outfordelivery" ${b.status==='outfordelivery'?'selected':''}>🚚 Out for Delivery</option>
           <option value="delivered" ${b.status==='delivered'?'selected':''}>✅ Delivered</option>
+          <option value="cancelled" ${b.status==='cancelled'?'selected':''}>❌ Cancelled</option>
         </select>
+        ${b.status === 'picked' ? `
+        <div style="margin-top:6px">
+          <select class="status-select" onchange="updateService('${b.id}', this.value)" style="margin-bottom:4px;width:100%">
+            <option value="">🧺 Select service...</option>
+            <option value="iron" ${b.service_type==='iron'?'selected':''}>🔥 Iron</option>
+            <option value="dryclean" ${b.service_type==='dryclean'?'selected':''}>🧥 Dry Clean</option>
+            <option value="laundry" ${b.service_type==='laundry'?'selected':''}>🫧 Laundry</option>
+            <option value="shoes" ${b.service_type==='shoes'?'selected':''}>👟 Shoes</option>
+            <option value="mixed" ${b.service_type==='mixed'?'selected':''}>📦 Mixed</option>
+          </select>
+          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+            <input type="checkbox" ${b.express?'checked':''} onchange="toggleExpress('${b.id}', this.checked)"> ⚡ Express
+          </label>
+          ${b.delivery_date ? `<div style="font-size:11px;color:var(--green);margin-top:2px">📦 ${b.delivery_date}</div>` : ''}
+        </div>` : b.delivery_date ? `<div style="font-size:11px;color:var(--green);margin-top:4px">📦 ${b.delivery_date}</div>` : ''}
       </td>
     </tr>
   `).join('');
@@ -288,10 +304,45 @@ function updateStatus(id, newStatus) {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: newStatus })
-  }).then(() => {
+  }).then(r => r.json()).then(data => {
     const booking = allBookings.find(b => b.id === id);
-    if (booking) { booking.status = newStatus; updateStats(); }
+    if (booking) {
+      booking.status = newStatus;
+      if (data.delivery_date) booking.delivery_date = data.delivery_date;
+      updateStats();
+    }
   }).catch(() => alert('Failed to update status. Try again.'));
+}
+
+function updateService(id, serviceType) {
+  if (!serviceType) return;
+  const booking = allBookings.find(b => b.id === id);
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: booking?.status || 'picked', service_type: serviceType, express: booking?.express || false })
+  }).then(r => r.json()).then(data => {
+    if (booking) {
+      booking.service_type = serviceType;
+      if (data.delivery_date) booking.delivery_date = data.delivery_date;
+      updateStats();
+    }
+  });
+}
+
+function toggleExpress(id, isExpress) {
+  const booking = allBookings.find(b => b.id === id);
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: booking?.status || 'picked', service_type: booking?.service_type || 'mixed', express: isExpress })
+  }).then(r => r.json()).then(data => {
+    if (booking) {
+      booking.express = isExpress;
+      if (data.delivery_date) booking.delivery_date = data.delivery_date;
+      updateStats();
+    }
+  });
 }
 
 function renderToday() {
@@ -355,7 +406,10 @@ function loadData() {
         address: b.address || '',
         date: b.date || '',
         slot: b.slot || '',
-        status: b.status || 'pending'
+        status: b.status || 'pending',
+        service_type: b.service_type || '',
+        express: b.express || false,
+        delivery_date: b.delivery_date || ''
       }));
       updateStats();
     })
