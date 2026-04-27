@@ -264,39 +264,139 @@ async function sendButtons(to, body, buttons) {
 }
 
 // ── GEMINI AI ─────────────────────────────────────────────────────
-async function askGemini(userMessage, customerName, hasActiveOrder) {
-  const systemPrompt = `You are a friendly WhatsApp assistant for Washkart Laundry, a laundry pickup and delivery service in Pimpri, Maharashtra, India.
 
-Your job is to understand what the customer wants and reply helpfully in the same language they use (Hindi, Marathi, Hinglish, or English). Keep replies SHORT — max 3-4 lines. WhatsApp style, friendly, use emojis occasionally.
+// 1. INTENT DETECTOR — understands natural language booking requests
+async function detectIntent(userMessage, customerName, lastOrder) {
+  const prompt = `You are an AI for Washkart Laundry WhatsApp bot. Analyze the customer message and return ONLY a JSON object.
 
-Customer name: ${customerName || "Customer"}
-Has active order: ${hasActiveOrder ? "Yes" : "No"}
+Customer: ${customerName || "Customer"}
+Last order: ${lastOrder ? `Date: ${lastOrder.date}, Slot: ${lastOrder.slot}` : "None"}
+Today: ${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
+Tomorrow: ${(() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }); })()}
 
-Services offered:
-- Ironing (from ₹10/pc)
-- Dry Cleaning (from ₹70)
-- Laundry/Washing (₹59/kg wash & fold, ₹79/kg wash & iron)
-- Shoe Cleaning (from ₹200/pair)
-- Express service: 4 hours delivery at 1.5x price (not on Thursdays)
-- Free pickup & delivery above ₹300
-- Closed on Thursdays
-- Payment: UPI or Cash at delivery
+Message: "${userMessage}"
 
-If the customer wants to:
-- BOOK a pickup → reply telling them to type "Pickup"
-- CHECK RATES → reply telling them to type "rates" or the specific service like "iron rates"
-- TRACK order → reply telling them to type "track"
-- CANCEL → reply telling them to type "cancel"
-- EXPRESS → reply telling them to type "express" after clothes are picked up
+Return JSON with these fields:
+{
+  "intent": "booking" | "estimate" | "tracking" | "pricing" | "cancel" | "complaint" | "general" | "same_as_last",
+  "date": "today" | "tomorrow" | "EXACT DATE STRING" | null,
+  "slot": "morning" | "evening" | null,
+  "items": [{"name": "item name", "qty": number, "service": "iron|dryclean|laundry|shoes"}] | null,
+  "language": "hindi" | "english" | "marathi" | "hinglish"
+}
 
-For complaints, special requests, or general questions — answer helpfully and empathetically.
-Never make up prices — refer them to type the service name for exact rates.
-Never promise specific delivery times beyond what's stated.`;
+Examples:
+- "Kal 6 baje pickup" → intent:booking, date:tomorrow, slot:evening
+- "Aaj subah pickup chahiye" → intent:booking, date:today, slot:morning  
+- "3 shirts 2 jeans dry clean kitna" → intent:estimate, items:[{name:shirt,qty:3,service:dryclean},{name:jeans,qty:2,service:dryclean}]
+- "Same as last time" → intent:same_as_last
+- "Mera order kahan hai" → intent:tracking
+- "Last time kurta kharab hua tha" → intent:complaint
+- "Saree dry clean kitna" → intent:pricing
+
+Return ONLY the JSON, no explanation.`;
 
   try {
     const res = await axios.post(GEMINI_URL, {
-      contents: [{ parts: [{ text: `${systemPrompt}\n\nCustomer message: "${userMessage}"` }] }],
-      generationConfig: { maxOutputTokens: 200, temperature: 0.7 }
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 300, temperature: 0.1 }
+    });
+    const text = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    const clean = text.replace(/```json|```/g, "").trim();
+    return JSON.parse(clean);
+  } catch(e) {
+    console.error("Intent detection error:", e?.response?.data || e.message);
+    return { intent: "general", language: "hinglish" };
+  }
+}
+
+// 2. ESTIMATE CALCULATOR
+function calculateEstimate(items) {
+  const prices = {
+    // Iron per piece
+    shirt_iron: 20, pant_iron: 20, kurta_iron: 20, saree_iron: 60,
+    lehenga_iron: 100, blazer_iron: 100, normal_iron: 10,
+    // Dry clean per piece
+    shirt_dryclean: 70, pant_dryclean: 70, jeans_dryclean: 70,
+    tshirt_dryclean: 70, kurta_dryclean: 150, suit_dryclean: 250,
+    saree_dryclean: 300, lehenga_dryclean: 350, blazer_dryclean: 275,
+    jacket_dryclean: 200, sweater_dryclean: 200, dress_dryclean: 175,
+    kurti_dryclean: 90, dupatta_dryclean: 150,
+    // Laundry per kg
+    shirt_laundry: 79, pant_laundry: 79, jeans_laundry: 79,
+    // Shoes per pair
+    sneakers_shoes: 300, leather_shoes: 400, sports_shoes: 250, slides_shoes: 200,
+  };
+
+  // Item name normalizer
+  const normalize = (name) => {
+    name = name.toLowerCase().trim();
+    if (name.includes("shirt")) return "shirt";
+    if (name.includes("pant") || name.includes("trouser")) return "pant";
+    if (name.includes("jeans")) return "jeans";
+    if (name.includes("kurta")) return "kurta";
+    if (name.includes("kurti")) return "kurti";
+    if (name.includes("saree") || name.includes("sari")) return "saree";
+    if (name.includes("lehenga") || name.includes("lehnga")) return "lehenga";
+    if (name.includes("blazer") || name.includes("coat")) return "blazer";
+    if (name.includes("jacket")) return "jacket";
+    if (name.includes("suit")) return "suit";
+    if (name.includes("sweater") || name.includes("woolen")) return "sweater";
+    if (name.includes("dress") || name.includes("frock")) return "dress";
+    if (name.includes("dupatta") || name.includes("chunni")) return "dupatta";
+    if (name.includes("tshirt") || name.includes("t-shirt") || name.includes("t shirt")) return "tshirt";
+    if (name.includes("sneaker") || name.includes("canvas")) return "sneakers";
+    if (name.includes("leather shoe") || name.includes("formal shoe")) return "leather";
+    if (name.includes("sports shoe") || name.includes("running")) return "sports";
+    return name;
+  };
+
+  let total = 0;
+  let breakdown = [];
+  let unknown = [];
+
+  for (const item of items) {
+    const itemName = normalize(item.name);
+    const service = item.service || "dryclean";
+    const qty = item.qty || 1;
+    const key = `${itemName}_${service}`;
+    const price = prices[key];
+    if (price) {
+      const subtotal = price * qty;
+      total += subtotal;
+      breakdown.push(`${qty}x ${item.name} (${service}) — ₹${subtotal}`);
+    } else {
+      unknown.push(item.name);
+    }
+  }
+
+  return { total, breakdown, unknown };
+}
+
+// 3. GENERAL AI REPLY
+async function askGemini(userMessage, customerName, hasActiveOrder) {
+  const systemPrompt = `You are a friendly WhatsApp assistant for Washkart Laundry, a laundry pickup and delivery service in Pimpri, Maharashtra, India.
+
+Reply in the SAME language the customer uses (Hindi/Marathi/Hinglish/English). Keep it SHORT — max 3 lines. Friendly, helpful, use emojis occasionally.
+
+Customer: ${customerName || "Customer"}
+Has active order: ${hasActiveOrder ? "Yes" : "No"}
+
+Services: Ironing (₹10+/pc), Dry Clean (₹70+), Laundry (₹59/kg+), Shoe Cleaning (₹200+/pair)
+Express: 4hr delivery at 1.5x price (not Thursdays)
+Payment: UPI/Cash at delivery. Closed Thursdays.
+
+Guide them:
+- Booking → type "Pickup"  
+- Rates → type "rates" or service name
+- Track → type "track"
+- Cancel → type "cancel"
+- Complaint → empathize and assure quality`;
+
+  try {
+    const res = await axios.post(GEMINI_URL, {
+      contents: [{ parts: [{ text: `${systemPrompt}\n\nCustomer: "${userMessage}"` }] }],
+      generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
     });
     return res.data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch(e) {
@@ -578,16 +678,49 @@ async function handleMessage(phone, rawText) {
   if (has(t, ...GREET_KW) && session.step === "idle") {
     const saved = await getCustomer(phone);
     session.step = "menu";
-    await sendButtons(phone,
-      `Hey ${saved ? saved.name : "there"}! 👋 Welcome to *Washkart Laundry*! 🧺\n\nHow can I help you?`,
-      [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
-    );
+    if (saved) {
+      // Returning customer — offer same as last order
+      const lastOrders = await dbSelect("bookings", `phone=eq.${phone}&order=created_at.desc&limit=1`).catch(() => []);
+      const lastOrder = lastOrders[0];
+      if (lastOrder) {
+        await sendButtons(phone,
+          `Hey ${saved.name}! 👋 Welcome back to *Washkart Laundry*! 🧺\n\nLast order: ${lastOrder.date} | ${lastOrder.slot}\n\nWhat would you like?`,
+          [{ id: "same_as_last_btn", title: "🔄 Same as last time" }, { id: "btn_book", title: "📦 New Booking" }, { id: "btn_track", title: "🔍 Track Order" }]
+        );
+      } else {
+        await sendButtons(phone,
+          `Hey ${saved.name}! 👋 Welcome back to *Washkart Laundry*! 🧺\n\nHow can I help you?`,
+          [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+        );
+      }
+    } else {
+      await sendButtons(phone,
+        `Hey there! 👋 Welcome to *Washkart Laundry*! 🧺\n\nHow can I help you?`,
+        [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+      );
+    }
     return;
   }
 
   // ── Menu buttons ──
   if (text === "btn_book")  { session.step = "idle"; await handleMessage(phone, "pickup"); return; }
   if (text === "btn_price") { await askPriceCategory(phone); return; }
+  if (text === "same_as_last_btn") {
+    const customer = await getCustomer(phone);
+    const lastOrders = await dbSelect("bookings", `phone=eq.${phone}&order=created_at.desc&limit=1`).catch(() => []);
+    const lastOrder = lastOrders[0];
+    if (lastOrder && customer) {
+      session.booking = { name: customer.name, address: customer.address };
+      await sendButtons(phone,
+        `🔄 Booking same address as last time:\n📍 ${customer.address}\n\nWhich day?`,
+        [{ id: "date_today", title: "Today" }, { id: "date_tomorrow", title: "Tomorrow" }, { id: "date_custom", title: "📆 Choose date" }]
+      );
+      session.step = "select_date";
+    } else {
+      await handleMessage(phone, "pickup");
+    }
+    return;
+  }
   if (text === "btn_track") {
     const active = await getActiveOrder(phone);
     if (active) {
@@ -597,6 +730,18 @@ async function handleMessage(phone, rawText) {
     } else {
       session.step = "tracking";
       await sendMessage(phone, "🔍 Please share your *Order ID* (e.g. FW-1234):");
+    }
+    return;
+  }
+
+  // ── Smart booking confirmation ──
+  if (session.step === "smart_confirm") {
+    if (text === "confirm_smart_booking") {
+      session.step = "idle";
+      await confirmBooking(phone, session.booking);
+    } else {
+      session.step = "idle";
+      await handleMessage(phone, "pickup");
     }
     return;
   }
@@ -662,15 +807,108 @@ async function handleMessage(phone, rawText) {
     return;
   }
 
-  // ── AI Fallback — Gemini understands anything ──
+  // ── AI Fallback — Smart intent detection ──
   const customer = await getCustomer(phone);
   const active = await getActiveOrder(phone);
+
+  // Get last order for "same as last" feature
+  let lastOrder = null;
+  try {
+    const allOrders = await dbSelect("bookings", `phone=eq.${phone}&order=created_at.desc&limit=2`);
+    lastOrder = allOrders.find(o => o.status !== "cancelled") || null;
+  } catch {}
+
+  const intent = await detectIntent(rawText, customer?.name, lastOrder);
+  console.log("Intent detected:", JSON.stringify(intent));
+
+  // ── Smart booking from natural language ──
+  if (intent.intent === "booking") {
+    if (intent.date || intent.slot) {
+      session.booking = {};
+      // Pre-fill from intent
+      if (customer) {
+        session.booking.name = customer.name;
+        session.booking.address = customer.address;
+      }
+      if (intent.date === "today") session.booking.date = getToday();
+      else if (intent.date === "tomorrow") session.booking.date = getTomorrow();
+      else if (intent.date) session.booking.date = intent.date;
+
+      if (intent.slot === "morning") session.booking.slot = "Morning (10 AM – 1 PM)";
+      else if (intent.slot === "evening") session.booking.slot = "Evening (5 PM – 8 PM)";
+
+      // Check Thursday
+      if (session.booking.date && isThursday(session.booking.date)) {
+        await sendMessage(phone, "Sorry, we're closed on Thursdays 🙏\n\nPlease choose another day — type *pickup* to book!");
+        return;
+      }
+
+      // If we have everything for returning customer → confirm directly
+      if (session.booking.name && session.booking.address && session.booking.date && session.booking.slot) {
+        await sendButtons(phone,
+          `Got it! 👍 Booking pickup for *${session.booking.date}* — *${session.booking.slot}*\n\nUsing your saved address:\n📍 ${session.booking.address}`,
+          [{ id: "confirm_smart_booking", title: "✅ Yes, Confirm" }, { id: "btn_book", title: "✏️ Change details" }]
+        );
+        session.step = "smart_confirm";
+        return;
+      }
+
+      // Partial info — fill what we have and continue flow
+      if (!session.booking.name) {
+        session.step = "get_address";
+        await sendMessage(phone, "👋 Welcome to *Washkart Laundry*! 🧺\n\nPlease send me your *pickup address*:");
+      } else if (!session.booking.date) {
+        session.step = "select_date";
+        await askDate(phone);
+      } else if (!session.booking.slot) {
+        session.step = "select_slot";
+        await askSlot(phone);
+      }
+      return;
+    }
+    // Has booking intent but no date/slot info
+    await handleMessage(phone, "pickup");
+    return;
+  }
+
+  // ── Same as last order ──
+  if (intent.intent === "same_as_last" && lastOrder) {
+    session.booking = {
+      name: customer?.name || lastOrder.name,
+      address: customer?.address || lastOrder.address,
+      date: null, slot: null
+    };
+    await sendButtons(phone,
+      `Book same as last time? 🔄\n\n👤 ${session.booking.name}\n📍 ${session.booking.address}\n\nJust pick a date:`,
+      [{ id: "date_today", title: "Today" }, { id: "date_tomorrow", title: "Tomorrow" }, { id: "date_custom", title: "📆 Choose date" }]
+    );
+    session.step = "select_date";
+    return;
+  }
+
+  // ── Estimate calculator ──
+  if (intent.intent === "estimate" && intent.items && intent.items.length > 0) {
+    const { total, breakdown, unknown } = calculateEstimate(intent.items);
+    if (total > 0) {
+      let msg = `💰 *Estimated Bill*\n━━━━━━━━━━━━━━━\n`;
+      breakdown.forEach(line => msg += `${line}\n`);
+      msg += `━━━━━━━━━━━━━━━\n*Total: ₹${total}*`;
+      if (unknown.length > 0) msg += `\n\n⚠️ Couldn't estimate: ${unknown.join(", ")} — rates may vary`;
+      msg += `\n\n⚡ Express (4hr): ₹${Math.ceil(total * 1.5)}\n\n_Final bill may vary by cloth quality_\n\nType *pickup* to book! 🧺`;
+      await sendMessage(phone, msg);
+    } else {
+      await sendMessage(phone, "I couldn't calculate that estimate. Please type the service name for rates (e.g. *dry clean rates*) 😊");
+    }
+    return;
+  }
+
+  // ── General AI reply ──
   const aiReply = await askGemini(rawText, customer?.name, !!active);
   if (aiReply) {
     await sendMessage(phone, aiReply);
   } else {
     await sendButtons(phone,
-      "Hi! 👋 How can I help you?\n\nType *pickup* to book, *rates* for pricing, or *track* to check your order.",
+      "Hi! 👋 How can I help?\n\nType *pickup* to book, *rates* for pricing, or *track* for order status.",
       [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
     );
   }
