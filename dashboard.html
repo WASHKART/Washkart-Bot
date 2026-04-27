@@ -142,9 +142,9 @@
       <div class="stat-sub">Scheduled today</div>
     </div>
     <div class="stat-card blue">
-      <div class="stat-label">Pending</div>
-      <div class="stat-value" id="stat-pending">0</div>
-      <div class="stat-sub">Awaiting pickup</div>
+      <div class="stat-label">Today's Deliveries</div>
+      <div class="stat-value" id="stat-deliveries">0</div>
+      <div class="stat-sub">Due today</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Customers</div>
@@ -198,6 +198,16 @@
         </div>
         <div class="today-list" id="today-list">
           <div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>
+        </div>
+      </div>
+
+      <!-- TODAY'S DELIVERIES -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">🚚 Today's Deliveries</div>
+        </div>
+        <div class="today-list" id="delivery-list">
+          <div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>
         </div>
       </div>
 
@@ -346,21 +356,43 @@ function toggleExpress(id, isExpress) {
 }
 
 function renderToday() {
-  const today = allBookings.filter(b => b.date === 'Today');
+  const today = getToday();
+  const todayBookings = allBookings.filter(b => b.date === today);
   const el = document.getElementById('today-list');
-  if (today.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; return; }
-  const morning = today.filter(b => b.slot.includes('Morning'));
-  const evening = today.filter(b => b.slot.includes('Evening'));
-  let html = '';
-  if (morning.length) {
-    html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning Slot</div>`;
-    morning.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+  if (todayBookings.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; }
+  else {
+    const morning = todayBookings.filter(b => b.slot && b.slot.includes('Morning'));
+    const evening = todayBookings.filter(b => b.slot && b.slot.includes('Evening'));
+    let html = '';
+    if (morning.length) {
+      html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning Slot</div>`;
+      morning.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+    }
+    if (evening.length) {
+      html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening Slot</div>`;
+      evening.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+    }
+    el.innerHTML = html;
   }
-  if (evening.length) {
-    html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening Slot</div>`;
-    evening.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
-  }
-  el.innerHTML = html;
+}
+
+function getToday() {
+  return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function renderDeliveries() {
+  const today = getToday();
+  const deliveries = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status));
+  const el = document.getElementById('delivery-list');
+  if (!deliveries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>'; return; }
+  el.innerHTML = deliveries.map(b => `
+    <div class="today-item">
+      <div class="today-name">${b.name} <span style="font-size:11px;color:var(--muted)">${b.id}</span></div>
+      <div class="today-address">${b.address}</div>
+      <div class="today-phone">${b.phone}</div>
+      ${b.service_type ? `<div style="font-size:11px;color:var(--green);margin-top:2px">${b.express ? '⚡ Express — ' : ''}${b.service_type}</div>` : ''}
+    </div>
+  `).join('');
 }
 
 function renderCustomers() {
@@ -386,12 +418,16 @@ function renderCustomers() {
 
 function updateStats() {
   document.getElementById('stat-total').textContent = allBookings.length;
-  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === 'Today').length;
-  document.getElementById('stat-pending').textContent = allBookings.filter(b => b.status === 'pending').length;
+  const today = getToday();
+  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === today).length;
+  document.getElementById('stat-deliveries').textContent = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status)).length;
+  const phones = new Set(allBookings.map(b => b.phone));
+  document.getElementById('stat-customers').textContent = phones.size;
   const phones = new Set(allBookings.map(b => b.phone));
   document.getElementById('stat-customers').textContent = phones.size;
   renderBookings();
   renderToday();
+  renderDeliveries();
   renderCustomers();
 }
 
