@@ -5,10 +5,12 @@ const app = express();
 app.use(express.json());
 
 // ── CONFIG ───────────────────────────────────────────────────────
-const TOKEN = "EAAST7Y5o9b0BRQmXq21AepqpGRuAfr4iPWQZB1TZC3an1X88vTye9aS2pKkm2pAN6b0wRsxfHbVTrFZBcbDMH0aZAPXivhtBXc5OwmgmAUSipjwBuZABLEyuHFZARZAWuC3iVL2kocytNvZCUZC85z9LXUAwK3E608ZCuOmNUv7E1GND7k1KsG49Ujwzw3T7QrlkgVWgZDZD";
+const TOKEN = "EAAST7Y5o9b0BRW88SOTRQqT2hJy62MgMRoTt0509KkEiRT8O74pSoOP8bmZBKTbfGEW8PhjIej3EP7JVZB1LKyM1ZCUGOwUeYck6HJbmDYviMWCKMPLLpA776ooDpTDWqMB5H2mnGhz635T7c31OxKGb7uQ4ZCZCrirw9ROQ2LIKRvq6GMGcAQqa1tQQxfsq2IwZDZD";
 const PHONE_NUMBER_ID = "1119391667920272";
 const VERIFY_TOKEN = "washkart_verify_123";
 const ADMIN_NUMBER = "917775066002";
+const GEMINI_KEY = "AIzaSyA0IB4vHNBnqbUTH5CUgsxmc7OL3CM_AH4";
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`;
 const SUPABASE_URL = "https://uausvybpqawxlayyqxlf.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhdXN2eWJwcWF3eGxheXlxeGxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMjE3NzYsImV4cCI6MjA5MjU5Nzc3Nn0.GWqlExeEX1VHAPFQ_YBJrFsOSFb5RS_ZZdxkDTMjjCM";
 const DB = `${SUPABASE_URL}/rest/v1`;
@@ -259,6 +261,48 @@ async function sendButtons(to, body, buttons) {
       { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
   } catch(e) { console.error("sendButtons error:", e?.response?.data || e.message); }
+}
+
+// ── GEMINI AI ─────────────────────────────────────────────────────
+async function askGemini(userMessage, customerName, hasActiveOrder) {
+  const systemPrompt = `You are a friendly WhatsApp assistant for Washkart Laundry, a laundry pickup and delivery service in Pimpri, Maharashtra, India.
+
+Your job is to understand what the customer wants and reply helpfully in the same language they use (Hindi, Marathi, Hinglish, or English). Keep replies SHORT — max 3-4 lines. WhatsApp style, friendly, use emojis occasionally.
+
+Customer name: ${customerName || "Customer"}
+Has active order: ${hasActiveOrder ? "Yes" : "No"}
+
+Services offered:
+- Ironing (from ₹10/pc)
+- Dry Cleaning (from ₹70)
+- Laundry/Washing (₹59/kg wash & fold, ₹79/kg wash & iron)
+- Shoe Cleaning (from ₹200/pair)
+- Express service: 4 hours delivery at 1.5x price (not on Thursdays)
+- Free pickup & delivery above ₹300
+- Closed on Thursdays
+- Payment: UPI or Cash at delivery
+
+If the customer wants to:
+- BOOK a pickup → reply telling them to type "Pickup"
+- CHECK RATES → reply telling them to type "rates" or the specific service like "iron rates"
+- TRACK order → reply telling them to type "track"
+- CANCEL → reply telling them to type "cancel"
+- EXPRESS → reply telling them to type "express" after clothes are picked up
+
+For complaints, special requests, or general questions — answer helpfully and empathetically.
+Never make up prices — refer them to type the service name for exact rates.
+Never promise specific delivery times beyond what's stated.`;
+
+  try {
+    const res = await axios.post(GEMINI_URL, {
+      contents: [{ parts: [{ text: `${systemPrompt}\n\nCustomer message: "${userMessage}"` }] }],
+      generationConfig: { maxOutputTokens: 200, temperature: 0.7 }
+    });
+    return res.data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch(e) {
+    console.error("Gemini error:", e?.response?.data || e.message);
+    return null;
+  }
 }
 
 // ── DB HELPERS ───────────────────────────────────────────────────
@@ -618,11 +662,18 @@ async function handleMessage(phone, rawText) {
     return;
   }
 
-  // ── Fallback ──
-  await sendButtons(phone,
-    "Hi! 👋 How can I help you?\n\nType *pickup* to book, *rates* for pricing, or *track* to check your order.",
-    [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
-  );
+  // ── AI Fallback — Gemini understands anything ──
+  const customer = await getCustomer(phone);
+  const active = await getActiveOrder(phone);
+  const aiReply = await askGemini(rawText, customer?.name, !!active);
+  if (aiReply) {
+    await sendMessage(phone, aiReply);
+  } else {
+    await sendButtons(phone,
+      "Hi! 👋 How can I help you?\n\nType *pickup* to book, *rates* for pricing, or *track* to check your order.",
+      [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+    );
+  }
   session.step = "menu";
 }
 
