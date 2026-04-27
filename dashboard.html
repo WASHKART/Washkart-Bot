@@ -423,8 +423,6 @@ function updateStats() {
   document.getElementById('stat-deliveries').textContent = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status)).length;
   const phones = new Set(allBookings.map(b => b.phone));
   document.getElementById('stat-customers').textContent = phones.size;
-  const phones = new Set(allBookings.map(b => b.phone));
-  document.getElementById('stat-customers').textContent = phones.size;
   renderBookings();
   renderToday();
   renderDeliveries();
