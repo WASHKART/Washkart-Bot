@@ -516,8 +516,13 @@ BOOKING LOGIC — BE AGGRESSIVE AT DETECTING INTENT:
 COMPLAINT DETECTION:
 - If customer complains about quality, damage, stain, wrong item, late delivery → action: "complaint"
 
-ESTIMATE:
-- If customer lists items and asks for price → action: "estimate"
+ESTIMATE — BE SMART ABOUT IT:
+- If customer asks price for specific items WITH quantities → action: "estimate", extract items array
+- Examples of estimate intent: "3 shirts aur 2 saree dry clean kitna?", "estimate karo", "2 kurta iron ka kitna lagega", "total kitna hoga", "4 jeans ka kya rate hai"
+- If they just ask about a general service (no specific items/quantities) → show_iron / show_dryclean / show_laundry / show_shoes
+- NEVER use show_price_category for a specific item estimate — use "estimate" action instead
+- items array format: [{"name":"shirt","qty":3,"service":"dryclean"}, {"name":"saree","qty":2,"service":"dryclean"}]
+- service values: "dryclean" / "iron" / "laundry" / "shoes"
 
 CONVERSATION HISTORY:
 ${history.map(h => `${h.role}: ${h.text}`).join("\n")}
@@ -527,14 +532,23 @@ Return ONLY the JSON, no markdown, no explanation.`;
   try {
     const res = await axios.post(GEMINI_URL, {
       contents: [{ parts: [{ text: `${systemPrompt}\n\nCustomer message: "${userMessage}"` }] }],
-      generationConfig: { maxOutputTokens: 500, temperature: 0.3 }
+      generationConfig: { maxOutputTokens: 600, temperature: 0.3 }
     });
     const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    const clean = raw.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    // Aggressively strip markdown and extract JSON
+    let clean = raw.replace(/```json[\s\S]*?```/g, m => m.replace(/```json|```/g, ""))
+                   .replace(/```/g, "").trim();
+    // If Gemini wrapped in text, extract JSON object
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (jsonMatch) clean = jsonMatch[0];
+    const parsed = JSON.parse(clean);
+    // Ensure extracted is always an object
+    if (!parsed.extracted) parsed.extracted = {};
+    return parsed;
   } catch(e) {
     console.error("Gemini error:", e?.response?.data || e.message);
-    return { reply: null, action: "none", extracted: {} };
+    // Return a soft fallback — never null reply so we don't show buttons
+    return { reply: "Ek second! 😊 Kya main aapki help kar sakta hoon? Pickup book karein, rates dekhein, ya order track karein.", action: "none", extracted: {} };
   }
 }
 
@@ -549,6 +563,29 @@ async function handleMessage(phone, rawText) {
   if (!session.history) session.history = [];
   session.history.push({ role: "customer", text: rawText });
   if (session.history.length > 10) session.history = session.history.slice(-10);
+
+  // ── Greeting — handle directly, never fall to buttons ──
+  if (has(t, ...GREET_KW) && session.step === "idle" && t.length < 30) {
+    const customer = await getCustomer(phone);
+    const active = await getActiveOrder(phone);
+    if (customer) {
+      if (active) {
+        const s = STATUS_MAP[active.status] || { label: active.status, eta: "" };
+        await sendMessage(phone,
+          `Hey ${customer.name}! 👋 Welcome back!\n\nYour order *${active.order_id}* is: ${s.label}\n\nKuch aur chahiye? Pickup book karein ya rates dekhein 😊`
+        );
+      } else {
+        await sendMessage(phone,
+          `Hey ${customer.name}! 👋 Washkart mein aaiye!\n\nPickup book karni hai? Bas bolo — *kal subah* ya *aaj evening* 😊\nOr *rates* type karein prices dekhne ke liye.`
+        );
+      }
+    } else {
+      await sendMessage(phone,
+        `Hi! 👋 Welcome to *Washkart Laundry*! 🧺\n\nHum laundry, dry cleaning, ironing aur shoe cleaning karte hain.\n\nPickup book karne ke liye bas bolo — *kal subah pickup* ya *aaj evening*! 😊`
+      );
+    }
+    return;
+  }
 
   // ── Price category buttons ──
   if (text === "price_iron")  { await sendMessage(phone, RATES.iron); return; }
@@ -690,7 +727,20 @@ async function handleMessage(phone, rawText) {
     return;
   }
 
-  // ── Date/slot button handlers (still support buttons as backup) ──
+  if (text === "confirm_direct" || (session.step === "direct_confirm" && has(t, ...YES_KW))) {
+    session.step = "idle";
+    await confirmBooking(phone, session.booking);
+    session.booking = {};
+    return;
+  }
+  if (session.step === "direct_confirm" && has(t, ...NO_KW)) {
+    session.step = "idle";
+    session.booking = {};
+    await sendMessage(phone, "No problem! Type *pickup* whenever you're ready 😊");
+    return;
+  }
+
+  // ── Date/slot button handlers ──
   if (text === "date_today") {
     if (isTodayThursday()) { await sendMessage(phone, "We're closed today (Thursday) 🙏 Please choose another day!"); await askDate(phone); return; }
     session.booking.date = getToday(); session.step = "select_slot"; await askSlot(phone); return;
@@ -733,6 +783,120 @@ async function handleMessage(phone, rawText) {
     if (!session.booking) session.booking = {};
     if (customer && !session.booking.name) session.booking.name = customer.name;
     if (customer && !session.booking.address) session.booking.address = customer.address;
+  }
+
+  // ── PRE-GEMINI: Smart multi-item estimate (cross-category) ──
+  // Detect estimate intent: has number + item OR keywords like "estimate","kitna lagega","calculate"
+  const ESTIMATE_TRIGGER_KW = ["estimate","kitna lagega","kitna hoga","calculate","total","bill","cost","kitne ka","kitne mein","how much for","price for","charge for","bata","lagega kitna","total kitna"];
+  const hasEstimateIntent = ESTIMATE_TRIGGER_KW.some(k => t.includes(k));
+  const hasNumberItem = /\d+\s*(saree|shirt|pant|trouser|jeans|kurta|kurti|suit|dress|jacket|sweater|lehenga|blazer|dupatta|bedsheet|blanket|sneaker|shoes|joote|kapde|kapda|piece|pc|pair)/i.test(rawText);
+
+  if (hasNumberItem || hasEstimateIntent) {
+    // Multi-item extraction: find all "N item [service]" patterns
+    const patterns = [
+      /(\d+)\s*(saree|shirt|pant|trouser|jeans|kurta|kurti|suit|dress|jacket|sweater|lehenga|blazer|dupatta|bedsheet|blanket|sneakers?|shoes?|slides?)/gi,
+    ];
+    const extractedItems = [];
+    let matchFound;
+    const itemRegex = /(\d+)\s*(saree|shirt|pant|trouser|jeans|kurta|kurti|suit|dress|jacket|sweater|lehenga|blazer|dupatta|bedsheet|blanket|sneakers?|shoes?|slides?)/gi;
+    while ((matchFound = itemRegex.exec(rawText)) !== null) {
+      const qty = parseInt(matchFound[1]);
+      const itemRaw = matchFound[2].toLowerCase().replace(/s$/, ""); // singularize
+      // Detect service from surrounding text (check whole message)
+      let service = "dryclean"; // default
+      if (has(t, "press","iron","istri","ironing")) service = "iron";
+      else if (has(t, "wash","laundry","dhona","dhulai","fold")) service = "laundry";
+      else if (has(t, "shoe","sneaker","joote","footwear","chappal")) service = "shoes";
+      else if (has(t, "dry","clean","dryclean","dc")) service = "dryclean";
+      extractedItems.push({ name: itemRaw, qty, service });
+    }
+
+    if (extractedItems.length > 0) {
+      const { total, breakdown, unknown } = calcEstimate(extractedItems);
+      if (total > 0) {
+        let msg = `💰 *Estimate*\n━━━━━━━━━━━━━━━\n`;
+        breakdown.forEach(l => msg += `${l}\n`);
+        if (unknown.length) msg += `\n⚠️ Couldn't estimate: ${unknown.join(", ")}\n`;
+        msg += `━━━━━━━━━━━━━━━\n*Total: ₹${total}*\n⚡ Express (4–8hr): ₹${Math.ceil(total * 1.5)}\n\n_Final bill may vary by cloth quality_\n\nType *pickup* to book! 🧺`;
+        await sendMessage(phone, msg);
+        return;
+      }
+    }
+    // If estimate intent but couldn't parse items, let Gemini handle it
+    if (hasEstimateIntent && extractedItems.length === 0) {
+      // Fall through to Gemini below
+    }
+  }
+
+  // ── PRE-GEMINI: Handle clear date+slot patterns directly ──
+  const hasBookingWord = has(t, ...BOOKING_KW);
+  const hasTomorrow = has(t, "kal","tomorrow","kal ko","next day","parson nahi kal");
+  const hasToday = has(t, "aaj","today","abhi","abhi ke liye");
+  const hasMorning = has(t, "subah","morning","10","11","12","savere","subeh");
+  const hasEvening = has(t, "shaam","evening","5","6","7","sham","dopahar baad");
+
+  if (hasBookingWord || hasTomorrow || hasToday) {
+    if (!session.booking) session.booking = {};
+    if (customer && !session.booking.name) session.booking.name = customer.name;
+    if (customer && !session.booking.address) session.booking.address = customer.address;
+
+    if (hasTomorrow && !session.booking.date) {
+      const tmrw = getTomorrow();
+      if (isTomorrowThursday()) {
+        await sendMessage(phone, "Kal Thursday hai — hum band rehte hain 🙏\n\nKoi aur din batao?");
+        await askDate(phone);
+        return;
+      }
+      session.booking.date = tmrw;
+    } else if (hasToday && !session.booking.date) {
+      if (isTodayThursday()) {
+        await sendMessage(phone, "Aaj Thursday hai — hum band rehte hain 🙏\n\nKoi aur din batao?");
+        await askDate(phone);
+        return;
+      }
+      session.booking.date = getToday();
+    }
+
+    if (hasMorning && !session.booking.slot) session.booking.slot = "Morning (10 AM – 1 PM)";
+    else if (hasEvening && !session.booking.slot) session.booking.slot = "Evening (5 PM – 8 PM)";
+
+    // If returning customer and we have date + slot → confirm directly
+    if (customer && session.booking.date && session.booking.slot) {
+      await sendButtons(phone,
+        `Got it! 👍\n\n📅 ${session.booking.date}\n🕐 ${session.booking.slot}\n📍 ${session.booking.address}\n\nConfirm booking?`,
+        [{ id: "confirm_direct", title: "✅ Confirm" }, { id: "date_custom", title: "📆 Change date" }, { id: "update_details", title: "✏️ Change address" }]
+      );
+      session.step = "direct_confirm";
+      return;
+    }
+
+    // Have date but no slot
+    if (session.booking.date && !session.booking.slot) {
+      await askSlot(phone);
+      session.step = "select_slot";
+      return;
+    }
+
+    // Have slot but no date
+    if (!session.booking.date && session.booking.slot) {
+      await sendMessage(phone, session.booking.slot.includes("Morning") ? "Subah ka slot ✅\n\nKab chahiye?" : "Shaam ka slot ✅\n\nKab chahiye?");
+      await askDate(phone);
+      session.step = "select_date";
+      return;
+    }
+
+    // Nothing extracted — start normal booking
+    if (customer) {
+      await sendButtons(phone,
+        `Pickup book karein? 😊\n\n📍 ${customer.address}`,
+        [{ id: "use_saved", title: "✅ Yes, this address" }, { id: "update_details", title: "✏️ New address" }]
+      );
+      session.step = "confirm_details";
+    } else {
+      session.step = "get_address";
+      await sendMessage(phone, "👋 Welcome to *Washkart*! 🧺\n\nApna pickup address bhejein:");
+    }
+    return;
   }
 
   // For returning customer saying yes/haan — check what we're waiting for
@@ -851,11 +1015,22 @@ async function handleMessage(phone, rawText) {
       break;
 
     default:
-      if (ai.reply) await sendMessage(phone, ai.reply);
-      else await sendButtons(phone,
-        "Hi! 👋 How can I help?\n\nJust tell me what you need — or choose below:",
-        [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
-      );
+      if (ai.reply) {
+        await sendMessage(phone, ai.reply);
+      } else {
+        // Only show buttons if it's truly a new/unknown conversation starter
+        const customer2 = await getCustomer(phone);
+        if (customer2) {
+          await sendMessage(phone,
+            `Hi ${customer2.name}! 👋 Kya karna hai?\n\n📦 Pickup book karein — bas bolo *kal subah* ya *aaj evening*\n💰 Rates dekhne ke liye: *rates*\n🔍 Order track: *track*`
+          );
+        } else {
+          await sendButtons(phone,
+            "Hi! 👋 How can I help?\n\nJust tell me what you need — or choose below:",
+            [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+          );
+        }
+      }
   }
 
   // Handle AI-guided text input steps
