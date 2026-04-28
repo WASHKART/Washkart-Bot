@@ -496,14 +496,22 @@ RESPOND WITH A JSON object:
   }
 }
 
-BOOKING LOGIC:
-- If customer wants booking AND we have name+address+date+slot → action: "book_now"
-- If missing name → action: "need_name", ask for it naturally
-- If missing address → action: "need_address", ask naturally
-- If missing date → action: "need_date", ask naturally
-- If missing slot → action: "need_slot", ask naturally
-- For returning customers with saved address, use their saved address unless they say a new one
-- If they say "same as last time" → use last order's details
+BOOKING LOGIC — BE AGGRESSIVE AT DETECTING INTENT:
+- ANY message with pickup/book/laundry/wash/kapde/dhobi/istri/press/dry clean = booking intent
+- "Kal subah pickup" = booking, date:tomorrow, slot:morning → action: need_date or book_now
+- "Aaj evening" = booking, date:today, slot:evening
+- "Pickup karna hai" = booking, need date
+- "Kapde dene hain" = booking
+- "Kal 6 baje" = booking, date:tomorrow, slot:evening (6pm = evening)
+- "Subah pickup" = booking, slot:morning
+- "Shaam ko aao" = booking, slot:evening
+- For returning customers (has saved name+address): only need date+slot → go straight to need_date
+- If all 4 collected (name+address+date+slot) → action: "book_now"
+- If missing name → action: "need_name"
+- If missing address → action: "need_address"
+- If missing date → action: "need_date"
+- If missing slot → action: "need_slot"
+- "Same as last time" → use last order date+slot, action: "book_now" if possible
 
 COMPLAINT DETECTION:
 - If customer complains about quality, damage, stain, wrong item, late delivery → action: "complaint"
@@ -666,8 +674,9 @@ async function handleMessage(phone, rawText) {
     return;
   }
 
-  // ── Smart price lookup (item named directly) ──
-  const itemResult = smartPriceLookup(t);
+  // ── Smart price lookup (item named directly, no quantity) ──
+  const hasQuantity = /\d+\s*(shirt|pant|saree|kurta|jeans|piece|pc|kapde|suit|dress|jacket|shoes|pair)/i.test(rawText);
+  const itemResult = !hasQuantity ? smartPriceLookup(t) : null;
   if (itemResult && !has(t, ...BOOKING_KW) && !has(t, ...TRACK_KW)) {
     await sendMessage(phone,
       `💰 *${itemResult.name}*\n` +
@@ -718,6 +727,13 @@ async function handleMessage(phone, rawText) {
   const customer = await getCustomer(phone);
   const active = await getActiveOrder(phone);
   const lastOrder = await getLastOrder(phone);
+
+  // Pre-check: if message clearly contains booking intent keywords, set booking mode
+  if (has(t, ...BOOKING_KW)) {
+    if (!session.booking) session.booking = {};
+    if (customer && !session.booking.name) session.booking.name = customer.name;
+    if (customer && !session.booking.address) session.booking.address = customer.address;
+  }
 
   // For returning customer saying yes/haan — check what we're waiting for
   if (has(t, ...YES_KW) && session.step === "idle" && customer && session.booking?.date && session.booking?.slot) {
