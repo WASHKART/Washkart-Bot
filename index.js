@@ -9,7 +9,7 @@ const TOKEN           = "EAAST7Y5o9b0BRQmXq21AepqpGRuAfr4iPWQZB1TZC3an1X88vTye9a
 const PHONE_NUMBER_ID = "1119391667920272";
 const VERIFY_TOKEN    = "washkart_verify_123";
 const ADMIN_NUMBER    = "917775066002";
-const GEMINI_KEY      = "AIzaSyA0IB4vHNBnqbUTH5CUgsxmc7OL3CM_AH4";
+const GEMINI_KEY      = "AIzaSyCzi-K2hGNwx1Q7sfj5g6dmnwoBtKTpL7o";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
 const SUPABASE_URL    = "https://uausvybpqawxlayyqxlf.supabase.co";
 const SUPABASE_KEY    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhdXN2eWJwcWF3eGxheXlxeGxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwMjE3NzYsImV4cCI6MjA5MjU5Nzc3Nn0.GWqlExeEX1VHAPFQ_YBJrFsOSFb5RS_ZZdxkDTMjjCM";
