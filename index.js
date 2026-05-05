@@ -5,14 +5,14 @@ const app = express();
 app.use(express.json());
 
 // ── CONFIG ────────────────────────────────────────────────────────
-const TOKEN           = "process.env.WHATSAPP_TOKEN";
+const TOKEN           = process.env.WHATSAPP_TOKEN;
 const PHONE_NUMBER_ID = "1119391667920272";
 const VERIFY_TOKEN    = "washkart_verify_123";
 const ADMIN_NUMBER    = "917775066002";
-const GEMINI_KEY      = "process.env.GEMINI_KEY";
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
+const GEMINI_KEY      = process.env.GEMINI_KEY;
+const GEMINI_URL      = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
 const SUPABASE_URL    = "https://uausvybpqawxlayyqxlf.supabase.co";
-const SUPABASE_KEY    = "process.env.SUPABASE_KEY";
+const SUPABASE_KEY    = process.env.SUPABASE_KEY;
 const DB              = `${SUPABASE_URL}/rest/v1`;
 const SB_HEADERS      = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" };
 
@@ -20,6 +20,7 @@ const SB_HEADERS      = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABAS
 async function dbInsert(t, d) { return (await axios.post(`${DB}/${t}`, d, { headers: SB_HEADERS })).data; }
 async function dbSelect(t, f) { return (await axios.get(`${DB}/${t}?${f}`, { headers: SB_HEADERS })).data; }
 async function dbUpdate(t, f, d) { return (await axios.patch(`${DB}/${t}?${f}`, d, { headers: SB_HEADERS })).data; }
+async function dbDelete(t, f) { return (await axios.delete(`${DB}/${t}?${f}`, { headers: { ...SB_HEADERS, Prefer: "" } })).data; }
 
 // ── SESSIONS ──────────────────────────────────────────────────────
 const sessions = {};
@@ -64,14 +65,7 @@ function norm(t) { return t.toLowerCase().trim().replace(/[^\w\s]/g, " ").replac
 function has(t, ...words) { return words.some(w => t.includes(w)); }
 
 // ── KEYWORD GROUPS ────────────────────────────────────────────────
-// BOOKING: only true intent words — no service names like laundry/wash/press
-const BOOKING_KW = [
-  "pickup", "book", "schedule", "collect", "dhobi", "booking",
-  "pickup karna", "pickup chahiye", "pickup karo", "book karo", "order karo",
-  "kapde dene", "kapde lene", "ghar se lelo", "ghar se lo",
-  "pickup book", "mujhe pickup", "laundry dena", "laundry lena"
-];
-const GREET_KW   = ["hi", "hello", "hey", "hii", "helo", "namaste", "kem cho", "namaskar", "good morning", "good evening", "good afternoon", "wassup", "hola", "jai shree", "radhe", "sat sri", "salam"];
+const BOOKING_KW = ["pickup", "book", "schedule", "collect", "dhobi", "booking", "pickup karna", "pickup chahiye", "pickup karo", "book karo", "order karo", "kapde dene", "kapde lene", "ghar se lelo", "ghar se lo", "pickup book", "mujhe pickup", "laundry dena", "laundry lena"];
 const TRACK_KW   = ["track", "order status", "check order", "order track", "kahan hai", "kab aayega", "kab milega", "delivery kab", "order kahan", "kapda kahan", "mera order", "order check", "delivery status", "status check"];
 const CANCEL_KW  = ["cancel", "cancellation", "band karo", "nahi chahiye", "cancel karo", "booking cancel", "order cancel", "raddh", "cancel karna", "booking band"];
 const EXPRESS_KW = ["express", "urgent", "jaldi", "fast", "4 hour", "same day", "asap", "jaldi chahiye", "urgent hai", "express chahiye"];
@@ -93,130 +87,87 @@ const STATUS_MAP = {
 // ── RATES ─────────────────────────────────────────────────────────
 const RATES = {
   iron:
-    "🔥 *IRONING RATES*\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "👕 Normal — ₹10 | ⚡ Urgent — ₹20\n" +
-    "💨 Steam — ₹20 | 👔 Shirt/Pant — ₹20\n" +
-    "👘 Kurta/Kurti — ₹20\n" +
-    "🧣 Shawl/Dupatta — ₹40\n" +
-    "🥻 Saree — ₹60 | 💃 Anarkali — ₹20\n" +
-    "👗 Lehenga — ₹100 | 🧥 Blazer — ₹100\n" +
-    "🛏 Bedsheet — ₹40 | 🔄 Roll Press — ₹120\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "⚡ Express (4–8hr) = 1.5x price\n" +
-    "⚠️ Rates may vary by cloth quality",
+    "🔥 *IRONING RATES*\n━━━━━━━━━━━━━━━\n" +
+    "👕 Normal — ₹10\n⚡ Urgent/Steam — ₹20\n" +
+    "👔 Shirt/Pant/Kurta — ₹20\n🧣 Dupatta/Shawl — ₹40\n" +
+    "🥻 Saree — ₹60\n💃 Anarkali — ₹20\n" +
+    "👗 Lehenga — ₹100\n🧥 Blazer — ₹100\n" +
+    "🛏 Bedsheet — ₹40\n🔄 Roll Press — ₹120\n" +
+    "━━━━━━━━━━━━━━━\n⚡ Express = 1.5x | ⚠️ Varies by cloth",
 
   dryclean:
-    "🧥 *DRY CLEAN — MEN*\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "👔 Shirt/Trouser/Jeans/T-Shirt — ₹70\n" +
-    "👘 Kurta — ₹150 | 🧶 Sweater — ₹200\n" +
-    "🧥 Blazer — ₹275 | Jacket — ₹200\n" +
-    "👔 Suit 2pc — ₹250 | Suit 3pc — ₹350\n" +
-    "🥋 Leather Jacket — ₹350\n" +
+    "🧥 *DRY CLEAN — MEN*\n━━━━━━━━━━━━━━━\n" +
+    "👔 Shirt/Trouser/Jeans — ₹70\n👘 Kurta — ₹150\n" +
+    "🧶 Sweater — ₹200\n🧥 Blazer — ₹275\n" +
+    "🧥 Jacket — ₹200\n👔 Suit 2pc — ₹250\n" +
+    "👔 Suit 3pc — ₹350\n🥋 Leather Jacket — ₹350\n" +
     "👘 Jodhpuri/Sherwani — ₹300\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "👗 *DRY CLEAN — WOMEN*\n" +
-    "━━━━━━━━━━━━━━━\n" +
+    "━━━━━━━━━━━━━━━\n👗 *DRY CLEAN — WOMEN*\n━━━━━━━━━━━━━━━\n" +
     "👚 Kurti — ₹90 | Blouse — ₹70\n" +
-    "🥻 Saree — ₹300 | Saree Work — ₹400\n" +
-    "🥻 Saree Silk — ₹350\n" +
-    "💃 Anarkali — ₹200\n" +
+    "🥻 Saree — ₹300 | Work — ₹400\n" +
+    "🥻 Silk Saree — ₹350\n💃 Anarkali — ₹200\n" +
     "👗 Lehenga — ₹350 | Heavy — ₹450\n" +
     "👗 Dress — ₹175 | Gown — ₹300\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "⚡ Express (4–8hr) = 1.5x price\n" +
-    "⚠️ Rates may vary by cloth quality",
+    "━━━━━━━━━━━━━━━\n⚡ Express = 1.5x | ⚠️ Varies by cloth",
 
   laundry:
-    "🫧 *LAUNDRY / WASHING*\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "👕 Wash & Fold — ₹59/kg\n" +
-    "🧺 Wash & Iron — ₹79/kg\n" +
-    "🛏 Bedsheet — ₹120/kg\n" +
-    "🛌 Blanket — ₹250/kg\n" +
-    "🪟 Curtain — ₹300/kg\n" +
-    "🛋 Sofa Cover — ₹150/kg\n" +
+    "🫧 *LAUNDRY / WASHING*\n━━━━━━━━━━━━━━━\n" +
+    "👕 Wash & Fold — ₹59/kg\n🧺 Wash & Iron — ₹79/kg\n" +
+    "🛏 Bedsheet — ₹120/kg\n🛌 Blanket — ₹250/kg\n" +
+    "🪟 Curtain — ₹300/kg\n🛋 Sofa Cover — ₹150/kg\n" +
     "🪣 Carpet — ₹300/kg\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "📦 Minimum 1kg\n" +
-    "🚚 Free pickup above ₹300\n" +
-    "⚡ Express (4–8hr) = 1.5x price",
+    "━━━━━━━━━━━━━━━\n📦 Min 1kg | 🚚 Free pickup >₹300\n⚡ Express = 1.5x",
 
   shoes:
-    "👟 *SHOE CLEANING*\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "👟 Sneakers — ₹300/pair\n" +
-    "👞 Leather Shoes — ₹400/pair\n" +
-    "🩴 Slides — ₹200/pair\n" +
-    "🏃 Sports Shoes — ₹250/pair\n" +
-    "━━━━━━━━━━━━━━━\n" +
-    "⚡ Express (4–8hr) = 1.5x price",
+    "👟 *SHOE CLEANING*\n━━━━━━━━━━━━━━━\n" +
+    "👟 Sneakers — ₹300/pair\n👞 Leather — ₹400/pair\n" +
+    "🩴 Slides — ₹200/pair\n🏃 Sports — ₹250/pair\n" +
+    "━━━━━━━━━━━━━━━\n⚡ Express = 1.5x",
 };
 
 const HELP_MSG =
-  "🧺 *Washkart — What I can do*\n" +
-  "━━━━━━━━━━━━━━━\n" +
+  "🧺 *Washkart — What I can do*\n━━━━━━━━━━━━━━━\n" +
   "📦 *Book pickup* — type 'pickup' or just tell me when\n" +
   "💰 *Rates* — type 'rates' or ask any item price\n" +
   "🔍 *Track order* — type 'track'\n" +
   "❌ *Cancel* — type 'cancel'\n" +
   "⚡ *Express* — type 'express' after pickup\n" +
   "🔄 *Repeat booking* — type 'same as last time'\n" +
-  "━━━━━━━━━━━━━━━\n" +
-  "Hindi, Marathi, English sab chalega! 😊\n" +
-  "Closed on *Thursdays* 🙏";
+  "━━━━━━━━━━━━━━━\nHindi, Marathi, English sab chalega! 😊\nClosed on *Thursdays* 🙏";
 
 // ── ESTIMATE ENGINE ───────────────────────────────────────────────
 const ITEM_PRICES = {
-  shirt:    { dryclean: 70,  iron: 20, laundry: 79 },
-  pant:     { dryclean: 70,  iron: 20, laundry: 79 },
-  trouser:  { dryclean: 70,  iron: 20, laundry: 79 },
-  jeans:    { dryclean: 70,  iron: 20, laundry: 79 },
-  tshirt:   { dryclean: 70,  iron: 20, laundry: 79 },
-  kurta:    { dryclean: 150, iron: 20, laundry: 79 },
-  kurti:    { dryclean: 90,  iron: 20, laundry: 79 },
-  saree:    { dryclean: 300, iron: 60, laundry: 120 },
-  lehenga:  { dryclean: 350, iron: 100 },
-  blazer:   { dryclean: 275, iron: 100 },
-  jacket:   { dryclean: 200, iron: 100 },
-  sweater:  { dryclean: 200, iron: 40 },
-  dress:    { dryclean: 175, iron: 40 },
-  dupatta:  { dryclean: 150, iron: 40 },
-  suit:     { dryclean: 250, iron: 100 },
-  anarkali: { dryclean: 200, iron: 20 },
-  sherwani: { dryclean: 300, iron: 100 },
-  gown:     { dryclean: 300, iron: 100 },
-  sneaker:  { shoes: 300 },
-  shoe:     { shoes: 300 },
-  slide:    { shoes: 200 },
-  bedsheet: { laundry: 120, iron: 40 },
-  blanket:  { laundry: 250 },
-  curtain:  { laundry: 300 },
+  shirt: { dryclean: 70, iron: 20, laundry: 79 }, pant: { dryclean: 70, iron: 20, laundry: 79 },
+  trouser: { dryclean: 70, iron: 20, laundry: 79 }, jeans: { dryclean: 70, iron: 20, laundry: 79 },
+  tshirt: { dryclean: 70, iron: 20, laundry: 79 }, kurta: { dryclean: 150, iron: 20, laundry: 79 },
+  kurti: { dryclean: 90, iron: 20, laundry: 79 }, saree: { dryclean: 300, iron: 60, laundry: 120 },
+  lehenga: { dryclean: 350, iron: 100 }, blazer: { dryclean: 275, iron: 100 },
+  jacket: { dryclean: 200, iron: 100 }, sweater: { dryclean: 200, iron: 40 },
+  dress: { dryclean: 175, iron: 40 }, dupatta: { dryclean: 150, iron: 40 },
+  suit: { dryclean: 250, iron: 100 }, anarkali: { dryclean: 200, iron: 20 },
+  sherwani: { dryclean: 300, iron: 100 }, gown: { dryclean: 300, iron: 100 },
+  sneaker: { shoes: 300 }, shoe: { shoes: 300 }, slide: { shoes: 200 },
+  bedsheet: { laundry: 120, iron: 40 }, blanket: { laundry: 250 }, curtain: { laundry: 300 },
 };
 
-// Detect service in a local window around each item match (not whole message)
 function detectServiceNear(fullText, matchIndex, matchLength) {
-  const window = fullText.toLowerCase().substring(Math.max(0, matchIndex - 30), matchIndex + matchLength + 30);
-  if (/dry\s*clean|dryclean|dry-clean|\bdc\b|chemical/.test(window)) return "dryclean";
-  if (/\biron\b|press|istri|steam/.test(window))                      return "iron";
-  if (/\bwash\b|\blaundry\b|dhulai|fold/.test(window))               return "laundry";
-  if (/\bshoe|\bsneaker|\bjoote|footwear/.test(window))              return "shoes";
+  const w = fullText.toLowerCase().substring(Math.max(0, matchIndex - 30), matchIndex + matchLength + 30);
+  if (/dry\s*clean|dryclean|dry-clean|\bdc\b|chemical/.test(w)) return "dryclean";
+  if (/\biron\b|press|istri|steam/.test(w)) return "iron";
+  if (/\bwash\b|\blaundry\b|dhulai|fold/.test(w)) return "laundry";
+  if (/\bshoe|\bsneaker|\bjoote|footwear/.test(w)) return "shoes";
   return null;
 }
 
 function extractEstimateItems(rawText) {
   const itemRegex = /(\d+)\s*(sarees?|shirts?|pants?|trousers?|jeans?|kurtas?|kurtis?|suits?|dresses?|jackets?|sweaters?|lehengas?|lehnga|blazers?|dupattas?|bedsheets?|blankets?|sneakers?|shoes?|slides?|tshirts?|t-shirts?|gowns?|anarkali|sherwanis?)/gi;
-  // Global service fallback
   const tl = rawText.toLowerCase();
   let globalService = "dryclean";
-  if (/dry\s*clean|dryclean|\bdc\b/.test(tl))       globalService = "dryclean";
-  else if (/\biron\b|press|istri/.test(tl))           globalService = "iron";
-  else if (/\bwash\b|\blaundry\b|dhulai/.test(tl))   globalService = "laundry";
-  else if (/\bshoe|\bsneaker|\bjoote/.test(tl))       globalService = "shoes";
-
-  const items = [];
-  let match;
+  if (/dry\s*clean|dryclean|\bdc\b/.test(tl)) globalService = "dryclean";
+  else if (/\biron\b|press|istri/.test(tl)) globalService = "iron";
+  else if (/\bwash\b|\blaundry\b|dhulai/.test(tl)) globalService = "laundry";
+  else if (/\bshoe|\bsneaker|\bjoote/.test(tl)) globalService = "shoes";
+  const items = []; let match;
   while ((match = itemRegex.exec(rawText)) !== null) {
     const qty = parseInt(match[1]);
     const raw = match[2].toLowerCase()
@@ -227,8 +178,7 @@ function extractEstimateItems(rawText) {
       .replace(/blazers?$/, "blazer").replace(/dupattas?$/, "dupatta")
       .replace(/bedsheets?$/, "bedsheet").replace(/blankets?$/, "blanket")
       .replace(/sneakers?$/, "sneaker").replace(/shoes?$/, "shoe").replace(/slides?$/, "slide")
-      .replace(/t-shirts?$|tshirts?$/, "tshirt").replace(/gowns?$/, "gown")
-      .replace(/sherwanis?$/, "sherwani");
+      .replace(/t-shirts?$|tshirts?$/, "tshirt").replace(/gowns?$/, "gown").replace(/sherwanis?$/, "sherwani");
     const localSvc = detectServiceNear(rawText, match.index, match[0].length);
     items.push({ name: raw, qty, service: localSvc || globalService });
   }
@@ -239,66 +189,45 @@ function calcEstimate(items) {
   let total = 0; const breakdown = []; const unknown = [];
   for (const item of items) {
     const key = item.name.toLowerCase().trim();
-    const svc = item.service || "dryclean";
-    const qty = item.qty || 1;
+    const svc = item.service || "dryclean"; const qty = item.qty || 1;
     const priceRow = ITEM_PRICES[key] || ITEM_PRICES[key + "s"] || ITEM_PRICES[key.replace(/s$/, "")];
     const unitPrice = priceRow?.[svc];
     if (unitPrice) {
       total += unitPrice * qty;
       const lbl = svc === "dryclean" ? "Dry Clean" : svc === "iron" ? "Iron" : svc === "laundry" ? "Laundry" : "Shoe Clean";
       breakdown.push(`${qty}x ${item.name} (${lbl}) — ₹${unitPrice * qty}`);
-    } else {
-      unknown.push(`${item.qty}x ${item.name}`);
-    }
+    } else { unknown.push(`${item.qty}x ${item.name}`); }
   }
   return { total, breakdown, unknown };
 }
 
-// ── ITEM PRICE MAP (single-item lookups) ──────────────────────────
+// ── ITEM PRICE MAP ────────────────────────────────────────────────
 const ITEM_MAP = [
-  [["normal iron", "sada iron", "simple iron"], "Normal Iron", 10],
-  [["urgent iron", "express iron"], "Urgent Iron", 20],
-  [["steam iron", "bhap", "steam press"], "Steam Iron", 20],
-  [["saree iron", "saree press", "sari iron"], "Saree Iron", 60],
-  [["lehenga iron", "lehenga press"], "Lehenga Iron", 100],
-  [["blazer iron", "blazer press", "coat iron"], "Blazer Iron", 100],
-  [["roll press", "roll iron"], "Roll Press", 120],
-  [["shirt iron", "shirt press"], "Shirt Iron", 20],
-  [["pant iron", "trouser iron", "pant press"], "Pant Iron", 20],
-  [["kurta iron", "kurta press", "kurti iron"], "Kurta Iron", 20],
-  [["dupatta iron", "dupatta press", "shawl iron"], "Dupatta Iron", 40],
-  [["bedsheet iron", "bed sheet iron"], "Bedsheet Iron", 40],
-  [["shirt dry", "shirt clean", "shirt dc"], "Shirt Dry Clean", 70],
-  [["pant dry", "trouser dry", "pant clean"], "Pant Dry Clean", 70],
-  [["jeans dry", "jeans clean", "jeans dc"], "Jeans Dry Clean", 70],
-  [["kurta dry", "kurta clean", "kurta dc"], "Kurta Dry Clean", 150],
-  [["kurti dry", "kurti clean"], "Kurti Dry Clean", 90],
-  [["suit 2", "2 piece", "2pc suit"], "Suit 2pc Dry Clean", 250],
-  [["suit 3", "3 piece", "3pc suit"], "Suit 3pc Dry Clean", 350],
-  [["blazer dry", "blazer clean", "coat dry"], "Blazer Dry Clean", 275],
-  [["jacket dry", "jacket clean"], "Jacket Dry Clean", 200],
-  [["leather jacket", "leather coat"], "Leather Jacket Dry Clean", 350],
-  [["sweater dry", "sweater clean", "woolen dry"], "Sweater Dry Clean", 200],
-  [["saree dry", "saree clean", "saree dc", "sari dry"], "Saree Dry Clean", 300],
-  [["saree work", "work saree", "designer saree", "heavy saree"], "Saree Work Dry Clean", 400],
-  [["saree silk", "silk saree", "pure silk"], "Saree Silk Dry Clean", 350],
-  [["anarkali dry", "anarkali clean"], "Anarkali Dry Clean", 200],
-  [["lehenga dry", "lehenga clean", "lehnga dry"], "Lehenga Dry Clean", 350],
-  [["lehenga heavy", "heavy lehenga", "bridal lehenga"], "Heavy Lehenga Dry Clean", 450],
-  [["dress dry", "dress clean", "frock dry"], "Dress Dry Clean", 175],
-  [["gown dry", "gown clean", "evening gown"], "Gown Dry Clean", 300],
-  [["dupatta dry", "dupatta clean"], "Dupatta Dry Clean", 150],
-  [["blanket wash", "razai wash", "blanket clean"], "Blanket Wash", 250],
-  [["curtain wash", "parda wash", "curtain clean"], "Curtain Wash", 300],
-  [["sofa cover", "sofa wash", "sofa clean"], "Sofa Cover Wash", 150],
-  [["carpet wash", "carpet clean"], "Carpet Wash", 300],
-  [["wash fold", "fold wash", "wash and fold"], "Wash & Fold", 59],
-  [["wash iron", "washing iron", "wash and iron"], "Wash & Iron", 79],
-  [["bedsheet wash", "bed sheet wash", "chadar wash"], "Bedsheet Wash", 120],
-  [["sneaker", "sneakers", "canvas shoe", "white shoe"], "Sneakers Cleaning", 300],
-  [["leather shoe", "formal shoe", "oxford"], "Leather Shoes Cleaning", 400],
-  [["slide", "slides", "chappal clean"], "Slides Cleaning", 200],
-  [["sports shoe", "running shoe", "gym shoe"], "Sports Shoes Cleaning", 250],
+  [["normal iron","sada iron","simple iron"],"Normal Iron",10],[["urgent iron","express iron"],"Urgent Iron",20],
+  [["steam iron","bhap","steam press"],"Steam Iron",20],[["saree iron","saree press","sari iron"],"Saree Iron",60],
+  [["lehenga iron","lehenga press"],"Lehenga Iron",100],[["blazer iron","blazer press","coat iron"],"Blazer Iron",100],
+  [["roll press","roll iron"],"Roll Press",120],[["shirt iron","shirt press"],"Shirt Iron",20],
+  [["pant iron","trouser iron","pant press"],"Pant Iron",20],[["kurta iron","kurta press","kurti iron"],"Kurta Iron",20],
+  [["dupatta iron","dupatta press","shawl iron"],"Dupatta Iron",40],[["bedsheet iron","bed sheet iron"],"Bedsheet Iron",40],
+  [["shirt dry","shirt clean","shirt dc"],"Shirt Dry Clean",70],[["pant dry","trouser dry","pant clean"],"Pant Dry Clean",70],
+  [["jeans dry","jeans clean","jeans dc"],"Jeans Dry Clean",70],[["kurta dry","kurta clean","kurta dc"],"Kurta Dry Clean",150],
+  [["kurti dry","kurti clean"],"Kurti Dry Clean",90],[["suit 2","2 piece","2pc suit"],"Suit 2pc Dry Clean",250],
+  [["suit 3","3 piece","3pc suit"],"Suit 3pc Dry Clean",350],[["blazer dry","blazer clean","coat dry"],"Blazer Dry Clean",275],
+  [["jacket dry","jacket clean"],"Jacket Dry Clean",200],[["leather jacket","leather coat"],"Leather Jacket Dry Clean",350],
+  [["sweater dry","sweater clean","woolen dry"],"Sweater Dry Clean",200],
+  [["saree dry","saree clean","saree dc","sari dry"],"Saree Dry Clean",300],
+  [["saree work","work saree","designer saree","heavy saree"],"Saree Work Dry Clean",400],
+  [["saree silk","silk saree","pure silk"],"Saree Silk Dry Clean",350],
+  [["anarkali dry","anarkali clean"],"Anarkali Dry Clean",200],[["lehenga dry","lehenga clean","lehnga dry"],"Lehenga Dry Clean",350],
+  [["lehenga heavy","heavy lehenga","bridal lehenga"],"Heavy Lehenga Dry Clean",450],
+  [["dress dry","dress clean","frock dry"],"Dress Dry Clean",175],[["gown dry","gown clean","evening gown"],"Gown Dry Clean",300],
+  [["dupatta dry","dupatta clean"],"Dupatta Dry Clean",150],[["blanket wash","razai wash","blanket clean"],"Blanket Wash",250],
+  [["curtain wash","parda wash","curtain clean"],"Curtain Wash",300],[["sofa cover","sofa wash","sofa clean"],"Sofa Cover Wash",150],
+  [["carpet wash","carpet clean"],"Carpet Wash",300],[["wash fold","fold wash","wash and fold"],"Wash & Fold",59],
+  [["wash iron","washing iron","wash and iron"],"Wash & Iron",79],[["bedsheet wash","bed sheet wash","chadar wash"],"Bedsheet Wash",120],
+  [["sneaker","sneakers","canvas shoe","white shoe"],"Sneakers Cleaning",300],
+  [["leather shoe","formal shoe","oxford"],"Leather Shoes Cleaning",400],
+  [["slide","slides","chappal clean"],"Slides Cleaning",200],[["sports shoe","running shoe","gym shoe"],"Sports Shoes Cleaning",250],
 ];
 function smartPriceLookup(t) {
   for (const [keywords, name, price] of ITEM_MAP) {
@@ -319,10 +248,8 @@ async function sendMessage(to, text) {
 async function sendButtons(to, body, buttons) {
   try {
     await axios.post(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp", to, type: "interactive",
-        interactive: {
-          type: "button", body: { text: body },
+      { messaging_product: "whatsapp", to, type: "interactive",
+        interactive: { type: "button", body: { text: body },
           action: { buttons: buttons.slice(0, 3).map(b => ({ type: "reply", reply: { id: b.id, title: b.title.slice(0, 20) } })) }
         }
       },
@@ -361,19 +288,16 @@ async function saveRating(phone, orderId, rating, comment) {
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────
 async function notifyAdmin(booking) {
+  const src = booking.source ? ` [${booking.source}]` : "";
   await sendMessage(ADMIN_NUMBER,
-    `🔔 *New Booking!*\n\n🆔 ${booking.orderId}\n👤 ${booking.name}\n📱 +${booking.phone}\n📍 ${booking.address}\n📅 ${booking.date}\n🕐 ${booking.slot}`
+    `🔔 *New Booking!*${src}\n\n🆔 ${booking.orderId}\n👤 ${booking.name}\n📱 +${booking.phone}\n📍 ${booking.address}\n📅 ${booking.date}\n🕐 ${booking.slot}`
   );
 }
 async function notifyAdminComplaint(phone, name, message) {
-  await sendMessage(ADMIN_NUMBER,
-    `⚠️ *Complaint!*\n\n👤 ${name || "Unknown"}\n📱 +${phone}\n💬 "${message}"\n\n_Please follow up._`
-  );
+  await sendMessage(ADMIN_NUMBER, `⚠️ *Complaint!*\n\n👤 ${name || "Unknown"}\n📱 +${phone}\n💬 "${message}"\n\n_Please follow up._`);
 }
 async function notifyAdminRating(phone, name, orderId, rating, comment) {
-  await sendMessage(ADMIN_NUMBER,
-    `⭐ *New Rating*\n\n👤 ${name || phone}\n🆔 ${orderId || "unknown"}\n⭐ ${rating}/5\n💬 ${comment || "No comment"}`
-  );
+  await sendMessage(ADMIN_NUMBER, `⭐ *New Rating*\n\n👤 ${name || phone}\n🆔 ${orderId || "unknown"}\n⭐ ${rating}/5\n💬 ${comment || "No comment"}`);
 }
 
 // ── BOOKING HELPERS ───────────────────────────────────────────────
@@ -414,7 +338,8 @@ async function confirmBooking(phone, booking) {
     await dbInsert("bookings", {
       order_id: orderId, name: booking.name, phone,
       address: booking.address, date: booking.date, slot: booking.slot,
-      status: "pending", reminder_sent: false
+      status: "pending", reminder_sent: false,
+      source: booking.source || "whatsapp"
     });
   } catch (e) { console.error("saveBooking:", e.message); }
   await sendMessage(phone,
@@ -459,32 +384,21 @@ Laundry: Wash & Fold ₹59/kg, Wash & Iron ₹79/kg
 Shoes: Sneakers ₹300, Leather ₹400, Sports ₹250, Slides ₹200
 Express: 1.5x, 4-8hrs. Free pickup above ₹300.
 
-RESPOND with JSON only (no markdown, no explanation):
+RESPOND with JSON only (no markdown):
 {
   "reply": "your friendly reply",
-  "action": "none" | "book_now" | "need_name" | "need_address" | "need_date" | "need_slot" | "show_iron" | "show_dryclean" | "show_laundry" | "show_shoes" | "show_rates_menu" | "track_order" | "complaint" | "estimate",
-  "extracted": {
-    "name": null,
-    "address": null,
-    "date": "today" | "tomorrow" | "date string" | null,
-    "slot": "morning" | "evening" | null,
-    "items": [{"name":"shirt","qty":2,"service":"dryclean"}] | null
-  }
+  "action": "none"|"book_now"|"need_name"|"need_address"|"need_date"|"need_slot"|"show_iron"|"show_dryclean"|"show_laundry"|"show_shoes"|"show_rates_menu"|"track_order"|"complaint"|"estimate",
+  "extracted": { "name": null, "address": null, "date": "today"|"tomorrow"|"date string"|null, "slot": "morning"|"evening"|null, "items": [{"name":"shirt","qty":2,"service":"dryclean"}]|null }
 }
 
 ACTION GUIDE:
-- General price query (no qty) → show_iron / show_dryclean / show_laundry / show_shoes / show_rates_menu
-- Specific items WITH quantities → action:"estimate", fill items array with PER-ITEM service
-- Booking intent → need_name/need_address/need_date/need_slot/book_now as needed
-- Complaint → complaint
-- Track → track_order
-- Greeting → none with friendly reply mentioning what you can do
-- Else → none with helpful reply
+- General price query (no qty) → show_iron/show_dryclean/show_laundry/show_shoes/show_rates_menu
+- Specific items WITH quantities → "estimate", fill items array PER-ITEM service
+- Booking intent → need_name/need_address/need_date/need_slot/book_now
+- Complaint → complaint | Track → track_order | Greeting → none with friendly reply
 
-ESTIMATE — detect service PER ITEM not whole message:
+ESTIMATE — detect service PER ITEM:
 "2 shirt dryclean aur 1 saree press" → [{name:shirt,qty:2,service:dryclean},{name:saree,qty:1,service:iron}]
-"10 shirt ka kitna" → [{name:shirt,qty:10,service:dryclean}]
-"3 jeans iron karo" → [{name:jeans,qty:3,service:iron}]
 
 HISTORY:
 ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
@@ -503,7 +417,7 @@ ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
     return parsed;
   } catch (e) {
     console.error("Gemini error:", e?.response?.data || e.message);
-    return { reply: "Ek second! 😊 Pickup book karein, rates dekhein, ya order track karein — batao kya chahiye!", action: "none", extracted: {} };
+    return { reply: "Ek second! 😊 Pickup book karein, rates dekhein, ya order track karein!", action: "none", extracted: {} };
   }
 }
 
@@ -517,7 +431,7 @@ async function handleMessage(phone, rawText) {
   session.history.push({ role: "customer", text: rawText });
   if (session.history.length > 12) session.history = session.history.slice(-12);
 
-  // ══ LAYER 1: Active session steps — always resolved first ════════
+  // ══ LAYER 1: Active session steps ════════════════════════════════
 
   if (session.step === "get_name") {
     if (rawText.trim().length < 2) { await sendMessage(phone, "Please apna naam share karein 😊"); return; }
@@ -543,8 +457,7 @@ async function handleMessage(phone, rawText) {
 
   if (session.step === "get_custom_date") {
     if (isThursdayStr(rawText)) { await sendMessage(phone, "Thursday ko hum band rehte hain 🙏\nKoi aur din batao:"); return; }
-    session.booking.date = rawText.trim();
-    session.step = "idle";
+    session.booking.date = rawText.trim(); session.step = "idle";
     if (!session.booking.slot) { await askSlot(phone); session.step = "select_slot"; }
     else { await showBookingConfirm(phone, session); }
     return;
@@ -591,23 +504,42 @@ async function handleMessage(phone, rawText) {
     await showBookingConfirm(phone, session); return;
   }
 
+  // ── FEEDBACK STEP — button-based rating ──────────────────────────
   if (session.step === "feedback") {
-    const starMatch = rawText.match(/[1-5]/);
-    const stars = starMatch ? parseInt(starMatch[0]) : (rawText.includes("⭐") ? rawText.split("⭐").length - 1 : null);
+    // Handle button responses
+    const ratingMap = { "rating_excellent": 5, "rating_good": 4, "rating_poor": 2 };
     const lastOrder = await getLastOrder(phone);
     const customer = await getCustomer(phone);
-    if (stars && stars >= 1 && stars <= 5) {
-      const comment = rawText.replace(/[1-5⭐]/g, "").trim() || null;
-      await saveRating(phone, lastOrder?.order_id, stars, comment);
-      await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, stars, comment);
-      const replies = ["", "Bahut sorry! 🙏 Admin contact karega.", "Sorry for the experience 🙏 Hum improve karenge.", "Thanks! 😊 Hum aur better karenge.", "Thanks for 4 stars! ⭐⭐⭐⭐ Milte hain agli baar!", "Shukriya! ⭐⭐⭐⭐⭐ Aapka support bahut matlab rakhta hai! 🙏"];
-      await sendMessage(phone, replies[stars]);
-      if (stars <= 2) await notifyAdminComplaint(phone, customer?.name, `Low rating ${stars}/5: ${rawText}`);
-    } else {
-      await saveRating(phone, lastOrder?.order_id, null, rawText);
-      await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "text", rawText);
-      await sendMessage(phone, "Shukriya aapke feedback ke liye! 🙏 Milte hain agli baar!");
+
+    if (ratingMap[rawText] !== undefined) {
+      const stars = ratingMap[rawText];
+      await saveRating(phone, lastOrder?.order_id, stars, null);
+      await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, stars, null);
+      if (stars === 5) {
+        await sendMessage(phone, "Shukriya! ⭐⭐⭐⭐⭐ Aapka support bahut matlab rakhta hai! 🙏\nMilte hain agli baar Washkart pe!");
+      } else if (stars === 4) {
+        await sendMessage(phone, "Thanks! 😊 Kuch aur better kar sakte hain? Batao — hum improve karenge!");
+        session.step = "feedback_comment"; return;
+      } else {
+        await sendMessage(phone, "Bahut sorry for the experience 🙏\nKya problem aayi? Batao — hum zaroor fix karenge.");
+        await notifyAdminComplaint(phone, customer?.name, `Low rating (${stars}/5) from ${customer?.name || phone}`);
+        session.step = "feedback_comment"; return;
+      }
+      session.step = "idle"; return;
     }
+    // Text reply — treat as comment without star
+    await saveRating(phone, lastOrder?.order_id, null, rawText);
+    await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "text", rawText);
+    await sendMessage(phone, "Shukriya feedback ke liye! 🙏 Milte hain agli baar!");
+    session.step = "idle"; return;
+  }
+
+  if (session.step === "feedback_comment") {
+    const lastOrder = await getLastOrder(phone);
+    const customer = await getCustomer(phone);
+    await saveRating(phone, lastOrder?.order_id, null, rawText);
+    await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "comment", rawText);
+    await sendMessage(phone, "Shukriya! 🙏 Hum aur better karenge. Milte hain agli baar!");
     session.step = "idle"; return;
   }
 
@@ -627,26 +559,21 @@ async function handleMessage(phone, rawText) {
   if (rawText === "update_details") { session.booking = {}; session.step = "get_address"; await sendMessage(phone, "📍 Naya address bhejein:"); return; }
   if (rawText === "no_cancel")      { await sendMessage(phone, "Theek hai! Order still active 👍"); return; }
   if (rawText === "confirm_direct") { if (session.step === "direct_confirm") { session.step = "idle"; await confirmBooking(phone, session.booking); session.booking = {}; } return; }
-  if (rawText === "btn_book")       { session.booking = {}; /* fall through */ }
+  if (rawText === "btn_book")       { session.booking = {}; }
 
   // ══ LAYER 3: Keyword shortcuts ════════════════════════════════════
-  if (rawText === "__audio__")       { await sendMessage(phone, "Voice notes nahi sun sakta 😊 Please type karein!"); return; }
-  if (has(t, ...HELP_KW))            { await sendMessage(phone, HELP_MSG); return; }
-  if (has(t, ...CANCEL_KW))          { await handleCancel(phone, session, rawText); return; }
-  if (has(t, ...TRACK_KW))           { await handleTrack(phone, session, rawText); return; }
+  if (rawText === "__audio__")      { await sendMessage(phone, "Voice notes nahi sun sakta 😊 Please type karein!"); return; }
+  if (has(t, ...HELP_KW))           { await sendMessage(phone, HELP_MSG); return; }
+  if (has(t, ...CANCEL_KW))         { await handleCancel(phone, session, rawText); return; }
+  if (has(t, ...TRACK_KW))          { await handleTrack(phone, session, rawText); return; }
   if (has(t, ...EXPRESS_KW) && session.step === "idle") { await handleExpress(phone); return; }
-  if (has(t, ...SAME_KW))            { await handleSameAsLast(phone, session); return; }
+  if (has(t, ...SAME_KW))           { await handleSameAsLast(phone, session); return; }
+  if (has(t, ...BOOKING_KW) || rawText === "btn_book") { await handleBookingIntent(phone, session, rawText, t); return; }
 
-  // BOOKING keywords — strictly only true booking intent words
-  if (has(t, ...BOOKING_KW) || rawText === "btn_book") {
-    await handleBookingIntent(phone, session, rawText, t); return;
-  }
-
-  // ══ LAYER 4: Gemini handles everything else ═══════════════════════
+  // ══ LAYER 4: Gemini ══════════════════════════════════════════════
   const customer = await getCustomer(phone);
   const active = await getActiveOrder(phone);
   const lastOrder = await getLastOrder(phone);
-
   if (customer) {
     if (!session.booking.name) session.booking.name = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
@@ -655,7 +582,6 @@ async function handleMessage(phone, rawText) {
   const ai = await geminiChat(phone, rawText, session, customer, active, lastOrder);
   console.log(`[AI] action:${ai.action} reply:${ai.reply?.slice(0, 60)}`);
 
-  // Extract booking fields
   if (ai.extracted?.name && !session.booking.name) session.booking.name = ai.extracted.name;
   if (ai.extracted?.address && !session.booking.address) session.booking.address = ai.extracted.address;
   if (ai.extracted?.date) {
@@ -679,18 +605,15 @@ async function handleMessage(phone, rawText) {
         await confirmBooking(phone, session.booking); session.booking = {};
       } else { await handleBookingIntent(phone, session, rawText, t); }
       break;
-
     case "need_name":    session.step = "get_name";    await sendMessage(phone, ai.reply || "Apna naam batao 😊"); break;
     case "need_address": session.step = "get_address"; await sendMessage(phone, ai.reply || "📍 Pickup address bhejein:"); break;
     case "need_date":    if (ai.reply) await sendMessage(phone, ai.reply); await askDate(phone); session.step = "select_date"; break;
     case "need_slot":    if (ai.reply) await sendMessage(phone, ai.reply); await askSlot(phone); session.step = "select_slot"; break;
-
     case "show_rates_menu": await askPriceCategory(phone); break;
     case "show_iron":       await sendMessage(phone, RATES.iron); break;
     case "show_dryclean":   await sendMessage(phone, RATES.dryclean); break;
     case "show_laundry":    await sendMessage(phone, RATES.laundry); break;
     case "show_shoes":      await sendMessage(phone, RATES.shoes); break;
-
     case "track_order":
       if (active) {
         const s = STATUS_MAP[active.status] || { label: active.status, eta: "" };
@@ -698,51 +621,33 @@ async function handleMessage(phone, rawText) {
         await sendMessage(phone, `📦 *Aapka Order*\n\n🆔 ${active.order_id}\n${s.label}${del}\n📅 ${active.date} | 🕐 ${active.slot}\n\n${s.eta}`);
       } else { await sendMessage(phone, ai.reply || "Koi active order nahi. *pickup* type karein 🧺"); }
       break;
-
     case "complaint":
-      await sendMessage(phone, ai.reply || "Bahut sorry 🙏 Admin se contact ho jayega aur fix kiya jayega.");
-      await notifyAdminComplaint(phone, customer?.name, rawText);
-      break;
-
+      await sendMessage(phone, ai.reply || "Bahut sorry 🙏 Admin se contact ho jayega.");
+      await notifyAdminComplaint(phone, customer?.name, rawText); break;
     case "estimate": {
-      // Use Gemini's items if valid, else parse ourselves
-      let items = (ai.extracted?.items?.length) ? ai.extracted.items : extractEstimateItems(rawText);
+      let items = ai.extracted?.items?.length ? ai.extracted.items : extractEstimateItems(rawText);
       if (items.length > 0) {
         const { total, breakdown, unknown } = calcEstimate(items);
         if (total > 0) {
           let msg = `💰 *Estimate*\n━━━━━━━━━━━━━━━\n`;
           breakdown.forEach(l => msg += `${l}\n`);
           if (unknown.length) msg += `\n⚠️ Estimate nahi mila: ${unknown.join(", ")}\n`;
-          msg += `━━━━━━━━━━━━━━━\n*Total: ₹${total}*\n⚡ Express (4–8hr): ₹${Math.ceil(total * 1.5)}\n\n_Final bill may vary by cloth quality_\n\nPickup ke liye: *pickup* 🧺`;
+          msg += `━━━━━━━━━━━━━━━\n*Total: ₹${total}*\n⚡ Express (4–8hr): ₹${Math.ceil(total * 1.5)}\n\n_Final bill may vary_\n\nPickup ke liye: *pickup* 🧺`;
           await sendMessage(phone, msg);
-        } else {
-          await sendMessage(phone, ai.reply || "Items aur service batao — e.g. *3 shirt dry clean* 😊");
-        }
-      } else {
-        await sendMessage(phone, ai.reply || "Kitne kapde hain aur kaunsi service? e.g. *3 shirt dry clean, 2 saree iron* 😊");
-      }
+        } else { await sendMessage(phone, ai.reply || "Items aur service batao 😊"); }
+      } else { await sendMessage(phone, ai.reply || "e.g. *3 shirt dry clean, 2 saree iron* 😊"); }
       break;
     }
-
     default:
-      if (ai.reply) {
-        await sendMessage(phone, ai.reply);
-      } else {
-        const c = customer;
-        if (c) {
-          await sendMessage(phone, `${c.name} ji! 👋\n\n*pickup* — booking karein\n*rates* — prices dekhein\n*track* — order status`);
-        } else {
-          await sendButtons(phone, "Hi! 👋 Washkart mein aapka swagat hai! Kya chahiye?",
-            [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
-          );
-        }
-      }
+      if (ai.reply) { await sendMessage(phone, ai.reply); }
+      else if (customer) { await sendMessage(phone, `${customer.name} ji! 👋\n\n*pickup* — booking\n*rates* — prices\n*track* — order status`); }
+      else { await sendButtons(phone, "Hi! 👋 Washkart mein aapka swagat hai!",
+        [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]); }
   }
-
   if (ai.reply) session.history.push({ role: "bot", text: ai.reply });
 }
 
-// ── FLOW HELPER FUNCTIONS ─────────────────────────────────────────
+// ── FLOW HELPERS ──────────────────────────────────────────────────
 async function handleDateButton(phone, session, which) {
   if (which === "today") {
     if (isTodayThursday()) { await sendMessage(phone, "Aaj Thursday hai — hum band 🙏"); await askDate(phone); return; }
@@ -751,17 +656,14 @@ async function handleDateButton(phone, session, which) {
     if (isTomorrowThursday()) { await sendMessage(phone, "Kal Thursday hai — hum band 🙏"); await askDate(phone); return; }
     session.booking.date = getTomorrow();
   }
-  session.step = "select_slot";
-  await askSlot(phone);
+  session.step = "select_slot"; await askSlot(phone);
 }
-
 async function handleSlotSelected(phone, session) {
   session.step = "idle";
   const bk = session.booking;
   if (bk.name && bk.address && bk.date && bk.slot) { await showBookingConfirm(phone, session); }
   else if (!bk.date) { await askDate(phone); session.step = "select_date"; }
 }
-
 async function handleTrack(phone, session, rawText) {
   if (rawText) {
     const m = rawText.match(/FW-\d+/i);
@@ -782,10 +684,8 @@ async function handleTrack(phone, session, rawText) {
     await sendMessage(phone, `📦 *Aapka Order*\n\n🆔 ${active.order_id}\n${s.label}${del}\n📅 ${active.date} | 🕐 ${active.slot}\n\n${s.eta}`);
     return;
   }
-  session.step = "tracking";
-  await sendMessage(phone, "🔍 Apna Order ID share karein (e.g. *FW-1234*):"); return;
+  session.step = "tracking"; await sendMessage(phone, "🔍 Apna Order ID share karein (e.g. *FW-1234*):"); return;
 }
-
 async function handleCancel(phone, session, rawText) {
   const m = rawText.match(/FW-\d+/i);
   const active = await getActiveOrder(phone);
@@ -797,14 +697,12 @@ async function handleCancel(phone, session, rawText) {
     if (["delivered", "cancelled"].includes(rows[0].status)) {
       await sendMessage(phone, `Order *${orderId}* already ${STATUS_MAP[rows[0].status]?.label} hai.`); return;
     }
-    await sendButtons(phone,
-      `Cancel karein *${orderId}*?\n📅 ${rows[0].date} | 🕐 ${rows[0].slot}`,
+    await sendButtons(phone, `Cancel karein *${orderId}*?\n📅 ${rows[0].date} | 🕐 ${rows[0].slot}`,
       [{ id: `cc_${orderId}`, title: "✅ Yes, Cancel" }, { id: "no_cancel", title: "❌ Keep it" }]
     );
     session.step = "confirm_cancel";
   } catch { await sendMessage(phone, "Kuch problem aayi. Phir try karein."); }
 }
-
 async function handleExpress(phone) {
   const active = await getActiveOrder(phone);
   if (active?.status === "picked") {
@@ -816,24 +714,19 @@ async function handleExpress(phone) {
   }
   await sendMessage(phone, "Express pickup ke baad request hota hai. Pehle *pickup* book karein 🧺");
 }
-
 async function handleSameAsLast(phone, session) {
   const customer = await getCustomer(phone);
   const last = await getLastOrder(phone);
   const active = await getActiveOrder(phone);
-  if (active && active.status !== "cancelled") {
-    await sendMessage(phone, `Order *${active.order_id}* already active hai. Pehle deliver hone do! 😊`); return;
-  }
+  if (active && active.status !== "cancelled") { await sendMessage(phone, `Order *${active.order_id}* already active hai. Pehle deliver hone do! 😊`); return; }
   if (!last) { await sendMessage(phone, "Koi purana order nahi mila. *pickup* type karein! 🧺"); return; }
   session.booking.name = customer?.name || last.name;
   session.booking.address = last.address;
-  await sendButtons(phone,
-    `Same as last time! 🔄\n\n📍 ${last.address}\n\nKis din pickup karein?`,
+  await sendButtons(phone, `Same as last time! 🔄\n\n📍 ${last.address}\n\nKis din pickup karein?`,
     [{ id: "date_today", title: "📅 Today" }, { id: "date_tomorrow", title: "📅 Tomorrow" }, { id: "date_custom", title: "📆 Other date" }]
   );
   session.step = "select_date";
 }
-
 async function handleBookingIntent(phone, session, rawText, t) {
   const customer = await getCustomer(phone);
   const active = await getActiveOrder(phone);
@@ -844,13 +737,10 @@ async function handleBookingIntent(phone, session, rawText, t) {
     if (!session.booking.name) session.booking.name = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
   }
-
-  // Extract date/slot from message text
   const hasTomorrow = has(t, "kal ", "tomorrow", "kal ko", "next day");
   const hasToday    = has(t, "aaj ", "today", "abhi");
   const hasMorning  = has(t, "subah", "morning", "savere", "subeh", "10 am", "11 am");
   const hasEvening  = has(t, "shaam", "evening", "sham", "5 pm", "6 pm", "7 pm");
-
   if (hasTomorrow && !session.booking.date) {
     if (isTomorrowThursday()) { await sendMessage(phone, "Kal Thursday hai — hum band 🙏\nKoi aur din?"); await askDate(phone); return; }
     session.booking.date = getTomorrow();
@@ -860,27 +750,18 @@ async function handleBookingIntent(phone, session, rawText, t) {
   }
   if (hasMorning && !session.booking.slot) session.booking.slot = "Morning (10 AM – 1 PM)";
   else if (hasEvening && !session.booking.slot) session.booking.slot = "Evening (5 PM – 8 PM)";
-
   const bk = session.booking;
-  // Returning customer + full details → confirm
   if (customer && bk.name && bk.address && bk.date && bk.slot) { await showBookingConfirm(phone, session); return; }
-  // Have date, need slot
   if (bk.date && !bk.slot) { await askSlot(phone); session.step = "select_slot"; return; }
-  // Have slot, need date
   if (!bk.date && bk.slot) { await askDate(phone); session.step = "select_date"; return; }
-  // Returning customer, have name+address, need date
   if (customer && bk.name && bk.address) {
-    await sendButtons(phone,
-      `Pickup book karein? 😊\n\n📍 ${customer.address}`,
+    await sendButtons(phone, `Pickup book karein? 😊\n\n📍 ${customer.address}`,
       [{ id: "use_saved", title: "✅ Yes, this address" }, { id: "update_details", title: "✏️ New address" }]
     );
     session.step = "confirm_details"; return;
   }
-  // New customer — need name
   if (!bk.name) { await sendMessage(phone, "👋 Welcome to *Washkart*! 🧺\n\nApna naam batao:"); session.step = "get_name"; return; }
-  // Have name, need address
   if (!bk.address) { await sendMessage(phone, `📍 ${bk.name} ji, apna pickup address bhejein:`); session.step = "get_address"; return; }
-  // Have name+address, need date
   await askDate(phone); session.step = "select_date";
 }
 
@@ -892,9 +773,7 @@ async function sendReminders() {
     const hour = new Date().getHours();
     for (const b of rows) {
       if ((b.slot?.includes("Morning") && hour === 8) || (b.slot?.includes("Evening") && hour === 15)) {
-        await sendMessage(b.phone,
-          `⏰ *Pickup Reminder!*\n\nHi ${b.name}! Aaj Washkart pickup hai.\n\n🕐 ${b.slot}\n📍 ${b.address}\n🆔 ${b.order_id}\n\nCancel: *cancel*`
-        );
+        await sendMessage(b.phone, `⏰ *Pickup Reminder!*\n\nHi ${b.name}! Aaj Washkart pickup hai.\n\n🕐 ${b.slot}\n📍 ${b.address}\n🆔 ${b.order_id}\n\nCancel: *cancel*`);
         await dbUpdate("bookings", `order_id=eq.${b.order_id}`, { reminder_sent: true });
       }
     }
@@ -908,7 +787,6 @@ app.get("/webhook", (req, res) => {
     res.status(200).send(req.query["hub.challenge"]);
   else res.sendStatus(403);
 });
-
 app.post("/webhook", async (req, res) => {
   try {
     const messages = req.body.entry?.[0]?.changes?.[0]?.value?.messages;
@@ -922,9 +800,7 @@ app.post("/webhook", async (req, res) => {
     let text = "";
     if (msg.type === "text") text = msg.text.body;
     else if (msg.type === "interactive") {
-      text = msg.interactive.type === "button_reply"
-        ? msg.interactive.button_reply.id
-        : msg.interactive.list_reply.id;
+      text = msg.interactive.type === "button_reply" ? msg.interactive.button_reply.id : msg.interactive.list_reply.id;
     }
     if (text) await handleMessage(phone, text);
     res.sendStatus(200);
@@ -937,19 +813,37 @@ app.get("/bookings", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+app.post("/bookings", async (req, res) => {
+  // Manual order entry from dashboard (walk-in / phone call)
+  try {
+    const { name, phone, address, date, slot, source, notes } = req.body;
+    if (!name || !phone || !address || !date || !slot) return res.status(400).json({ error: "Missing required fields" });
+    const orderId = genOrderId();
+    const normPhone = normalizePhone(phone);
+    await dbInsert("bookings", { order_id: orderId, name, phone: normPhone, address, date, slot, status: "pending", reminder_sent: false, source: source || "walkin", notes: notes || "" });
+    // Save/update customer
+    await saveCustomer(normPhone, name, address);
+    // Notify admin
+    await sendMessage(ADMIN_NUMBER, `🔔 *New Booking [${source || "Walk-in"}]*\n\n🆔 ${orderId}\n👤 ${name}\n📱 +${normPhone}\n📍 ${address}\n📅 ${date}\n🕐 ${slot}${notes ? `\n📝 ${notes}` : ""}`);
+    res.json({ success: true, order_id: orderId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.patch("/bookings/:orderId", async (req, res) => {
   try {
-    const { status, service_type, express, delivery_date } = req.body;
+    const { status, service_type, express, delivery_date, notes } = req.body;
     const orderId = req.params.orderId;
     const updateData = { status };
     if (service_type) updateData.service_type = service_type;
     if (express !== undefined) updateData.express = express;
     if (delivery_date) updateData.delivery_date = delivery_date;
+    if (notes !== undefined) updateData.notes = notes;
     if (service_type && !delivery_date) updateData.delivery_date = calcDeliveryDate(service_type, express || false);
     await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
     const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
     const b = rows[0];
-    // ONE consolidated message per status — no spam
+
+    // Send WhatsApp notification — NOT for cancelled
     const msgs = {
       picked:
         `🚗 *Kapde pick up ho gaye!*\n\n` +
@@ -960,19 +854,41 @@ app.patch("/bookings/:orderId", async (req, res) => {
         `🫧 *Cleaning shuru ho gayi!*\n\n` +
         (updateData.delivery_date ? `📦 Delivery: *${updateData.delivery_date}*\n` : "") +
         `Hum khayal rakh rahe hain. ✨\n🆔 ${orderId}`,
-      outfordelivery:
-        `🚚 *Aapka order delivery pe hai!*\n\nFresh kapde jald pahunchenge! 😊\n🆔 ${orderId}`,
+      outfordelivery: `🚚 *Aapka order delivery pe hai!*\n\nFresh kapde jald pahunchenge! 😊\n🆔 ${orderId}`,
       delivered:
-        `✅ *Kapde deliver ho gaye!*\n\nThank you for choosing Washkart! 🙏\n\n` +
-        `Aapka experience kaisa raha?\nReply karein: ⭐ (1) se ⭐⭐⭐⭐⭐ (5) tak`,
+        `✅ *Kapde deliver ho gaye!*\n\nThank you for choosing Washkart! 🙏`,
     };
     if (msgs[status] && b?.phone) {
       await sendMessage(b.phone, msgs[status]);
-      if (status === "delivered" && sessions[b.phone]) {
-        sessions[b.phone].step = "feedback";
+      // After delivery — send rating buttons
+      if (status === "delivered") {
+        setTimeout(async () => {
+          await sendButtons(b.phone,
+            "Aapka experience kaisa raha? 😊",
+            [{ id: "rating_excellent", title: "🤩 Excellent" }, { id: "rating_good", title: "😊 Good" }, { id: "rating_poor", title: "😞 Needs Work" }]
+          );
+          if (sessions[b.phone]) sessions[b.phone].step = "feedback";
+        }, 2000);
       }
     }
     res.json({ success: true, delivery_date: updateData.delivery_date });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/bookings/:orderId", async (req, res) => {
+  try {
+    await dbDelete("bookings", `order_id=eq.${req.params.orderId}`);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Manual WhatsApp message from dashboard
+app.post("/send-message", async (req, res) => {
+  try {
+    const { phone, message } = req.body;
+    if (!phone || !message) return res.status(400).json({ error: "Phone and message required" });
+    await sendMessage(normalizePhone(phone), message);
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -980,12 +896,10 @@ app.get("/customers", async (req, res) => {
   try { res.json(await dbSelect("customers", "order=created_at.desc")); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.get("/ratings", async (req, res) => {
   try { res.json(await dbSelect("ratings", "order=created_at.desc")); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 app.get("/dashboard", (req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
 app.get("/", (req, res) => res.send("Washkart Bot is running! 🧺"));
 
