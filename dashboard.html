@@ -6,115 +6,173 @@
 <title>Washkart Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --green: #1a7c4a;
-    --green-light: #e8f5ef;
-    --green-mid: #a8d5bc;
-    --dark: #0f1f17;
-    --text: #1a2e24;
-    --muted: #6b8f7a;
-    --bg: #f5f9f7;
-    --white: #ffffff;
-    --border: #d4e8dc;
-    --orange: #e07b39;
-    --blue: #2563eb;
-    --red: #dc2626;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+:root {
+  --green:#1a7c4a;--green-light:#e8f5ef;--green-mid:#a8d5bc;
+  --dark:#0f1f17;--text:#1a2e24;--muted:#6b8f7a;--bg:#f5f9f7;
+  --white:#fff;--border:#d4e8dc;--orange:#e07b39;--blue:#2563eb;--red:#dc2626;--purple:#7c3aed;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 
-  /* HEADER */
-  .header { background: var(--dark); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; }
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .logo { font-family: 'DM Mono', monospace; color: #fff; font-size: 15px; letter-spacing: 0.05em; }
-  .logo span { color: #4ade80; }
-  .live-badge { background: #4ade80; color: var(--dark); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; font-family: 'DM Mono', monospace; }
-  .header-right { font-family: 'DM Mono', monospace; color: var(--muted); font-size: 12px; }
+/* HEADER */
+.header{background:var(--dark);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;}
+.header-left{display:flex;align-items:center;gap:12px;}
+.logo{font-family:'DM Mono',monospace;color:#fff;font-size:15px;letter-spacing:.05em;}
+.logo span{color:#4ade80;}
+.live-badge{background:#4ade80;color:var(--dark);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;}
+.header-right{font-family:'DM Mono',monospace;color:var(--muted);font-size:12px;}
+.header-actions{display:flex;gap:8px;}
+.btn{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+.btn-primary{background:var(--green);color:#fff;}
+.btn-primary:hover{background:#155f38;}
+.btn-outline{background:transparent;border:1px solid #4ade8044;color:#4ade80;}
+.btn-outline:hover{background:#4ade8022;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-danger:hover{background:#b91c1c;}
+.btn-sm{padding:4px 10px;font-size:12px;}
+.btn-ghost{background:var(--green-light);border:1px solid var(--green-mid);color:var(--green);}
+.btn-ghost:hover{background:var(--green-mid);}
 
-  /* LAYOUT */
-  .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem; }
+/* NAV TABS */
+.nav-tabs{background:var(--white);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;gap:0;overflow-x:auto;}
+.nav-tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;}
+.nav-tab.active{color:var(--green);border-bottom-color:var(--green);}
 
-  /* STATS ROW */
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-  .stat-card { background: var(--white); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem 1.5rem; position: relative; overflow: hidden; }
-  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--green); }
-  .stat-card.orange::before { background: var(--orange); }
-  .stat-card.blue::before { background: var(--blue); }
-  .stat-card.red::before { background: var(--red); }
-  .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
-  .stat-value { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--text); }
-  .stat-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+/* LAYOUT */
+.container{max-width:1280px;margin:0 auto;padding:1.5rem;}
 
-  /* MAIN GRID */
-  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; }
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem;}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.3rem;position:relative;overflow:hidden;}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--green);}
+.stat-card.orange::before{background:var(--orange);}
+.stat-card.blue::before{background:var(--blue);}
+.stat-card.red::before{background:var(--red);}
+.stat-card.purple::before{background:var(--purple);}
+.stat-label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.stat-value{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px;}
 
-  /* PANELS */
-  .panel { background: var(--white); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-  .panel-header { padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-  .panel-title { font-size: 14px; font-weight: 600; color: var(--text); }
-  .panel-body { padding: 0; }
+/* MAIN GRID */
+.main-grid{display:grid;grid-template-columns:1fr 320px;gap:1rem;}
 
-  /* TABS */
-  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 1.5rem; }
-  .tab { padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
-  .tab.active { color: var(--green); border-bottom-color: var(--green); }
+/* PANELS */
+.panel{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1rem;}
+.panel-header{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.panel-title{font-size:14px;font-weight:600;}
 
-  /* BOOKINGS TABLE */
-  .table-wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; padding: 10px 16px; color: var(--muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); background: var(--bg); }
-  td { padding: 12px 16px; border-bottom: 1px solid #f0f7f3; vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: var(--green-light); }
+/* SEARCH */
+.search-bar{padding:.8rem 1.3rem;border-bottom:1px solid var(--border);display:flex;gap:8px;}
+.search-input{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+.search-input:focus{outline:none;border-color:var(--green);}
 
-  /* STATUS BADGES */
-  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-  .badge.pending { background: #fef3c7; color: #92400e; }
-  .badge.picked { background: #dbeafe; color: #1e40af; }
-  .badge.washing { background: #ede9fe; color: #5b21b6; }
-  .badge.delivered { background: #dcfce7; color: #166534; }
+/* STATUS FILTER TABS */
+.filter-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 1.3rem;overflow-x:auto;}
+.filter-tab{padding:9px 14px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px;}
+.filter-tab.active{color:var(--green);border-bottom-color:var(--green);}
 
-  /* STATUS SELECT */
-  .status-select { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--white); color: var(--text); cursor: pointer; font-family: 'DM Sans', sans-serif; }
+/* TABLE */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:9px 14px;color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
+td{padding:11px 14px;border-bottom:1px solid #f0f7f3;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--green-light);}
+tr.overdue td{background:#fff5f5;}
+tr.overdue:hover td{background:#fee2e2;}
 
-  /* SLOT BADGE */
-  .slot-badge { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+/* STATUS BADGES */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-pending{background:#fef3c7;color:#92400e;}
+.badge-picked{background:#dbeafe;color:#1e40af;}
+.badge-inprogress{background:#ede9fe;color:#5b21b6;}
+.badge-outfordelivery{background:#fed7aa;color:#9a3412;}
+.badge-delivered{background:#dcfce7;color:#166534;}
+.badge-cancelled{background:#fee2e2;color:#991b1b;}
+.badge-walkin{background:#f0f9ff;color:#0369a1;font-size:10px;}
+.badge-call{background:#fdf4ff;color:#7e22ce;font-size:10px;}
+.badge-whatsapp{background:#f0fdf4;color:#15803d;font-size:10px;}
+.overdue-tag{font-size:10px;color:var(--red);font-weight:600;}
 
-  /* ORDER ID */
-  .order-id { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--green); font-weight: 500; }
+/* STATUS SELECT */
+.status-select{border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px;background:var(--white);color:var(--text);cursor:pointer;font-family:'DM Sans',sans-serif;}
 
-  /* TODAY PANEL */
-  .today-list { padding: 0; }
-  .today-item { padding: 12px 1.5rem; border-bottom: 1px solid #f0f7f3; display: flex; flex-direction: column; gap: 4px; }
-  .today-item:last-child { border-bottom: none; }
-  .today-name { font-size: 13px; font-weight: 600; color: var(--text); }
-  .today-address { font-size: 12px; color: var(--muted); }
-  .today-slot { font-size: 11px; font-family: 'DM Mono', monospace; }
-  .today-slot.morning { color: #d97706; }
-  .today-slot.evening { color: #2563eb; }
-  .today-phone { font-size: 12px; color: var(--green); font-family: 'DM Mono', monospace; }
+/* ORDER ID */
+.order-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:500;}
 
-  /* CUSTOMER LIST */
-  .cust-item { padding: 12px 1.5rem; border-bottom: 1px solid #f0f7f3; display: flex; align-items: center; gap: 10px; }
-  .cust-item:last-child { border-bottom: none; }
-  .cust-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--green-light); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; color: var(--green); flex-shrink: 0; }
-  .cust-info { flex: 1; min-width: 0; }
-  .cust-name { font-size: 13px; font-weight: 500; }
-  .cust-phone { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
-  .cust-count { font-size: 11px; color: var(--muted); text-align: right; }
+/* TODAY PANELS */
+.today-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;display:flex;flex-direction:column;gap:3px;}
+.today-item:last-child{border-bottom:none;}
+.today-name{font-size:13px;font-weight:600;}
+.today-address{font-size:12px;color:var(--muted);}
+.today-phone{font-size:12px;color:var(--green);font-family:'DM Mono',monospace;}
 
-  /* EMPTY STATE */
-  .empty { padding: 3rem; text-align: center; color: var(--muted); font-size: 13px; }
-  .empty-icon { font-size: 32px; margin-bottom: 8px; }
+/* CUSTOMER LIST */
+.cust-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;display:flex;align-items:center;gap:10px;}
+.cust-item:last-child{border-bottom:none;}
+.cust-avatar{width:32px;height:32px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--green);flex-shrink:0;}
+.cust-info{flex:1;min-width:0;}
+.cust-name{font-size:13px;font-weight:500;}
+.cust-phone{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
 
-  /* REFRESH BTN */
-  .refresh-btn { background: var(--green-light); border: 1px solid var(--green-mid); color: var(--green); padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; }
-  .refresh-btn:hover { background: var(--green-mid); }
+/* RATINGS */
+.rating-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;}
+.rating-item:last-child{border-bottom:none;}
+.stars{color:#f59e0b;font-size:14px;}
 
-  @media (max-width: 900px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .main-grid { grid-template-columns: 1fr; }
-  }
+/* EMPTY */
+.empty{padding:2.5rem;text-align:center;color:var(--muted);font-size:13px;}
+.empty-icon{font-size:28px;margin-bottom:8px;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:#00000066;z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--white);border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
+.modal-header{padding:1.2rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:600;}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;}
+.modal-body{padding:1.5rem;}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
+
+/* FORM */
+.form-group{margin-bottom:1rem;}
+.form-label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
+.form-input,.form-select,.form-textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);color:var(--text);}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--green);}
+.form-textarea{resize:vertical;min-height:80px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+
+/* MESSAGE TEMPLATES */
+.template-btn{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:12px;background:var(--bg);transition:all .15s;}
+.template-btn:hover{border-color:var(--green);background:var(--green-light);}
+.template-btn strong{display:block;font-size:13px;margin-bottom:2px;}
+
+/* PAGE SECTIONS */
+.page-section{display:none;}
+.page-section.active{display:block;}
+
+/* REVENUE CARDS */
+.revenue-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem;}
+.rev-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center;}
+.rev-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
+.rev-value{font-family:'DM Mono',monospace;font-size:22px;color:var(--green);font-weight:500;}
+
+/* TOAST */
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--dark);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:500;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.toast.success{background:var(--green);}
+.toast.error{background:var(--red);}
+
+@media(max-width:900px){
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .main-grid{grid-template-columns:1fr;}
+  .form-row{grid-template-columns:1fr;}
+  .revenue-grid{grid-template-columns:1fr;}
+}
+@media(max-width:500px){
+  .stats{grid-template-columns:1fr 1fr;}
+  .header-actions .btn span{display:none;}
+}
 </style>
 </head>
 <body>
@@ -124,7 +182,20 @@
     <div class="logo">WASH<span>KART</span> admin</div>
     <div class="live-badge">LIVE</div>
   </div>
+  <div class="header-actions">
+    <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 <span>Send Message</span></button>
+    <button class="btn btn-primary btn-sm" onclick="openModal('modal-order')">+ <span>New Order</span></button>
+  </div>
   <div class="header-right" id="clock"></div>
+</div>
+
+<!-- NAV TABS -->
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="showPage('orders',this)">📋 Orders</div>
+  <div class="nav-tab" onclick="showPage('today',this)">📦 Today</div>
+  <div class="nav-tab" onclick="showPage('customers',this)">👥 Customers</div>
+  <div class="nav-tab" onclick="showPage('ratings',this)">⭐ Ratings</div>
+  <div class="nav-tab" onclick="showPage('revenue',this)">💰 Revenue</div>
 </div>
 
 <div class="container">
@@ -132,156 +203,397 @@
   <!-- STATS -->
   <div class="stats">
     <div class="stat-card">
-      <div class="stat-label">Total Bookings</div>
+      <div class="stat-label">Total Orders</div>
       <div class="stat-value" id="stat-total">0</div>
       <div class="stat-sub">All time</div>
     </div>
     <div class="stat-card orange">
-      <div class="stat-label">Today's Pickups</div>
+      <div class="stat-label">Today Pickups</div>
       <div class="stat-value" id="stat-today">0</div>
-      <div class="stat-sub">Scheduled today</div>
+      <div class="stat-sub">Scheduled</div>
     </div>
     <div class="stat-card blue">
-      <div class="stat-label">Today's Deliveries</div>
+      <div class="stat-label">Today Deliveries</div>
       <div class="stat-value" id="stat-deliveries">0</div>
       <div class="stat-sub">Due today</div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card red">
+      <div class="stat-label">Overdue</div>
+      <div class="stat-value" id="stat-overdue">0</div>
+      <div class="stat-sub">Past delivery date</div>
+    </div>
+    <div class="stat-card purple">
       <div class="stat-label">Customers</div>
       <div class="stat-value" id="stat-customers">0</div>
-      <div class="stat-sub">Unique customers</div>
+      <div class="stat-sub">Unique</div>
     </div>
   </div>
 
-  <!-- MAIN GRID -->
-  <div class="main-grid">
-
-    <!-- LEFT: BOOKINGS -->
+  <!-- ═══ ORDERS PAGE ═══ -->
+  <div id="page-orders" class="page-section active">
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title">All Bookings</div>
-        <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
       </div>
-      <div class="tabs">
-        <div class="tab active" onclick="filterTab('all', this)">All</div>
-        <div class="tab" onclick="filterTab('pending', this)">Pending</div>
-        <div class="tab" onclick="filterTab('picked', this)">Picked Up</div>
-        <div class="tab" onclick="filterTab('inprogress', this)">In Progress</div>
-        <div class="tab" onclick="filterTab('outfordelivery', this)">Out for Delivery</div>
-        <div class="tab" onclick="filterTab('delivered', this)">Delivered</div>
+      <div class="search-bar">
+        <input class="search-input" id="search-input" placeholder="🔍 Search by name, phone, order ID..." oninput="renderBookings()">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('search-input').value='';renderBookings()">✕</button>
+      </div>
+      <div class="filter-tabs">
+        <div class="filter-tab active" onclick="filterTab('all',this)">All</div>
+        <div class="filter-tab" onclick="filterTab('pending',this)">⏳ Pending</div>
+        <div class="filter-tab" onclick="filterTab('picked',this)">🚗 Picked</div>
+        <div class="filter-tab" onclick="filterTab('inprogress',this)">🫧 In Progress</div>
+        <div class="filter-tab" onclick="filterTab('outfordelivery',this)">🚚 Out for Delivery</div>
+        <div class="filter-tab" onclick="filterTab('delivered',this)">✅ Delivered</div>
+        <div class="filter-tab" onclick="filterTab('cancelled',this)">❌ Cancelled</div>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Order ID</th>
+              <th>Order</th>
               <th>Customer</th>
               <th>Address</th>
               <th>Date & Slot</th>
+              <th>Service</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="bookings-table">
-            <tr><td colspan="5" class="empty"><div class="empty-icon">📋</div>No bookings yet</td></tr>
+            <tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>Loading...</td></tr>
           </tbody>
         </table>
       </div>
     </div>
+  </div>
 
-    <!-- RIGHT: TODAY + CUSTOMERS -->
-    <div style="display:flex;flex-direction:column;gap:1rem;">
-
-      <!-- TODAY'S PICKUPS -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">📦 Today's Pickups</div>
+  <!-- ═══ TODAY PAGE ═══ -->
+  <div id="page-today" class="page-section">
+    <div class="main-grid">
+      <div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📦 Today's Pickups</div></div>
+          <div id="today-pickups"><div class="empty"><div class="empty-icon">🎉</div>No pickups today</div></div>
         </div>
-        <div class="today-list" id="today-list">
-          <div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">🚚 Today's Deliveries</div></div>
+          <div id="today-deliveries"><div class="empty"><div class="empty-icon">✅</div>No deliveries today</div></div>
         </div>
       </div>
-
-      <!-- TODAY'S DELIVERIES -->
-      <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">🚚 Today's Deliveries</div>
-        </div>
-        <div class="today-list" id="delivery-list">
-          <div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>
+      <div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">⚠️ Overdue Orders</div></div>
+          <div id="overdue-list"><div class="empty"><div class="empty-icon">✅</div>None overdue</div></div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- CUSTOMERS -->
+  <!-- ═══ CUSTOMERS PAGE ═══ -->
+  <div id="page-customers" class="page-section">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">👥 All Customers</div>
+        <span id="cust-count" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="search-bar">
+        <input class="search-input" id="cust-search" placeholder="🔍 Search customers..." oninput="renderCustomers()">
+      </div>
+      <div id="customers-list"><div class="empty"><div class="empty-icon">👤</div>No customers yet</div></div>
+    </div>
+  </div>
+
+  <!-- ═══ RATINGS PAGE ═══ -->
+  <div id="page-ratings" class="page-section">
+    <div class="main-grid">
       <div class="panel">
-        <div class="panel-header">
-          <div class="panel-title">👥 Customers</div>
-        </div>
-        <div id="customers-list">
-          <div class="empty"><div class="empty-icon">👤</div>No customers yet</div>
+        <div class="panel-header"><div class="panel-title">⭐ Customer Ratings</div></div>
+        <div id="ratings-list"><div class="empty"><div class="empty-icon">⭐</div>No ratings yet</div></div>
+      </div>
+      <div>
+        <div class="panel">
+          <div class="panel-header"><div class="panel-title">📊 Rating Summary</div></div>
+          <div style="padding:1.3rem;" id="ratings-summary">
+            <div class="empty">No data yet</div>
+          </div>
         </div>
       </div>
+    </div>
+  </div>
 
+  <!-- ═══ REVENUE PAGE ═══ -->
+  <div id="page-revenue" class="page-section">
+    <div class="revenue-grid">
+      <div class="rev-card">
+        <div class="rev-label">This Week (Est.)</div>
+        <div class="rev-value" id="rev-week">₹0</div>
+      </div>
+      <div class="rev-card">
+        <div class="rev-label">This Month (Est.)</div>
+        <div class="rev-value" id="rev-month">₹0</div>
+      </div>
+      <div class="rev-card">
+        <div class="rev-label">All Time (Est.)</div>
+        <div class="rev-value" id="rev-total">₹0</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><div class="panel-title">📊 Orders by Service</div></div>
+      <div style="padding:1.3rem;" id="service-breakdown"></div>
+    </div>
+    <div class="panel" style="margin-top:1rem;">
+      <div class="panel-header"><div class="panel-title">📊 Orders by Source</div></div>
+      <div style="padding:1.3rem;" id="source-breakdown"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══ MODAL: NEW ORDER ═══ -->
+<div class="modal-overlay" id="modal-order">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">➕ New Order Entry</div>
+      <button class="modal-close" onclick="closeModal('modal-order')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Customer Name *</label>
+          <input class="form-input" id="new-name" placeholder="Full name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Phone *</label>
+          <input class="form-input" id="new-phone" placeholder="10-digit number" type="tel">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pickup Address *</label>
+        <input class="form-input" id="new-address" placeholder="Full address">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Pickup Date *</label>
+          <input class="form-input" id="new-date" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Slot *</label>
+          <select class="form-select" id="new-slot">
+            <option value="Morning (10 AM – 1 PM)">🌅 Morning (10 AM – 1 PM)</option>
+            <option value="Evening (5 PM – 8 PM)">🌆 Evening (5 PM – 8 PM)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Source</label>
+          <select class="form-select" id="new-source">
+            <option value="walkin">🚶 Walk-in</option>
+            <option value="call">📞 Phone Call</option>
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="other">📌 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Service (optional)</label>
+          <select class="form-select" id="new-service">
+            <option value="">— Not known yet —</option>
+            <option value="iron">🔥 Iron</option>
+            <option value="dryclean">🧥 Dry Clean</option>
+            <option value="laundry">🫧 Laundry</option>
+            <option value="shoes">👟 Shoes</option>
+            <option value="mixed">📦 Mixed</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes (optional)</label>
+        <textarea class="form-textarea" id="new-notes" placeholder="Handle saree carefully, light starch on shirts..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-order')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNewOrder()">✅ Create Order</button>
     </div>
   </div>
 </div>
 
+<!-- ═══ MODAL: SEND MESSAGE ═══ -->
+<div class="modal-overlay" id="modal-message">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">💬 Send WhatsApp Message</div>
+      <button class="modal-close" onclick="closeModal('modal-message')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Phone Number *</label>
+        <input class="form-input" id="msg-phone" placeholder="10-digit number or select customer below" type="tel">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Quick select customer</label>
+        <select class="form-select" id="msg-customer-select" onchange="selectMsgCustomer(this.value)">
+          <option value="">— Type phone above or select —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Message *</label>
+        <textarea class="form-textarea" id="msg-text" placeholder="Type your message..." style="min-height:100px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Or use a template</label>
+        <button class="template-btn" onclick="useTemplate('ready')">
+          <strong>✅ Clothes Ready for Pickup</strong>
+          Your clothes are ready! Please visit or we can schedule delivery.
+        </button>
+        <button class="template-btn" onclick="useTemplate('delay')">
+          <strong>⏳ Slight Delay</strong>
+          Hi! Your order is taking a little longer than expected. We'll deliver by tomorrow. Sorry for the wait!
+        </button>
+        <button class="template-btn" onclick="useTemplate('reminder')">
+          <strong>⏰ Pickup Reminder</strong>
+          Hi! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive in your slot.
+        </button>
+        <button class="template-btn" onclick="useTemplate('promo')">
+          <strong>🎉 Special Offer</strong>
+          Hi! Washkart special: Get 10% off on dry cleaning this week. Book now by replying PICKUP!
+        </button>
+        <button class="template-btn" onclick="useTemplate('status')">
+          <strong>📦 Order Status Update</strong>
+          Hi! Your clothes are currently being cleaned and will be delivered soon. Thank you for choosing Washkart!
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-message')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendManualMessage()">📤 Send Message</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
 <script>
-// ─── CONFIG ───────────────────────────────────────────
-// Replace this with your actual Render bot URL
 const BOT_URL = 'https://washkart-bot.onrender.com';
+let allBookings = [], allCustomers = [], allRatings = [], currentFilter = 'all';
 
-// ─── CLOCK ────────────────────────────────────────────
+// ── CLOCK ──────────────────────────────────────────────────────────
 function updateClock() {
-  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', {
-    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
-  });
+  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
 }
-setInterval(updateClock, 1000);
-updateClock();
+setInterval(updateClock, 1000); updateClock();
 
-// ─── DEMO DATA (replace with real API call when backend ready) ─
-let allBookings = [];
+// ── TOAST ──────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
 
-let currentFilter = 'all';
+// ── PAGE NAV ───────────────────────────────────────────────────────
+function showPage(name, el) {
+  document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  el.classList.add('active');
+}
 
-function filterTab(filter, el) {
-  currentFilter = filter;
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+// ── MODAL ──────────────────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ── DATE HELPERS ───────────────────────────────────────────────────
+function getToday() { return new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' }); }
+function isOverdue(b) {
+  if (!b.delivery_date || ['delivered','cancelled'].includes(b.status)) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const parts = b.delivery_date.match(/(\d+)\s+(\w+)/);
+  if (!parts) return false;
+  try {
+    const d = new Date(`${parts[2]} ${parts[1]} ${new Date().getFullYear()}`);
+    d.setHours(0,0,0,0);
+    return d < today;
+  } catch { return false; }
+}
+
+// ── SOURCE BADGE ───────────────────────────────────────────────────
+function sourceBadge(src) {
+  if (!src || src === 'whatsapp') return '<span class="badge badge-whatsapp">💬 WhatsApp</span>';
+  if (src === 'walkin') return '<span class="badge badge-walkin">🚶 Walk-in</span>';
+  if (src === 'call') return '<span class="badge badge-call">📞 Call</span>';
+  return `<span class="badge badge-walkin">${src}</span>`;
+}
+
+// ── STATUS BADGE ───────────────────────────────────────────────────
+function statusBadge(s) {
+  const map = {
+    pending:'<span class="badge badge-pending">⏳ Pending</span>',
+    picked:'<span class="badge badge-picked">🚗 Picked Up</span>',
+    inprogress:'<span class="badge badge-inprogress">🫧 In Progress</span>',
+    outfordelivery:'<span class="badge badge-outfordelivery">🚚 Out for Delivery</span>',
+    delivered:'<span class="badge badge-delivered">✅ Delivered</span>',
+    cancelled:'<span class="badge badge-cancelled">❌ Cancelled</span>',
+  };
+  return map[s] || s;
+}
+
+// ── RENDER BOOKINGS ─────────────────────────────────────────────────
+function filterTab(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   renderBookings();
 }
 
-function statusBadge(status) {
-  const map = {
-    pending: '<span class="badge pending">⏳ Pending</span>',
-    picked: '<span class="badge picked">🚗 Picked Up</span>',
-    washing: '<span class="badge washing">🫧 Washing</span>',
-    delivered: '<span class="badge delivered">✅ Delivered</span>'
-  };
-  return map[status] || status;
-}
-
 function renderBookings() {
-  const filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
+  let filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
+  if (q) filtered = filtered.filter(b =>
+    b.name.toLowerCase().includes(q) || b.phone.includes(q) || b.id.toLowerCase().includes(q) || (b.address||'').toLowerCase().includes(q)
+  );
   const tbody = document.getElementById('bookings-table');
-  if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty"><div class="empty-icon">📋</div>No bookings</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = filtered.map(b => `
-    <tr>
-      <td><span class="order-id">${b.id}</span></td>
+  if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>No bookings found</td></tr>`; return; }
+
+  tbody.innerHTML = filtered.map(b => {
+    const over = isOverdue(b);
+    return `<tr class="${over ? 'overdue' : ''}">
       <td>
-        <div style="font-weight:500;font-size:13px">${b.name}</div>
+        <div class="order-id">${b.id}</div>
+        ${sourceBadge(b.source)}
+        ${over ? '<div class="overdue-tag">⚠️ OVERDUE</div>' : ''}
+        ${b.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">📝 ${b.notes}</div>` : ''}
+      </td>
+      <td>
+        <div style="font-weight:500">${b.name}</div>
         <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${b.phone}</div>
       </td>
-      <td style="font-size:12px;color:var(--muted);max-width:160px">${b.address}</td>
+      <td style="font-size:12px;color:var(--muted);max-width:150px">${b.address}</td>
       <td>
         <div style="font-size:12px;font-weight:500">${b.date}</div>
-        <div class="slot-badge">${b.slot.includes('Morning') ? '🌅' : '🌆'} ${b.slot}</div>
+        <div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning') ? '🌅' : '🌆'} ${b.slot}</div>
+        ${b.delivery_date ? `<div style="font-size:11px;color:${over?'var(--red)':'var(--green)'}">📦 ${b.delivery_date}</div>` : ''}
       </td>
       <td>
-        <select class="status-select" onchange="updateStatus('${b.id}', this.value)">
+        ${b.status === 'picked' || b.service_type ? `
+        <select class="status-select" onchange="updateService('${b.id}',this.value)" style="width:100%;margin-bottom:4px">
+          <option value="">🧺 Service...</option>
+          <option value="iron" ${b.service_type==='iron'?'selected':''}>🔥 Iron</option>
+          <option value="dryclean" ${b.service_type==='dryclean'?'selected':''}>🧥 Dry Clean</option>
+          <option value="laundry" ${b.service_type==='laundry'?'selected':''}>🫧 Laundry</option>
+          <option value="shoes" ${b.service_type==='shoes'?'selected':''}>👟 Shoes</option>
+          <option value="mixed" ${b.service_type==='mixed'?'selected':''}>📦 Mixed</option>
+        </select>
+        <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" ${b.express?'checked':''} onchange="toggleExpress('${b.id}',this.checked)"> ⚡ Express
+        </label>` : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+      </td>
+      <td>
+        <select class="status-select" onchange="updateStatus('${b.id}',this.value)">
           <option value="pending" ${b.status==='pending'?'selected':''}>⏳ Pending</option>
           <option value="picked" ${b.status==='picked'?'selected':''}>🚗 Picked Up</option>
           <option value="inprogress" ${b.status==='inprogress'?'selected':''}>🫧 In Progress</option>
@@ -289,169 +601,325 @@ function renderBookings() {
           <option value="delivered" ${b.status==='delivered'?'selected':''}>✅ Delivered</option>
           <option value="cancelled" ${b.status==='cancelled'?'selected':''}>❌ Cancelled</option>
         </select>
-        ${b.status === 'picked' ? `
-        <div style="margin-top:6px">
-          <select class="status-select" onchange="updateService('${b.id}', this.value)" style="margin-bottom:4px;width:100%">
-            <option value="">🧺 Select service...</option>
-            <option value="iron" ${b.service_type==='iron'?'selected':''}>🔥 Iron</option>
-            <option value="dryclean" ${b.service_type==='dryclean'?'selected':''}>🧥 Dry Clean</option>
-            <option value="laundry" ${b.service_type==='laundry'?'selected':''}>🫧 Laundry</option>
-            <option value="shoes" ${b.service_type==='shoes'?'selected':''}>👟 Shoes</option>
-            <option value="mixed" ${b.service_type==='mixed'?'selected':''}>📦 Mixed</option>
-          </select>
-          <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
-            <input type="checkbox" ${b.express?'checked':''} onchange="toggleExpress('${b.id}', this.checked)"> ⚡ Express
-          </label>
-          ${b.delivery_date ? `<div style="font-size:11px;color:var(--green);margin-top:2px">📦 ${b.delivery_date}</div>` : ''}
-        </div>` : b.delivery_date ? `<div style="font-size:11px;color:var(--green);margin-top:4px">📦 ${b.delivery_date}</div>` : ''}
       </td>
-    </tr>
-  `).join('');
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')" title="Send WhatsApp">💬</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteOrder('${b.id}')" title="Delete">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
-function updateStatus(id, newStatus) {
+// ── STATUS / SERVICE / EXPRESS UPDATES ────────────────────────────
+function updateStatus(id, status) {
+  const b = allBookings.find(x => x.id === id);
   fetch(`${BOT_URL}/bookings/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: newStatus })
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status, service_type: b?.service_type || '', express: b?.express || false })
   }).then(r => r.json()).then(data => {
-    const booking = allBookings.find(b => b.id === id);
-    if (booking) {
-      booking.status = newStatus;
-      if (data.delivery_date) booking.delivery_date = data.delivery_date;
-      updateStats();
-    }
-  }).catch(() => alert('Failed to update status. Try again.'));
+    if (b) { b.status = status; if (data.delivery_date) b.delivery_date = data.delivery_date; }
+    toast(`Order ${id} → ${status}`); updateAll();
+  }).catch(() => toast('Update failed', 'error'));
 }
-
 function updateService(id, serviceType) {
   if (!serviceType) return;
-  const booking = allBookings.find(b => b.id === id);
+  const b = allBookings.find(x => x.id === id);
   fetch(`${BOT_URL}/bookings/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: booking?.status || 'picked', service_type: serviceType, express: booking?.express || false })
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status: b?.status || 'picked', service_type: serviceType, express: b?.express || false })
   }).then(r => r.json()).then(data => {
-    if (booking) {
-      booking.service_type = serviceType;
-      if (data.delivery_date) booking.delivery_date = data.delivery_date;
-      updateStats();
-    }
+    if (b) { b.service_type = serviceType; if (data.delivery_date) b.delivery_date = data.delivery_date; }
+    updateAll();
+  });
+}
+function toggleExpress(id, val) {
+  const b = allBookings.find(x => x.id === id);
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status: b?.status || 'picked', service_type: b?.service_type || 'mixed', express: val })
+  }).then(r => r.json()).then(data => {
+    if (b) { b.express = val; if (data.delivery_date) b.delivery_date = data.delivery_date; }
+    updateAll();
   });
 }
 
-function toggleExpress(id, isExpress) {
-  const booking = allBookings.find(b => b.id === id);
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: booking?.status || 'picked', service_type: booking?.service_type || 'mixed', express: isExpress })
-  }).then(r => r.json()).then(data => {
-    if (booking) {
-      booking.express = isExpress;
-      if (data.delivery_date) booking.delivery_date = data.delivery_date;
-      updateStats();
-    }
-  });
+// ── DELETE ORDER ───────────────────────────────────────────────────
+function deleteOrder(id) {
+  if (!confirm(`Delete order ${id}? This cannot be undone.`)) return;
+  fetch(`${BOT_URL}/bookings/${id}`, { method:'DELETE' })
+    .then(r => { if (r.ok) { allBookings = allBookings.filter(b => b.id !== id); toast(`Order ${id} deleted`); updateAll(); } else toast('Delete failed','error'); })
+    .catch(() => toast('Delete failed','error'));
 }
 
+// ── TODAY ──────────────────────────────────────────────────────────
 function renderToday() {
   const today = getToday();
-  const todayBookings = allBookings.filter(b => b.date === today);
-  const el = document.getElementById('today-list');
-  if (todayBookings.length === 0) { el.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; }
+  const pickups = allBookings.filter(b => b.date === today && !['cancelled'].includes(b.status));
+  const deliveries = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status));
+  const overdue = allBookings.filter(isOverdue);
+
+  // Pickups
+  const pEl = document.getElementById('today-pickups');
+  if (!pickups.length) { pEl.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; }
   else {
-    const morning = todayBookings.filter(b => b.slot && b.slot.includes('Morning'));
-    const evening = todayBookings.filter(b => b.slot && b.slot.includes('Evening'));
+    const morning = pickups.filter(b => b.slot?.includes('Morning'));
+    const evening = pickups.filter(b => b.slot?.includes('Evening'));
     let html = '';
     if (morning.length) {
-      html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning Slot</div>`;
-      morning.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning (10 AM – 1 PM)</div>`;
+      morning.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
     }
     if (evening.length) {
-      html += `<div style="padding:8px 1.5rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening Slot</div>`;
-      evening.forEach(b => { html += `<div class="today-item"><div class="today-name">${b.name}</div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div></div>`; });
+      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening (5 PM – 8 PM)</div>`;
+      evening.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
     }
-    el.innerHTML = html;
+    pEl.innerHTML = html;
   }
+
+  // Deliveries
+  const dEl = document.getElementById('today-deliveries');
+  if (!deliveries.length) { dEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>'; }
+  else { dEl.innerHTML = deliveries.map(b => `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${b.service_type ? `<div style="font-size:11px;color:var(--green)">${b.express?'⚡ Express — ':''}${b.service_type}</div>` : ''}</div>`).join(''); }
+
+  // Overdue
+  const oEl = document.getElementById('overdue-list');
+  if (!overdue.length) { oEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No overdue orders</div>'; }
+  else { oEl.innerHTML = overdue.map(b => `<div class="today-item" style="border-left:3px solid var(--red);padding-left:calc(1.3rem - 3px)"><div class="today-name" style="color:var(--red)">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">Due: ${b.delivery_date} — ${statusBadge(b.status)}</div><div class="today-phone">${b.phone}</div></div>`).join(''); }
+
+  document.getElementById('stat-overdue').textContent = overdue.length;
 }
 
-function getToday() {
-  return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
-}
-
-function renderDeliveries() {
-  const today = getToday();
-  const deliveries = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status));
-  const el = document.getElementById('delivery-list');
-  if (!deliveries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>'; return; }
-  el.innerHTML = deliveries.map(b => `
-    <div class="today-item">
-      <div class="today-name">${b.name} <span style="font-size:11px;color:var(--muted)">${b.id}</span></div>
-      <div class="today-address">${b.address}</div>
-      <div class="today-phone">${b.phone}</div>
-      ${b.service_type ? `<div style="font-size:11px;color:var(--green);margin-top:2px">${b.express ? '⚡ Express — ' : ''}${b.service_type}</div>` : ''}
-    </div>
-  `).join('');
-}
-
+// ── CUSTOMERS ──────────────────────────────────────────────────────
 function renderCustomers() {
-  const seen = {};
-  allBookings.forEach(b => {
-    if (!seen[b.phone]) seen[b.phone] = { name: b.name, phone: b.phone, count: 0 };
-    seen[b.phone].count++;
-  });
-  const customers = Object.values(seen);
+  const q = (document.getElementById('cust-search')?.value || '').toLowerCase();
+  let custs = allCustomers;
+  if (q) custs = custs.filter(c => c.name?.toLowerCase().includes(q) || c.phone?.includes(q) || c.address?.toLowerCase().includes(q));
   const el = document.getElementById('customers-list');
-  if (!customers.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div>No customers yet</div>'; return; }
-  el.innerHTML = customers.map(c => `
-    <div class="cust-item">
-      <div class="cust-avatar">${c.name[0]}</div>
+  document.getElementById('cust-count').textContent = `${custs.length} customers`;
+  if (!custs.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div>No customers found</div>'; return; }
+  el.innerHTML = custs.map(c => {
+    const orderCount = allBookings.filter(b => b.phone === c.phone).length;
+    return `<div class="cust-item">
+      <div class="cust-avatar">${(c.name||'?')[0].toUpperCase()}</div>
       <div class="cust-info">
         <div class="cust-name">${c.name}</div>
         <div class="cust-phone">${c.phone}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.address||''}</div>
       </div>
-      <div class="cust-count">${c.count} order${c.count>1?'s':''}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;color:var(--muted)">${orderCount} order${orderCount!==1?'s':''}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openSendMsg('${c.phone}','${c.name}')">💬</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── RATINGS ────────────────────────────────────────────────────────
+function renderRatings() {
+  const el = document.getElementById('ratings-list');
+  const sumEl = document.getElementById('ratings-summary');
+  if (!allRatings.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">⭐</div>No ratings yet</div>'; sumEl.innerHTML = '<div class="empty">No data</div>'; return; }
+  const rated = allRatings.filter(r => r.rating);
+  const avg = rated.length ? (rated.reduce((s,r) => s + r.rating, 0) / rated.length).toFixed(1) : '—';
+  const dist = [5,4,3,2,1].map(n => ({ n, count: rated.filter(r => r.rating === n).length }));
+  sumEl.innerHTML = `
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:40px;font-weight:600;color:var(--green)">${avg}</div>
+      <div style="color:#f59e0b;font-size:20px">${'⭐'.repeat(Math.round(avg))}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">${rated.length} ratings</div>
     </div>
-  `).join('');
+    ${dist.map(d => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:12px;width:20px">${d.n}⭐</span>
+      <div style="flex:1;background:var(--bg);border-radius:4px;height:8px;overflow:hidden">
+        <div style="width:${rated.length?Math.round(d.count/rated.length*100):0}%;background:var(--green);height:100%"></div>
+      </div>
+      <span style="font-size:12px;color:var(--muted);width:20px">${d.count}</span>
+    </div>`).join('')}`;
+  el.innerHTML = allRatings.map(r => {
+    const cust = allCustomers.find(c => c.phone === r.phone);
+    return `<div class="rating-item">
+      <div style="display:flex;justify-content:space-between;align-items:start">
+        <div>
+          <span style="font-weight:500">${cust?.name || r.phone}</span>
+          <span class="order-id" style="margin-left:8px">${r.order_id||''}</span>
+        </div>
+        <div class="stars">${r.rating ? '⭐'.repeat(r.rating) : '💬'}</div>
+      </div>
+      ${r.comment ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">"${r.comment}"</div>` : ''}
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : ''}</div>
+    </div>`;
+  }).join('');
 }
 
-function updateStats() {
-  document.getElementById('stat-total').textContent = allBookings.length;
+// ── REVENUE ────────────────────────────────────────────────────────
+const SERVICE_AVG = { iron: 40, dryclean: 200, laundry: 300, shoes: 300, mixed: 250 };
+function calcRevenue(bookings) {
+  return bookings.filter(b => b.status === 'delivered').reduce((s, b) => s + (SERVICE_AVG[b.service_type] || 150), 0);
+}
+function renderRevenue() {
+  const now = new Date();
+  const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+  const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
+  const weekOrders = allBookings.filter(b => b.created_at && new Date(b.created_at) >= weekAgo);
+  const monthOrders = allBookings.filter(b => b.created_at && new Date(b.created_at) >= monthAgo);
+  document.getElementById('rev-week').textContent = `₹${calcRevenue(weekOrders).toLocaleString('en-IN')}`;
+  document.getElementById('rev-month').textContent = `₹${calcRevenue(monthOrders).toLocaleString('en-IN')}`;
+  document.getElementById('rev-total').textContent = `₹${calcRevenue(allBookings).toLocaleString('en-IN')}`;
+
+  // Service breakdown
+  const svc = {};
+  allBookings.forEach(b => { if (b.service_type) { svc[b.service_type] = (svc[b.service_type]||0) + 1; } });
+  const total = Object.values(svc).reduce((a,b)=>a+b,0)||1;
+  const svcEl = document.getElementById('service-breakdown');
+  if (!Object.keys(svc).length) { svcEl.innerHTML = '<div class="empty">No service data yet. Assign services when picking up orders.</div>'; }
+  else { svcEl.innerHTML = Object.entries(svc).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:13px;width:100px;text-transform:capitalize">${k}</span>
+      <div style="flex:1;background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
+        <div style="width:${Math.round(v/total*100)}%;background:var(--green);height:100%;border-radius:6px"></div>
+      </div>
+      <span style="font-size:12px;color:var(--muted);width:40px;text-align:right">${v} orders</span>
+    </div>`).join(''); }
+
+  // Source breakdown
+  const src = {};
+  allBookings.forEach(b => { const s = b.source||'whatsapp'; src[s] = (src[s]||0) + 1; });
+  const srcEl = document.getElementById('source-breakdown');
+  const srcTotal = Object.values(src).reduce((a,b)=>a+b,0)||1;
+  srcEl.innerHTML = Object.entries(src).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:13px;width:100px;text-transform:capitalize">${k}</span>
+      <div style="flex:1;background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
+        <div style="width:${Math.round(v/srcTotal*100)}%;background:var(--blue);height:100%;border-radius:6px"></div>
+      </div>
+      <span style="font-size:12px;color:var(--muted);width:40px;text-align:right">${v}</span>
+    </div>`).join('');
+}
+
+// ── STATS UPDATE ───────────────────────────────────────────────────
+function updateAll() {
   const today = getToday();
-  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === today).length;
+  document.getElementById('stat-total').textContent = allBookings.length;
+  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === today && !['cancelled'].includes(b.status)).length;
   document.getElementById('stat-deliveries').textContent = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status)).length;
-  const phones = new Set(allBookings.map(b => b.phone));
-  document.getElementById('stat-customers').textContent = phones.size;
-  renderBookings();
-  renderToday();
-  renderDeliveries();
-  renderCustomers();
+  document.getElementById('stat-customers').textContent = allCustomers.length;
+  renderBookings(); renderToday(); renderCustomers(); renderRatings(); renderRevenue();
 }
 
-function loadData() {
-  fetch(`${BOT_URL}/bookings`)
-    .then(r => r.json())
-    .then(data => {
-      allBookings = data.map(b => ({
-        id: b.order_id,
-        name: b.name || '',
-        phone: b.phone || '',
-        address: b.address || '',
-        date: b.date || '',
-        slot: b.slot || '',
-        status: b.status || 'pending',
-        service_type: b.service_type || '',
-        express: b.express || false,
-        delivery_date: b.delivery_date || ''
-      }));
-      updateStats();
-    })
-    .catch(() => updateStats());
+// ── LOAD DATA ──────────────────────────────────────────────────────
+async function loadData() {
+  try {
+    const [bRes, cRes, rRes] = await Promise.all([
+      fetch(`${BOT_URL}/bookings`),
+      fetch(`${BOT_URL}/customers`),
+      fetch(`${BOT_URL}/ratings`).catch(() => ({ json: () => [] }))
+    ]);
+    allBookings = (await bRes.json()).map(b => ({
+      id: b.order_id, name: b.name||'', phone: b.phone||'', address: b.address||'',
+      date: b.date||'', slot: b.slot||'', status: b.status||'pending',
+      service_type: b.service_type||'', express: b.express||false,
+      delivery_date: b.delivery_date||'', source: b.source||'whatsapp',
+      notes: b.notes||'', created_at: b.created_at||''
+    }));
+    allCustomers = await cRes.json();
+    allRatings = await rRes.json().catch(() => []);
+    // Populate customer dropdowns
+    populateCustomerDropdown();
+    updateAll();
+  } catch (e) { console.error('Load error:', e); toast('Failed to load data', 'error'); }
 }
+
+function populateCustomerDropdown() {
+  const sel = document.getElementById('msg-customer-select');
+  sel.innerHTML = '<option value="">— Type phone above or select —</option>';
+  allCustomers.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.phone; opt.textContent = `${c.name} (${c.phone})`;
+    sel.appendChild(opt);
+  });
+}
+
+// ── NEW ORDER ──────────────────────────────────────────────────────
+async function submitNewOrder() {
+  const name = document.getElementById('new-name').value.trim();
+  const phone = document.getElementById('new-phone').value.trim();
+  const address = document.getElementById('new-address').value.trim();
+  const dateInput = document.getElementById('new-date').value;
+  const slot = document.getElementById('new-slot').value;
+  const source = document.getElementById('new-source').value;
+  const service = document.getElementById('new-service').value;
+  const notes = document.getElementById('new-notes').value.trim();
+  if (!name||!phone||!address||!dateInput||!slot) { toast('Please fill all required fields','error'); return; }
+
+  // Format date to match bot format
+  const d = new Date(dateInput);
+  const dateStr = d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+
+  const body = { name, phone, address, date: dateStr, slot, source, notes };
+  if (service) body.service_type = service;
+
+  try {
+    const res = await fetch(`${BOT_URL}/bookings`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast(`✅ Order ${data.order_id} created!`);
+      closeModal('modal-order');
+      // Reset form
+      ['new-name','new-phone','new-address','new-date','new-notes'].forEach(id => document.getElementById(id).value='');
+      document.getElementById('new-source').value='walkin';
+      document.getElementById('new-service').value='';
+      loadData();
+    } else { toast(data.error||'Failed to create order','error'); }
+  } catch { toast('Network error','error'); }
+}
+
+// ── MANUAL MESSAGE ─────────────────────────────────────────────────
+function openSendMsg(phone, name) {
+  document.getElementById('msg-phone').value = phone;
+  document.getElementById('msg-text').value = `Hi ${name}! `;
+  openModal('modal-message');
+}
+function selectMsgCustomer(phone) {
+  if (phone) document.getElementById('msg-phone').value = phone;
+}
+const TEMPLATES = {
+  ready: '✅ Your clothes are ready! Please let us know if you need delivery or will pick up from the store.',
+  delay: 'Hi! Your Washkart order is taking a little longer than expected. We\'ll deliver by tomorrow. Really sorry for the wait! 🙏',
+  reminder: '⏰ Hi! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive within your slot. 💚',
+  promo: '🎉 Hi! Special offer from Washkart: Get 10% off dry cleaning this week! Reply *pickup* to book. Valid till Sunday.',
+  status: '📦 Hi! Your clothes are currently being cleaned with care and will be delivered soon. Thank you for choosing Washkart! 🙏',
+};
+function useTemplate(key) {
+  document.getElementById('msg-text').value = TEMPLATES[key];
+}
+async function sendManualMessage() {
+  const phone = document.getElementById('msg-phone').value.trim();
+  const message = document.getElementById('msg-text').value.trim();
+  if (!phone||!message) { toast('Phone and message required','error'); return; }
+  try {
+    const res = await fetch(`${BOT_URL}/send-message`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, message })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('✅ Message sent!');
+      closeModal('modal-message');
+      document.getElementById('msg-phone').value='';
+      document.getElementById('msg-text').value='';
+      document.getElementById('msg-customer-select').value='';
+    } else { toast(data.error||'Failed to send','error'); }
+  } catch { toast('Network error','error'); }
+}
+
+// Set today's date as default in new order form
+document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
 
 loadData();
-setInterval(loadData, 30000); // Auto refresh every 30 seconds
+setInterval(loadData, 30000);
 </script>
 </body>
 </html>
