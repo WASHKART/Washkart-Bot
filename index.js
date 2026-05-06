@@ -47,7 +47,8 @@ function isTomorrowThursday() { const d = new Date(); d.setDate(d.getDate() + 1)
 function isThursdayStr(str) {
   if (!str) return false;
   const s = str.toLowerCase();
-  if (s.includes("thursday") || s.includes("guruvar") || s.includes("veervar")) return true;
+  if (s.includes("thursday") || s.includes("guruvar") || s.includes("veervar") ||
+      s.includes("गुरुवार") || s.includes("bruhaspativar") || s.includes("bruhaspati")) return true;
   try { const d = new Date(str); if (!isNaN(d.getTime()) && d.getDay() === 4) return true; } catch {}
   return false;
 }
@@ -65,18 +66,220 @@ function norm(t) { return t.toLowerCase().trim().replace(/[^\w\s]/g, " ").replac
 function has(t, ...words) { return words.some(w => t.includes(w)); }
 
 // ── KEYWORD GROUPS ────────────────────────────────────────────────
-const BOOKING_KW = ["pickup", "book", "schedule", "collect", "dhobi", "booking", "pickup karna", "pickup chahiye", "pickup karo", "book karo", "order karo", "kapde dene", "kapde lene", "ghar se lelo", "ghar se lo", "pickup book", "mujhe pickup", "laundry dena", "laundry lena"];
-const TRACK_KW   = ["track", "order status", "check order", "order track", "kahan hai", "kab aayega", "kab milega", "delivery kab", "order kahan", "kapda kahan", "mera order", "order check", "delivery status", "status check"];
-const CANCEL_KW  = ["cancel", "cancellation", "band karo", "nahi chahiye", "cancel karo", "booking cancel", "order cancel", "raddh", "cancel karna", "booking band"];
-const EXPRESS_KW = ["express", "urgent", "jaldi", "fast", "4 hour", "same day", "asap", "jaldi chahiye", "urgent hai", "express chahiye"];
-const HELP_KW    = ["help", "menu", "options", "kya kar sakte", "what can", "commands", "guide", "kya karte ho", "services"];
-const YES_KW     = ["yes", "haan", "ha", "haa", "ji", "ok", "okay", "theek", "theek hai", "sahi", "bilkul", "zaroor", "sure", "correct", "confirm", "ho ja", "kar do", "done", "haan ji", "ha ji"];
-const NO_KW      = ["no", "nahi", "na", "nope", "mat karo", "nhi", "nahin", "nai", "naa"];
-const SAME_KW    = ["same as last", "same as before", "pichli baar jaisa", "last wala", "repeat", "same order", "same booking", "same slot", "wahi wala", "wahi time", "pehle wala"];
+// Each group covers English / Hindi / Marathi / Hinglish variations
+
+const BOOKING_KW = [
+  // ── English ──
+  "pickup", "pick up", "book", "schedule", "collect", "collection",
+  "booking", "place order", "new order", "want pickup", "need pickup",
+  "arrange pickup", "send pickup", "get pickup", "laundry pickup",
+  // ── Hindi ──
+  "kapde dene", "kapde lene", "kapde bhejo", "kapde uthao", "kapde lo",
+  "ghar se lelo", "ghar se lo", "ghar aao", "ghar pe aao", "aa jao",
+  "pickup karna", "pickup chahiye", "pickup karo", "pickup book karo",
+  "pickup lagao", "pickup bhejo", "pickup de do", "mujhe pickup",
+  "book karo", "book karna", "booking karo", "booking chahiye",
+  "order karo", "order dena", "order lagao", "order book karo",
+  "laundry dena", "laundry lena", "laundry bhejo", "laundry chahiye",
+  "kapda dena", "kapda lena", "kapde nikalo", "kapde pack karo",
+  "dhobi", "dhobi bhejo", "dhobi ko bulao", "dhulai karo",
+  "istri karo", "press karo", "dhona hai", "kapde dhone hain",
+  // ── Marathi (romanised) ──
+  "pickup hava", "pickup kara", "pickup pathva", "pickup dyaa",
+  "kapde nyaa", "kapde ghya", "kapde patha", "kapde pathva",
+  "kapde uthva", "kapde uthvayche", "kapde dyayche",
+  "ghari ya", "ghari yaa", "ghari ya na", "ghari yeva",
+  "booking kara", "book kara", "order kara", "order dyaa",
+  "laundry dyaa", "laundry patha", "laundry havi", "laundry kara",
+  "dhobi patha", "kapde dho", "kapde istri kara",
+  "nyayala ya", "ghyayala ya", "uthayla ya", "collect kara",
+  // ── Marathi (Devanagari) ──
+  "पिकअप", "कपडे न्या", "कपडे घ्या", "कपडे पाठवा", "बुकिंग करा",
+  "लॉन्ड्री द्या", "घरी या", "उचला", "कपडे उचला",
+  // ── Hinglish ──
+  "pickup book karna hai", "pickup chahiye mujhe", "bhai pickup karo",
+  "yaar pickup lo", "pickup le lo", "aake lo", "aake kapde lo",
+  "kapde collect karo", "kapde le jao", "kapde utha lo",
+  "booking chahiye bhai", "ek booking karo", "booking de do",
+  "laundry ka pickup", "wash karna hai", "dry clean karna hai",
+  "parso", "parso subah", "parso shaam",
+];
+
+const TRACK_KW = [
+  // ── English ──
+  "track", "tracking", "order status", "check order", "order track",
+  "where is my order", "status", "delivery status", "order update",
+  "check status", "order info", "where are my clothes",
+  // ── Hindi ──
+  "kahan hai", "kab aayega", "kab milega", "kab aayenge",
+  "delivery kab", "order kahan", "kapda kahan", "kapde kahan hain",
+  "mera order", "mera kapda", "order check", "order dekho",
+  "status check", "status batao", "kab tak aayega", "kitna time",
+  "order hua kya", "pickup hua kya", "kapde aaye kya",
+  "update do", "kya hua order ka", "order ka kya hua",
+  // ── Marathi (romanised) ──
+  "order kuth aahe", "kapde kuth aahet", "kev aayil", "kev yenar",
+  "status sanga", "kiti vel lagel", "delivery kev honar",
+  "kapde aale ka", "order update sanga", "kath aahe maza order",
+  // ── Marathi (Devanagari) ──
+  "ऑर्डर कुठे आहे", "कपडे कुठे आहेत", "स्टेटस सांगा",
+  // ── Hinglish ──
+  "bhai order kahan hai", "yaar status kya hai", "order track karo",
+  "mujhe batao order kahan hai", "kapde kab aayenge bhai",
+];
+
+const CANCEL_KW = [
+  // ── English ──
+  "cancel", "cancellation", "cancel order", "cancel booking",
+  "don't want", "dont want", "stop", "drop it", "nevermind",
+  // ── Hindi ──
+  "band karo", "nahi chahiye", "cancel karo", "booking cancel",
+  "order cancel", "raddh", "cancel karna", "booking band",
+  "mat karo", "rehne do", "chodo", "chhodo", "band kar do",
+  "order band karo", "cancel kar do", "booking cancel karo",
+  "nahi lena", "nahi dena", "nahi karwana", "rokho",
+  // ── Marathi (romanised) ──
+  "cancel kara", "nako", "nako aahe", "radhd kara", "thamba",
+  "booking nako", "order nako", "cancel dyaa", "band kara",
+  // ── Marathi (Devanagari) ──
+  "रद्द करा", "नको", "बंद करा", "कॅन्सल करा",
+  // ── Hinglish ──
+  "yaar cancel karo", "bhai cancel kar do", "cancel bhai",
+  "nahi chahiye bhai", "rehne de yaar",
+];
+
+const EXPRESS_KW = [
+  // ── English ──
+  "express", "urgent", "fast", "quick", "asap", "rush",
+  "same day", "today delivery", "4 hour", "emergency",
+  "as soon as possible", "immediately", "right now delivery",
+  // ── Hindi ──
+  "jaldi", "jaldi karo", "jaldi chahiye", "urgent hai",
+  "express chahiye", "abhi chahiye", "aaj chahiye",
+  "jaldi deliver karo", "jaldi bhejo", "urgent pickup",
+  "kal tak chahiye", "aaj raat tak", "kuch ghante mein",
+  // ── Marathi (romanised) ──
+  "lavkar", "lavkar kara", "lavkar hava", "lavkar pathva",
+  "urgent aahe", "express hava", "aaj hava", "tvarit",
+  // ── Marathi (Devanagari) ──
+  "लवकर", "तातडीने", "अर्जंट",
+  // ── Hinglish ──
+  "bhai jaldi karo", "yaar urgent hai", "express lagao",
+  "jaldi bhai", "fast kar do", "express wala",
+];
+
+const HELP_KW = [
+  // ── English ──
+  "help", "menu", "options", "what can you do", "what can",
+  "commands", "guide", "services", "how does it work",
+  "how to use", "what do you offer", "info",
+  // ── Hindi ──
+  "kya kar sakte", "kya karte ho", "kya kya hota hai",
+  "kaise use kare", "samjhao", "batao", "kya services hain",
+  "madad chahiye", "madad karo", "help chahiye",
+  // ── Marathi (romanised) ──
+  "kay karta", "help kara", "madat kara", "kay suvidha aahe",
+  "kasa vaparawa", "sangaa", "mahiti dya",
+  // ── Marathi (Devanagari) ──
+  "मदत", "माहिती द्या", "काय सेवा आहे",
+  // ── Hinglish ──
+  "bhai kya kya karte ho", "yaar help karo", "kuch samjha do",
+];
+
+const YES_KW = [
+  // ── English ──
+  "yes", "yep", "yup", "yeah", "sure", "correct", "confirm",
+  "confirmed", "alright", "absolutely", "definitely", "proceed",
+  "go ahead", "done", "ok", "okay",
+  // ── Hindi ──
+  "haan", "ha", "haa", "ji", "ji haan", "haan ji", "ha ji",
+  "theek", "theek hai", "theek hai ji", "sahi", "sahi hai",
+  "bilkul", "zaroor", "ho ja", "kar do", "haan kar do",
+  "manzoor", "agree", "chalo", "chalega",
+  // ── Marathi (romanised) ──
+  "ho", "hoy", "hoo", "hoy na", "chalu kara", "kara",
+  "theek aahe", "barobar", "accord", "nakkicha",
+  // ── Marathi (Devanagari) ──
+  "हो", "होय", "बरोबर", "नक्की",
+  // ── Hinglish ──
+  "haan bhai", "ha yaar", "ok bhai", "done bhai", "chal kar do",
+];
+
+const NO_KW = [
+  // ── English ──
+  "no", "nope", "nah", "not now", "later", "not yet",
+  // ── Hindi ──
+  "nahi", "na", "nhi", "nahin", "nai", "naa",
+  "abhi nahi", "baad mein", "rehne do", "mat karo",
+  "nahi chahiye", "nahi karna", "chhod do",
+  // ── Marathi (romanised) ──
+  "nako", "nahi", "nakos", "nahi hav", "pudhe",
+  // ── Marathi (Devanagari) ──
+  "नको", "नाही",
+  // ── Hinglish ──
+  "nahi bhai", "na yaar", "abhi nahi bhai", "nahi re",
+];
+
+const SAME_KW = [
+  // ── English ──
+  "same as last", "same as before", "same as last time",
+  "repeat", "repeat order", "same order", "same booking",
+  "same slot", "previous order", "last order again",
+  // ── Hindi ──
+  "pichli baar jaisa", "last wala", "wahi wala", "wahi time",
+  "pehle wala", "pehle jaisa", "dobara wahi", "same karo",
+  "wahi order", "wahi booking", "phir se wahi",
+  "usi tarah", "pehle jaisi booking",
+  // ── Marathi (romanised) ──
+  "aaglyasarkha", "tyach sarkha", "last sarkha", "same kara",
+  "toch order", "tich booking", "purvicha sarkha",
+  // ── Marathi (Devanagari) ──
+  "तसेच करा", "आधीसारखे",
+  // ── Hinglish ──
+  "bhai same karo", "yaar wahi wala", "same de do bhai",
+];
 
 // ── DIRECT KEYWORD SHORTCUTS (pre-Gemini) ─────────────────────────
-const RATES_KW   = ["rate card", "price list", "rates", "price", "pricing", "kitna lagta", "kitne paise", "charges", "cost", "fee", "tarrif", "tariff", "kitna", "rate"];
-const GREET_KW   = ["hi", "hello", "hey", "hii", "helo", "namaste", "namaskar", "salam", "salaam", "good morning", "good evening", "good afternoon", "good night", "sup", "wassup"];
+const RATES_KW = [
+  // ── English ──
+  "rate card", "price list", "rates", "price", "pricing",
+  "charges", "cost", "fee", "tariff", "how much", "how much does",
+  "what is the price", "what are the charges", "rate batao",
+  // ── Hindi ──
+  "kitna lagta", "kitne paise", "kitna chahiye", "kitna hoga",
+  "kitne mein", "rate kya hai", "price kya hai", "charge kya hai",
+  "kitne ka", "kya rate", "daam kya", "daam batao",
+  "rate list", "price batao", "charge batao", "cost kya hai",
+  // ── Marathi (romanised) ──
+  "kiti lagel", "kiti paisa", "rate kiti", "charge kiti",
+  "kiti rupaye", "rate sanga", "price sanga", "kiti ahe",
+  "dar kiti", "kiti paise lagtat",
+  // ── Marathi (Devanagari) ──
+  "किती लागेल", "दर काय", "रेट सांगा", "किती रुपये",
+  // ── Hinglish ──
+  "bhai kitna lagega", "yaar rate kya hai", "kitna dena padega",
+  "rate de do", "price de do", "charge bata do",
+];
+
+const GREET_KW = [
+  // ── English ──
+  "hi", "hello", "hey", "hii", "helo", "heya", "howdy",
+  "good morning", "good evening", "good afternoon", "good night",
+  "good day", "sup", "wassup", "whatsup", "what's up",
+  // ── Hindi ──
+  "namaste", "namaskar", "pranam", "jai shri ram", "ram ram",
+  "jai hind", "sat sri akal", "adaab", "salaam", "salam",
+  "salaam alaikum", "assalam", "kya haal", "kaise ho",
+  "sab theek", "kya chal raha", "kya haal hai",
+  // ── Marathi (romanised) ──
+  "namaskar", "jai maharashtra", "kasa aahe", "kase aahat",
+  "kem cho", "kay chal", "majhet aahe", "bhari aahe",
+  // ── Marathi (Devanagari) ──
+  "नमस्कार", "नमस्ते", "कसे आहात", "जय महाराष्ट्र",
+  // ── Hinglish ──
+  "bhai hello", "yaar hi", "bhai kya haal", "hello bhai",
+  "hi yaar", "kem cho bhai",
+];
 
 // ── STATUS CONFIG ─────────────────────────────────────────────────
 const STATUS_MAP = {
@@ -369,10 +572,22 @@ async function geminiChat(phone, userMessage, session, customer, activeOrder, la
   const systemPrompt = `You are Washkart Assistant — a friendly WhatsApp laundry bot for Washkart Laundry, Pimpri, Maharashtra.
 
 RULES:
-1. Reply in SAME language as customer (Hindi/Marathi/Hinglish/English)
+1. Reply in SAME language as customer (Hindi/Marathi/Hinglish/English). If they write in Marathi, reply in Marathi.
 2. SHORT replies — max 3-4 lines. Friendly, use emojis
 3. CLOSED on Thursdays — suggest another day
 4. Never invent prices
+
+MARATHI DATE/TIME WORDS (understand these):
+- "आज" / "aaj" = today
+- "उद्या" / "udya" = tomorrow
+- "परवा" / "parso" / "parsoon" = day after tomorrow
+- "सकाळी" / "sakali" / "sakal" = morning
+- "संध्याकाळी" / "sandhyakal" / "sham" = evening
+- "गुरुवार" / "guruvar" = Thursday (CLOSED)
+
+MARATHI BOOKING WORDS (understand these as pickup intent):
+"कपडे न्या", "कपडे घ्या", "घरी या", "पिकअप द्या", "बुकिंग करा", "लॉन्ड्री द्या",
+"pickup hava", "kapde nyaa", "ghari ya", "booking kara", "laundry dyaa"
 
 CUSTOMER:
 - Name: ${customer?.name || "New customer"}
@@ -402,7 +617,7 @@ RESPOND with JSON only (no markdown):
 {
   "reply": "your friendly reply",
   "action": "none"|"book_now"|"need_name"|"need_address"|"need_date"|"need_slot"|"show_iron"|"show_dryclean"|"show_laundry"|"show_shoes"|"show_rates_menu"|"track_order"|"complaint"|"estimate",
-  "extracted": { "name": null, "address": null, "date": "today"|"tomorrow"|"date string"|null, "slot": "morning"|"evening"|null, "items": [{"name":"shirt","qty":2,"service":"dryclean"}]|null }
+  "extracted": { "name": null, "address": null, "date": "today"|"tomorrow"|"day_after_tomorrow"|"date string"|null, "slot": "morning"|"evening"|null, "items": [{"name":"shirt","qty":2,"service":"dryclean"}]|null }
 }
 
 ACTION GUIDE:
@@ -648,7 +863,10 @@ async function handleMessage(phone, rawText) {
   if (ai.extracted?.address && !session.booking.address) session.booking.address = ai.extracted.address;
   if (ai.extracted?.date) {
     const d = ai.extracted.date;
-    session.booking.date = d === "today" ? getToday() : d === "tomorrow" ? getTomorrow() : d;
+    session.booking.date = d === "today" ? getToday()
+      : d === "tomorrow" ? getTomorrow()
+      : d === "day_after_tomorrow" ? getDayAfter()
+      : d;
     if (isThursdayStr(session.booking.date)) {
       session.booking.date = null;
       await sendMessage(phone, "Thursday ko hum band rehte hain 🙏\nKoi aur din choose karein:");
@@ -752,7 +970,7 @@ async function handleCancel(phone, session, rawText) {
   const m = rawText.match(/FW-\d+/i);
   const active = await getActiveOrder(phone);
   const orderId = m ? m[0].toUpperCase() : active?.order_id;
-  if (!orderId) { await sendMessage(phone, "Koi active order nahi mila. *pickup* type karein 🧺"); return; }
+  if (!orderId) { session.step = "idle"; await sendMessage(phone, "Koi active order nahi mila. *pickup* type karein 🧺"); return; }
   try {
     const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
     if (!rows.length) { await sendMessage(phone, "Order nahi mila."); return; }
@@ -799,11 +1017,14 @@ async function handleBookingIntent(phone, session, rawText, t) {
     if (!session.booking.name) session.booking.name = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
   }
-  const hasTomorrow = has(t, "kal ", "tomorrow", "kal ko", "next day");
-  const hasToday    = has(t, "aaj ", "today", "abhi");
-  const hasMorning  = has(t, "subah", "morning", "savere", "subeh", "10 am", "11 am");
-  const hasEvening  = has(t, "shaam", "evening", "sham", "5 pm", "6 pm", "7 pm");
-  if (hasTomorrow && !session.booking.date) {
+  const hasTomorrow = has(t, "kal ", "tomorrow", "kal ko", "next day", "udya", "उद्या");
+  const hasToday    = has(t, "aaj ", "today", "abhi", "aaj ko", "aajach", "aज");
+  const hasParso    = has(t, "parso", "परवा", "day after tomorrow", "day after", "parsoon");
+  const hasMorning  = has(t, "subah", "morning", "savere", "subeh", "10 am", "11 am", "sakali", "sakal", "सकाळी", "सुबह");
+  const hasEvening  = has(t, "shaam", "evening", "sham", "5 pm", "6 pm", "7 pm", "sandhyakal", "संध्याकाळी", "शाम");
+  if (hasParso && !session.booking.date) {
+    session.booking.date = getDayAfter();
+  } else if (hasTomorrow && !session.booking.date) {
     if (isTomorrowThursday()) { await sendMessage(phone, "Kal Thursday hai — hum band 🙏\nKoi aur din?"); await askDate(phone); return; }
     session.booking.date = getTomorrow();
   } else if (hasToday && !session.booking.date) {
