@@ -142,7 +142,11 @@ tr.overdue:hover td{background:#fee2e2;}
 .form-textarea{resize:vertical;min-height:80px;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
 
-/* MESSAGE TEMPLATES */
+/* Walk-in info banner */
+.walkin-banner{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:1rem;display:none;}
+.walkin-banner.show{display:block;}
+
+/* Message TEMPLATES */
 .template-btn{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:12px;background:var(--bg);transition:all .15s;}
 .template-btn:hover{border-color:var(--green);background:var(--green-light);}
 .template-btn strong{display:block;font-size:13px;margin-bottom:2px;}
@@ -360,6 +364,23 @@ tr.overdue:hover td{background:#fee2e2;}
       <button class="modal-close" onclick="closeModal('modal-order')">✕</button>
     </div>
     <div class="modal-body">
+
+      <!-- Source selector — drives smart field visibility -->
+      <div class="form-group">
+        <label class="form-label">Source *</label>
+        <select class="form-select" id="new-source" onchange="onSourceChange(this.value)">
+          <option value="walkin">🚶 Walk-in</option>
+          <option value="call">📞 Phone Call</option>
+          <option value="whatsapp">💬 WhatsApp</option>
+          <option value="other">📌 Other</option>
+        </select>
+      </div>
+
+      <!-- Walk-in info banner -->
+      <div class="walkin-banner show" id="walkin-banner">
+        🚶 <strong>Walk-in order</strong> — Clothes already received. Address, date & slot are optional. Status will be set to <strong>Picked Up</strong> automatically.
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Customer Name *</label>
@@ -370,33 +391,29 @@ tr.overdue:hover td{background:#fee2e2;}
           <input class="form-input" id="new-phone" placeholder="10-digit number" type="tel">
         </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">Pickup Address *</label>
+
+      <!-- Address — hidden for walk-in -->
+      <div class="form-group" id="field-address">
+        <label class="form-label" id="label-address">Pickup Address</label>
         <input class="form-input" id="new-address" placeholder="Full address">
       </div>
-      <div class="form-row">
+
+      <!-- Date + Slot row — hidden for walk-in -->
+      <div class="form-row" id="field-datetime">
         <div class="form-group">
-          <label class="form-label">Pickup Date *</label>
+          <label class="form-label" id="label-date">Pickup Date</label>
           <input class="form-input" id="new-date" type="date">
         </div>
         <div class="form-group">
-          <label class="form-label">Slot *</label>
+          <label class="form-label" id="label-slot">Slot</label>
           <select class="form-select" id="new-slot">
             <option value="Morning (10 AM – 1 PM)">🌅 Morning (10 AM – 1 PM)</option>
             <option value="Evening (5 PM – 8 PM)">🌆 Evening (5 PM – 8 PM)</option>
           </select>
         </div>
       </div>
+
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Source</label>
-          <select class="form-select" id="new-source">
-            <option value="walkin">🚶 Walk-in</option>
-            <option value="call">📞 Phone Call</option>
-            <option value="whatsapp">💬 WhatsApp</option>
-            <option value="other">📌 Other</option>
-          </select>
-        </div>
         <div class="form-group">
           <label class="form-label">Service (optional)</label>
           <select class="form-select" id="new-service">
@@ -408,7 +425,15 @@ tr.overdue:hover td{background:#fee2e2;}
             <option value="mixed">📦 Mixed</option>
           </select>
         </div>
+        <!-- Status indicator (read-only visual) -->
+        <div class="form-group">
+          <label class="form-label">Initial Status</label>
+          <div id="status-indicator" style="padding:9px 12px;border-radius:8px;font-size:13px;font-weight:500;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;">
+            🚗 Picked Up (Walk-in)
+          </div>
+        </div>
       </div>
+
       <div class="form-group">
         <label class="form-label">Notes (optional)</label>
         <textarea class="form-textarea" id="new-notes" placeholder="Handle saree carefully, light starch on shirts..."></textarea>
@@ -445,6 +470,10 @@ tr.overdue:hover td{background:#fee2e2;}
       </div>
       <div class="form-group">
         <label class="form-label">Or use a template</label>
+        <button class="template-btn" onclick="useTemplate('pickup')">
+          <strong>📦 Re-engagement — Book Pickup</strong>
+          Remind customer to book their next pickup.
+        </button>
         <button class="template-btn" onclick="useTemplate('ready')">
           <strong>✅ Clothes Ready for Pickup</strong>
           Your clothes are ready! Please visit or we can schedule delivery.
@@ -480,6 +509,8 @@ tr.overdue:hover td{background:#fee2e2;}
 <script>
 const BOT_URL = 'https://washkart-bot.onrender.com';
 let allBookings = [], allCustomers = [], allRatings = [], currentFilter = 'all';
+// Track the currently selected customer name for template personalisation
+let msgCustomerName = '';
 
 // ── CLOCK ──────────────────────────────────────────────────────────
 function updateClock() {
@@ -542,6 +573,44 @@ function statusBadge(s) {
   return map[s] || s;
 }
 
+// ── SMART FORM: SOURCE-BASED FIELD VISIBILITY ─────────────────────
+function onSourceChange(source) {
+  const isWalkIn = source === 'walkin';
+  const fieldAddress = document.getElementById('field-address');
+  const fieldDatetime = document.getElementById('field-datetime');
+  const walkinBanner = document.getElementById('walkin-banner');
+  const statusIndicator = document.getElementById('status-indicator');
+  const labelAddress = document.getElementById('label-address');
+  const labelDate = document.getElementById('label-date');
+  const labelSlot = document.getElementById('label-slot');
+
+  if (isWalkIn) {
+    // Walk-in: hide date/slot, make address optional, show banner
+    fieldDatetime.style.display = 'none';
+    walkinBanner.classList.add('show');
+    labelAddress.textContent = 'Address (optional)';
+    labelDate.textContent = 'Pickup Date (optional)';
+    labelSlot.textContent = 'Slot (optional)';
+    document.getElementById('new-address').placeholder = 'Leave blank for Walk-in (In-store)';
+    statusIndicator.style.background = '#dbeafe';
+    statusIndicator.style.color = '#1e40af';
+    statusIndicator.style.borderColor = '#bfdbfe';
+    statusIndicator.textContent = '🚗 Picked Up (Walk-in)';
+  } else {
+    // Non-walk-in: show all fields, mark as required
+    fieldDatetime.style.display = '';
+    walkinBanner.classList.remove('show');
+    labelAddress.textContent = 'Pickup Address *';
+    labelDate.textContent = 'Pickup Date *';
+    labelSlot.textContent = 'Slot *';
+    document.getElementById('new-address').placeholder = 'Full address';
+    statusIndicator.style.background = '#fef3c7';
+    statusIndicator.style.color = '#92400e';
+    statusIndicator.style.borderColor = '#fde68a';
+    statusIndicator.textContent = '⏳ Pending (Awaiting Pickup)';
+  }
+}
+
 // ── RENDER BOOKINGS ─────────────────────────────────────────────────
 function filterTab(f, el) {
   currentFilter = f;
@@ -559,6 +628,14 @@ function renderBookings() {
   const tbody = document.getElementById('bookings-table');
   if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>No bookings found</td></tr>`; return; }
 
+  // Display "Walk-in (In-store)" for walk-in orders with blank/default address
+  const displayAddress = (b) => {
+    if (b.source === 'walkin' && (!b.address || b.address === 'Walk-in (In-store)')) {
+      return '<span style="color:var(--muted);font-style:italic">Walk-in (In-store)</span>';
+    }
+    return b.address || '<span style="color:var(--muted)">—</span>';
+  };
+
   tbody.innerHTML = filtered.map(b => {
     const over = isOverdue(b);
     return `<tr class="${over ? 'overdue' : ''}">
@@ -572,10 +649,10 @@ function renderBookings() {
         <div style="font-weight:500">${b.name}</div>
         <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${b.phone}</div>
       </td>
-      <td style="font-size:12px;color:var(--muted);max-width:150px">${b.address}</td>
+      <td style="font-size:12px;color:var(--muted);max-width:150px">${displayAddress(b)}</td>
       <td>
-        <div style="font-size:12px;font-weight:500">${b.date}</div>
-        <div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning') ? '🌅' : '🌆'} ${b.slot}</div>
+        <div style="font-size:12px;font-weight:500">${b.date || '—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning') ? '🌅' : b.slot === 'Walk-in' ? '🚶' : '🌆'} ${b.slot || '—'}</div>
         ${b.delivery_date ? `<div style="font-size:11px;color:${over?'var(--red)':'var(--green)'}">📦 ${b.delivery_date}</div>` : ''}
       </td>
       <td>
@@ -666,6 +743,7 @@ function renderToday() {
   else {
     const morning = pickups.filter(b => b.slot?.includes('Morning'));
     const evening = pickups.filter(b => b.slot?.includes('Evening'));
+    const walkin  = pickups.filter(b => b.slot === 'Walk-in' || b.source === 'walkin');
     let html = '';
     if (morning.length) {
       html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning (10 AM – 1 PM)</div>`;
@@ -675,13 +753,17 @@ function renderToday() {
       html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening (5 PM – 8 PM)</div>`;
       evening.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
     }
+    if (walkin.length) {
+      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#0369a1;text-transform:uppercase;letter-spacing:.05em">🚶 Walk-in (In-store)</div>`;
+      walkin.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">Walk-in (In-store)</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
+    }
     pEl.innerHTML = html;
   }
 
   // Deliveries
   const dEl = document.getElementById('today-deliveries');
   if (!deliveries.length) { dEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>'; }
-  else { dEl.innerHTML = deliveries.map(b => `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${b.service_type ? `<div style="font-size:11px;color:var(--green)">${b.express?'⚡ Express — ':''}${b.service_type}</div>` : ''}</div>`).join(''); }
+  else { dEl.innerHTML = deliveries.map(b => `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address || 'Walk-in (In-store)'}</div><div class="today-phone">${b.phone}</div>${b.service_type ? `<div style="font-size:11px;color:var(--green)">${b.express?'⚡ Express — ':''}${b.service_type}</div>` : ''}</div>`).join(''); }
 
   // Overdue
   const oEl = document.getElementById('overdue-list');
@@ -825,7 +907,6 @@ async function loadData() {
     }));
     allCustomers = await cRes.json();
     allRatings = await rRes.json().catch(() => []);
-    // Populate customer dropdowns
     populateCustomerDropdown();
     updateAll();
   } catch (e) { console.error('Load error:', e); toast('Failed to load data', 'error'); }
@@ -836,29 +917,45 @@ function populateCustomerDropdown() {
   sel.innerHTML = '<option value="">— Type phone above or select —</option>';
   allCustomers.forEach(c => {
     const opt = document.createElement('option');
-    opt.value = c.phone; opt.textContent = `${c.name} (${c.phone})`;
+    opt.value = c.phone;
+    opt.textContent = `${c.name} (${c.phone})`;
+    opt.dataset.name = c.name;
     sel.appendChild(opt);
   });
 }
 
 // ── NEW ORDER ──────────────────────────────────────────────────────
 async function submitNewOrder() {
-  const name = document.getElementById('new-name').value.trim();
-  const phone = document.getElementById('new-phone').value.trim();
+  const name    = document.getElementById('new-name').value.trim();
+  const phone   = document.getElementById('new-phone').value.trim();
   const address = document.getElementById('new-address').value.trim();
   const dateInput = document.getElementById('new-date').value;
-  const slot = document.getElementById('new-slot').value;
-  const source = document.getElementById('new-source').value;
+  const slot    = document.getElementById('new-slot').value;
+  const source  = document.getElementById('new-source').value;
   const service = document.getElementById('new-service').value;
-  const notes = document.getElementById('new-notes').value.trim();
-  if (!name||!phone||!address||!dateInput||!slot) { toast('Please fill all required fields','error'); return; }
+  const notes   = document.getElementById('new-notes').value.trim();
 
-  // Format date to match bot format
-  const d = new Date(dateInput);
-  const dateStr = d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+  const isWalkIn = source === 'walkin';
 
-  const body = { name, phone, address, date: dateStr, slot, source, notes };
-  if (service) body.service_type = service;
+  if (!name || !phone) { toast('Name and phone are required', 'error'); return; }
+  if (!isWalkIn && (!address || !dateInput || !slot)) {
+    toast('Please fill address, date and slot', 'error'); return;
+  }
+
+  // Format date string only if provided
+  let dateStr = '';
+  if (dateInput) {
+    const d = new Date(dateInput);
+    dateStr = d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
+  }
+
+  const body = {
+    name, phone, source, notes,
+    ...(address ? { address } : {}),
+    ...(dateStr  ? { date: dateStr } : {}),
+    ...((!isWalkIn && slot) ? { slot } : {}),
+    ...(service  ? { service_type: service } : {}),
+  };
 
   try {
     const res = await fetch(`${BOT_URL}/bookings`, {
@@ -870,36 +967,53 @@ async function submitNewOrder() {
       closeModal('modal-order');
       // Reset form
       ['new-name','new-phone','new-address','new-date','new-notes'].forEach(id => document.getElementById(id).value='');
-      document.getElementById('new-source').value='walkin';
-      document.getElementById('new-service').value='';
+      document.getElementById('new-source').value = 'walkin';
+      document.getElementById('new-service').value = '';
+      onSourceChange('walkin'); // reset field visibility
       loadData();
-    } else { toast(data.error||'Failed to create order','error'); }
-  } catch { toast('Network error','error'); }
+    } else { toast(data.error||'Failed to create order', 'error'); }
+  } catch { toast('Network error', 'error'); }
 }
 
 // ── MANUAL MESSAGE ─────────────────────────────────────────────────
+// Opens the send message modal, pre-fills phone and a personalised greeting.
+// Stores the customer name so templates can use it.
 function openSendMsg(phone, name) {
+  msgCustomerName = name || '';
   document.getElementById('msg-phone').value = phone;
+  // Pre-fill with name-personalised greeting
   document.getElementById('msg-text').value = `Hi ${name}! `;
   openModal('modal-message');
 }
+
 function selectMsgCustomer(phone) {
-  if (phone) document.getElementById('msg-phone').value = phone;
+  if (!phone) return;
+  document.getElementById('msg-phone').value = phone;
+  // Also update the stored name from the selected option's data attribute
+  const sel = document.getElementById('msg-customer-select');
+  const opt = sel.options[sel.selectedIndex];
+  msgCustomerName = opt?.dataset?.name || '';
 }
+
+// Templates — all personalised with customer name when available
 const TEMPLATES = {
-  ready: '✅ Your clothes are ready! Please let us know if you need delivery or will pick up from the store.',
-  delay: 'Hi! Your Washkart order is taking a little longer than expected. We\'ll deliver by tomorrow. Really sorry for the wait! 🙏',
-  reminder: '⏰ Hi! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive within your slot. 💚',
-  promo: '🎉 Hi! Special offer from Washkart: Get 10% off dry cleaning this week! Reply *pickup* to book. Valid till Sunday.',
-  status: '📦 Hi! Your clothes are currently being cleaned with care and will be delivered soon. Thank you for choosing Washkart! 🙏',
+  pickup:   (n) => `Hi${n?' '+n:''}! 😊 Washkart mein wapas swagat hai! 🧺\n\nKya agle baar pickup book karna chahoge? Reply karo *pickup* aur hum arrange kar denge. ✨`,
+  ready:    (n) => `Hi${n?' '+n:''}! ✅ Aapke kapde tayaar hain! 👕\n\nKab delivery karein? Ya aap store se collect kar sakte ho. Batao! 😊`,
+  delay:    (n) => `Hi${n?' '+n:''}! 🙏 Aapka Washkart order thoda extra time le raha hai. Kal tak deliver ho jayega — really sorry for the wait!`,
+  reminder: (n) => `⏰ Hi${n?' '+n:''}! Aaj Washkart pickup scheduled hai. 🚗\n\nHamari team aapke slot mein pahunchegi. Ready rakhein kapde! 💚`,
+  promo:    (n) => `🎉 Hi${n?' '+n:''}! Washkart special offer — is hafte dry cleaning pe 10% off! 🧥\n\nAbhi book karo — reply karo *PICKUP*. Sunday tak valid! 🙌`,
+  status:   (n) => `📦 Hi${n?' '+n:''}! Aapke kapde clean ho rahe hain aur jald deliver honge. 🫧✨\n\nThank you for choosing Washkart! 🙏`,
 };
+
 function useTemplate(key) {
-  document.getElementById('msg-text').value = TEMPLATES[key];
+  const fn = TEMPLATES[key];
+  if (fn) document.getElementById('msg-text').value = fn(msgCustomerName);
 }
+
 async function sendManualMessage() {
-  const phone = document.getElementById('msg-phone').value.trim();
+  const phone   = document.getElementById('msg-phone').value.trim();
   const message = document.getElementById('msg-text').value.trim();
-  if (!phone||!message) { toast('Phone and message required','error'); return; }
+  if (!phone || !message) { toast('Phone and message required', 'error'); return; }
   try {
     const res = await fetch(`${BOT_URL}/send-message`, {
       method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, message })
@@ -908,14 +1022,17 @@ async function sendManualMessage() {
     if (data.success) {
       toast('✅ Message sent!');
       closeModal('modal-message');
-      document.getElementById('msg-phone').value='';
-      document.getElementById('msg-text').value='';
-      document.getElementById('msg-customer-select').value='';
-    } else { toast(data.error||'Failed to send','error'); }
-  } catch { toast('Network error','error'); }
+      document.getElementById('msg-phone').value = '';
+      document.getElementById('msg-text').value = '';
+      document.getElementById('msg-customer-select').value = '';
+      msgCustomerName = '';
+    } else { toast(data.error||'Failed to send', 'error'); }
+  } catch { toast('Network error', 'error'); }
 }
 
-// Set today's date as default in new order form
+// ── INIT ───────────────────────────────────────────────────────────
+// Default to walk-in form state on load
+onSourceChange('walkin');
 document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
 
 loadData();
