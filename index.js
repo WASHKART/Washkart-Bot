@@ -74,6 +74,10 @@ const YES_KW     = ["yes", "haan", "ha", "haa", "ji", "ok", "okay", "theek", "th
 const NO_KW      = ["no", "nahi", "na", "nope", "mat karo", "nhi", "nahin", "nai", "naa"];
 const SAME_KW    = ["same as last", "same as before", "pichli baar jaisa", "last wala", "repeat", "same order", "same booking", "same slot", "wahi wala", "wahi time", "pehle wala"];
 
+// ── DIRECT KEYWORD SHORTCUTS (pre-Gemini) ─────────────────────────
+const RATES_KW   = ["rate card", "price list", "rates", "price", "pricing", "kitna lagta", "kitne paise", "charges", "cost", "fee", "tarrif", "tariff", "kitna", "rate"];
+const GREET_KW   = ["hi", "hello", "hey", "hii", "helo", "namaste", "namaskar", "salam", "salaam", "good morning", "good evening", "good afternoon", "good night", "sup", "wassup"];
+
 // ── STATUS CONFIG ─────────────────────────────────────────────────
 const STATUS_MAP = {
   pending:        { label: "⏳ Pending pickup",   eta: "Our team will pick up within your selected slot." },
@@ -290,7 +294,7 @@ async function saveRating(phone, orderId, rating, comment) {
 async function notifyAdmin(booking) {
   const src = booking.source ? ` [${booking.source}]` : "";
   await sendMessage(ADMIN_NUMBER,
-    `🔔 *New Booking!*${src}\n\n🆔 ${booking.orderId}\n👤 ${booking.name}\n📱 +${booking.phone}\n📍 ${booking.address}\n📅 ${booking.date}\n🕐 ${booking.slot}`
+    `🔔 *New Booking!*${src}\n\n🆔 ${booking.orderId}\n👤 ${booking.name}\n📱 +${booking.phone}\n📍 ${booking.address || "Walk-in"}\n📅 ${booking.date || "—"}\n🕐 ${booking.slot || "—"}`
   );
 }
 async function notifyAdminComplaint(phone, name, message) {
@@ -298,6 +302,16 @@ async function notifyAdminComplaint(phone, name, message) {
 }
 async function notifyAdminRating(phone, name, orderId, rating, comment) {
   await sendMessage(ADMIN_NUMBER, `⭐ *New Rating*\n\n👤 ${name || phone}\n🆔 ${orderId || "unknown"}\n⭐ ${rating}/5\n💬 ${comment || "No comment"}`);
+}
+
+// ── POST-RATING UPSELL ────────────────────────────────────────────
+async function sendPostRatingUpsell(phone) {
+  setTimeout(async () => {
+    await sendButtons(phone,
+      "Agle baar pickup chahiye? 🧺",
+      [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_track", title: "🔍 Track Order" }]
+    );
+  }, 2000);
 }
 
 // ── BOOKING HELPERS ───────────────────────────────────────────────
@@ -337,13 +351,13 @@ async function confirmBooking(phone, booking) {
   try {
     await dbInsert("bookings", {
       order_id: orderId, name: booking.name, phone,
-      address: booking.address, date: booking.date, slot: booking.slot,
+      address: booking.address || "", date: booking.date || "", slot: booking.slot || "",
       status: "pending", reminder_sent: false,
       source: booking.source || "whatsapp"
     });
   } catch (e) { console.error("saveBooking:", e.message); }
   await sendMessage(phone,
-    `✅ *Booking Confirmed!*\n\n🆔 *${orderId}*\n👤 ${booking.name}\n📍 ${booking.address}\n📅 ${booking.date}\n🕐 ${booking.slot}\n\n` +
+    `✅ *Booking Confirmed!*\n\n🆔 *${orderId}*\n👤 ${booking.name}\n📍 ${booking.address || "—"}\n📅 ${booking.date || "—"}\n🕐 ${booking.slot || "—"}\n\n` +
     `Our team will arrive within your slot. 💚\n💰 Payment via UPI/Cash at delivery.\n\nCancel karne ke liye: *cancel*`
   );
   await notifyAdmin(booking);
@@ -505,8 +519,9 @@ async function handleMessage(phone, rawText) {
   }
 
   // ── FEEDBACK STEP — button-based rating ──────────────────────────
+  // FIX: Feedback step is checked early so rating button IDs are always caught,
+  // regardless of how long the customer took to tap.
   if (session.step === "feedback") {
-    // Handle button responses
     const ratingMap = { "rating_excellent": 5, "rating_good": 4, "rating_poor": 2 };
     const lastOrder = await getLastOrder(phone);
     const customer = await getCustomer(phone);
@@ -517,21 +532,25 @@ async function handleMessage(phone, rawText) {
       await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, stars, null);
       if (stars === 5) {
         await sendMessage(phone, "Shukriya! ⭐⭐⭐⭐⭐ Aapka support bahut matlab rakhta hai! 🙏\nMilte hain agli baar Washkart pe!");
+        session.step = "idle";
+        await sendPostRatingUpsell(phone);
       } else if (stars === 4) {
         await sendMessage(phone, "Thanks! 😊 Kuch aur better kar sakte hain? Batao — hum improve karenge!");
-        session.step = "feedback_comment"; return;
+        session.step = "feedback_comment";
       } else {
         await sendMessage(phone, "Bahut sorry for the experience 🙏\nKya problem aayi? Batao — hum zaroor fix karenge.");
         await notifyAdminComplaint(phone, customer?.name, `Low rating (${stars}/5) from ${customer?.name || phone}`);
-        session.step = "feedback_comment"; return;
+        session.step = "feedback_comment";
       }
-      session.step = "idle"; return;
+      return;
     }
     // Text reply — treat as comment without star
     await saveRating(phone, lastOrder?.order_id, null, rawText);
     await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "text", rawText);
     await sendMessage(phone, "Shukriya feedback ke liye! 🙏 Milte hain agli baar!");
-    session.step = "idle"; return;
+    session.step = "idle";
+    await sendPostRatingUpsell(phone);
+    return;
   }
 
   if (session.step === "feedback_comment") {
@@ -540,7 +559,9 @@ async function handleMessage(phone, rawText) {
     await saveRating(phone, lastOrder?.order_id, null, rawText);
     await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "comment", rawText);
     await sendMessage(phone, "Shukriya! 🙏 Hum aur better karenge. Milte hain agli baar!");
-    session.step = "idle"; return;
+    session.step = "idle";
+    await sendPostRatingUpsell(phone);
+    return;
   }
 
   // ══ LAYER 2: Button IDs ══════════════════════════════════════════
@@ -568,6 +589,47 @@ async function handleMessage(phone, rawText) {
   if (has(t, ...TRACK_KW))          { await handleTrack(phone, session, rawText); return; }
   if (has(t, ...EXPRESS_KW) && session.step === "idle") { await handleExpress(phone); return; }
   if (has(t, ...SAME_KW))           { await handleSameAsLast(phone, session); return; }
+
+  // ── DIRECT HANDLERS: Rates & Greetings (never hit Gemini) ────────
+  // Greetings
+  if (has(t, ...GREET_KW)) {
+    const customer = await getCustomer(phone);
+    const active = await getActiveOrder(phone);
+    if (customer) {
+      if (active) {
+        await sendMessage(phone,
+          `${customer.name} ji, swagat hai! 👋\n\nAapka order *${active.order_id}* — ${STATUS_MAP[active.status]?.label} 📦\n\n*track* — status | *pickup* — new booking | *rates* — prices`
+        );
+      } else {
+        await sendButtons(phone,
+          `${customer.name} ji, swagat hai! 👋\n\nKya karu aapke liye? 😊`,
+          [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+        );
+      }
+    } else {
+      await sendButtons(phone,
+        "Hi! 👋 *Washkart* mein aapka swagat hai!\n\nPimpri-Chinchwad ka #1 laundry service 🧺",
+        [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]
+      );
+    }
+    return;
+  }
+
+  // Rates
+  if (has(t, ...RATES_KW)) {
+    // Check for specific service in the message first
+    if (has(t, "iron", "press", "istri")) { await sendMessage(phone, RATES.iron); return; }
+    if (has(t, "dry", "dryclean", "dry clean", "dc")) { await sendMessage(phone, RATES.dryclean); return; }
+    if (has(t, "wash", "laundry", "dhulai", "fold")) { await sendMessage(phone, RATES.laundry); return; }
+    if (has(t, "shoe", "sneaker", "joote", "footwear")) { await sendMessage(phone, RATES.shoes); return; }
+    // Generic rates request — show menu
+    await askPriceCategory(phone);
+    return;
+  }
+
+  // "Book pickup" exact phrase
+  if (has(t, "book pickup", "pickup book")) { await handleBookingIntent(phone, session, rawText, t); return; }
+
   if (has(t, ...BOOKING_KW) || rawText === "btn_book") { await handleBookingIntent(phone, session, rawText, t); return; }
 
   // ══ LAYER 4: Gemini ══════════════════════════════════════════════
@@ -813,18 +875,50 @@ app.get("/bookings", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// FIX: Walk-in orders default to status=picked; address/slot/date optional
 app.post("/bookings", async (req, res) => {
-  // Manual order entry from dashboard (walk-in / phone call)
   try {
-    const { name, phone, address, date, slot, source, notes } = req.body;
-    if (!name || !phone || !address || !date || !slot) return res.status(400).json({ error: "Missing required fields" });
+    const { name, phone, address, date, slot, source, notes, service_type } = req.body;
+    if (!name || !phone) return res.status(400).json({ error: "Name and phone are required" });
+
+    const isWalkIn = source === "walkin";
+    // For walk-in, address/date/slot are optional; for others they're required
+    if (!isWalkIn && (!address || !date || !slot)) {
+      return res.status(400).json({ error: "Missing required fields: address, date, slot" });
+    }
+
     const orderId = genOrderId();
     const normPhone = normalizePhone(phone);
-    await dbInsert("bookings", { order_id: orderId, name, phone: normPhone, address, date, slot, status: "pending", reminder_sent: false, source: source || "walkin", notes: notes || "" });
-    // Save/update customer
-    await saveCustomer(normPhone, name, address);
+    const initialStatus = isWalkIn ? "picked" : "pending";
+
+    await dbInsert("bookings", {
+      order_id: orderId,
+      name,
+      phone: normPhone,
+      address: address || "Walk-in (In-store)",
+      date: date || getToday(),
+      slot: slot || "Walk-in",
+      status: initialStatus,
+      reminder_sent: false,
+      source: source || "walkin",
+      notes: notes || "",
+      ...(service_type ? { service_type } : {}),
+    });
+
+    // Save/update customer (address optional for walk-in)
+    if (address) {
+      await saveCustomer(normPhone, name, address);
+    } else {
+      // Save customer without address if they don't exist yet
+      const existing = await getCustomer(normPhone);
+      if (!existing) await dbInsert("customers", { phone: normPhone, name, address: "" }).catch(() => {});
+    }
+
     // Notify admin
-    await sendMessage(ADMIN_NUMBER, `🔔 *New Booking [${source || "Walk-in"}]*\n\n🆔 ${orderId}\n👤 ${name}\n📱 +${normPhone}\n📍 ${address}\n📅 ${date}\n🕐 ${slot}${notes ? `\n📝 ${notes}` : ""}`);
+    await sendMessage(ADMIN_NUMBER,
+      `🔔 *New Booking [${source || "Walk-in"}]*\n\n🆔 ${orderId}\n👤 ${name}\n📱 +${normPhone}\n📍 ${address || "Walk-in (In-store)"}\n📅 ${date || getToday()}\n🕐 ${slot || "Walk-in"}${notes ? `\n📝 ${notes}` : ""}${service_type ? `\n🧺 ${service_type}` : ""}\n\n_Status: ${initialStatus}_`
+    );
+
     res.json({ success: true, order_id: orderId });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -868,6 +962,8 @@ app.patch("/bookings/:orderId", async (req, res) => {
             [{ id: "rating_excellent", title: "🤩 Excellent" }, { id: "rating_good", title: "😊 Good" }, { id: "rating_poor", title: "😞 Needs Work" }]
           );
           if (sessions[b.phone]) sessions[b.phone].step = "feedback";
+          // FIX: Also initialise session if customer hasn't messaged yet
+          else sessions[b.phone] = { step: "feedback", booking: {}, history: [] };
         }, 2000);
       }
     }
