@@ -23,7 +23,8 @@ async function dbUpdate(t, f, d) { return (await axios.patch(`${DB}/${t}?${f}`, 
 async function dbDelete(t, f) { return (await axios.delete(`${DB}/${t}?${f}`, { headers: { ...SB_HEADERS, Prefer: "" } })).data; }
 
 // ── SESSIONS ──────────────────────────────────────────────────────
-const sessions = {};
+// In-memory cache — Supabase is source of truth on restart
+const sessionCache = {};
 const processedMessages = new Set();
 
 function normalizePhone(p) {
@@ -32,10 +33,66 @@ function normalizePhone(p) {
   if (p.length === 10) return "91" + p;
   return p;
 }
-function getSession(phone) {
-  if (!sessions[phone]) sessions[phone] = { step: "idle", booking: {}, history: [] };
-  return sessions[phone];
+
+// Load session from Supabase, fall back to empty session
+async function getSession(phone) {
+  if (sessionCache[phone]) return sessionCache[phone];
+  try {
+    const rows = await dbSelect("sessions", `phone=eq.${phone}`);
+    if (rows.length) {
+      const s = rows[0];
+      sessionCache[phone] = {
+        step:    s.step    || "idle",
+        booking: s.booking || {},
+        history: s.history || [],
+      };
+    } else {
+      sessionCache[phone] = { step: "idle", booking: {}, history: [] };
+    }
+  } catch {
+    sessionCache[phone] = { step: "idle", booking: {}, history: [] };
+  }
+  return sessionCache[phone];
 }
+
+// Persist session to Supabase (debounced — write at most once per 2s per phone)
+const sessionWriteTimers = {};
+function saveSession(phone, session) {
+  sessionCache[phone] = session;
+  if (sessionWriteTimers[phone]) clearTimeout(sessionWriteTimers[phone]);
+  sessionWriteTimers[phone] = setTimeout(async () => {
+    try {
+      const rows = await dbSelect("sessions", `phone=eq.${phone}`).catch(() => []);
+      const payload = {
+        phone,
+        step:       session.step    || "idle",
+        booking:    session.booking || {},
+        history:    (session.history || []).slice(-12),
+        updated_at: new Date().toISOString(),
+      };
+      if (rows.length) await dbUpdate("sessions", `phone=eq.${phone}`, payload);
+      else             await dbInsert("sessions", payload);
+    } catch (e) { console.error("saveSession error:", e.message); }
+  }, 2000);
+}
+
+// Rate limiting — max 10 messages per phone per minute
+const rateLimitMap = {};
+function isRateLimited(phone) {
+  const now = Date.now();
+  if (!rateLimitMap[phone]) rateLimitMap[phone] = [];
+  rateLimitMap[phone] = rateLimitMap[phone].filter(t => now - t < 60000);
+  if (rateLimitMap[phone].length >= 10) return true;
+  rateLimitMap[phone].push(now);
+  return false;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const phone of Object.keys(rateLimitMap)) {
+    rateLimitMap[phone] = rateLimitMap[phone].filter(t => now - t < 60000);
+    if (!rateLimitMap[phone].length) delete rateLimitMap[phone];
+  }
+}, 5 * 60 * 1000);
 
 // ── DATE UTILS ────────────────────────────────────────────────────
 function formatDate(d) { return d.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }); }
@@ -446,11 +503,14 @@ function smartPriceLookup(t) {
 // ── SEND HELPERS ──────────────────────────────────────────────────
 async function sendMessage(to, text) {
   try {
-    await axios.post(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
+    const res = await axios.post(`https://graph.facebook.com/v25.0/${PHONE_NUMBER_ID}/messages`,
       { messaging_product: "whatsapp", to, type: "text", text: { body: text } },
       { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
-  } catch (e) { console.error("sendMessage error:", e?.response?.data || e.message); }
+    console.log(`[sendMessage] ✅ sent to ${to} | status:${res.status}`);
+  } catch (e) {
+    console.error(`[sendMessage] ❌ failed to ${to}:`, JSON.stringify(e?.response?.data || e.message));
+  }
 }
 async function sendButtons(to, body, buttons) {
   try {
@@ -526,12 +586,21 @@ async function askDate(phone) {
   await sendButtons(phone, "📅 Kaunse din pickup karein?\n\n_(Closed Thursdays)_", buttons);
 }
 async function askSlot(phone) {
-  const hour = new Date().getHours();
-  if (hour >= 16) { await sendMessage(phone, "Aaj ke slots bhar gaye 😊\nKal ke liye book karein!"); await askDate(phone); return; }
+  const now  = new Date();
+  const hour = now.getHours();
+  const min  = now.getMinutes();
+  // Morning slot bookable until 9:30 AM (30 min before 10 AM start)
+  const morningOpen = hour < 9 || (hour === 9 && min < 30);
+  // No slots after 4 PM
+  if (hour >= 16) {
+    await sendMessage(phone, "Aaj ke slots bhar gaye 😊\nKal ke liye book karein!");
+    await askDate(phone);
+    return;
+  }
   const buttons = [];
-  if (hour < 9) buttons.push({ id: "slot_morning", title: "🌅 10 AM – 1 PM" });
+  if (morningOpen) buttons.push({ id: "slot_morning", title: "🌅 10 AM – 1 PM" });
   buttons.push({ id: "slot_evening", title: "🌆 5 PM – 8 PM" });
-  const note = hour >= 9 ? "Morning slot closed. Evening slot available:" : "Time slot choose karein:";
+  const note = morningOpen ? "Time slot choose karein:" : "Morning slot closed. Evening slot available:";
   await sendButtons(phone, `🕐 ${note}`, buttons);
 }
 async function askPriceCategory(phone) {
@@ -653,12 +722,20 @@ ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
 // ── MAIN HANDLER ──────────────────────────────────────────────────
 async function handleMessage(phone, rawText) {
   phone = normalizePhone(phone);
-  const session = getSession(phone);
+
+  // Rate limiting — silently drop if spamming
+  if (isRateLimited(phone)) {
+    console.log(`[rate-limit] ${phone} exceeded 10 msg/min`);
+    return;
+  }
+
+  const session = await getSession(phone);
   const t = norm(rawText);
 
   if (!session.history) session.history = [];
   session.history.push({ role: "customer", text: rawText });
   if (session.history.length > 12) session.history = session.history.slice(-12);
+  saveSession(phone, session);
 
   // ══ LAYER 1: Active session steps ════════════════════════════════
 
@@ -925,6 +1002,7 @@ async function handleMessage(phone, rawText) {
         [{ id: "btn_book", title: "📦 Book Pickup" }, { id: "btn_price", title: "💰 Rates" }, { id: "btn_track", title: "🔍 Track Order" }]); }
   }
   if (ai.reply) session.history.push({ role: "bot", text: ai.reply });
+  saveSession(phone, session);
 }
 
 // ── FLOW HELPERS ──────────────────────────────────────────────────
@@ -1017,22 +1095,50 @@ async function handleBookingIntent(phone, session, rawText, t) {
     if (!session.booking.name) session.booking.name = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
   }
-  const hasTomorrow = has(t, "kal ", "tomorrow", "kal ko", "next day", "udya", "उद्या");
-  const hasToday    = has(t, "aaj ", "today", "abhi", "aaj ko", "aajach", "aज");
-  const hasParso    = has(t, "parso", "परवा", "day after tomorrow", "day after", "parsoon");
-  const hasMorning  = has(t, "subah", "morning", "savere", "subeh", "10 am", "11 am", "sakali", "sakal", "सकाळी", "सुबह");
-  const hasEvening  = has(t, "shaam", "evening", "sham", "5 pm", "6 pm", "7 pm", "sandhyakal", "संध्याकाळी", "शाम");
-  if (hasParso && !session.booking.date) {
+  const hasTomorrow  = has(t, "kal ", "tomorrow", "kal ko", "next day", "udya", "उद्या");
+  const hasToday     = has(t, "aaj ", "today", "abhi", "aaj ko", "aajach", "आज");
+  const hasParso     = has(t, "parso", "परवा", "day after tomorrow", "day after", "parsoon");
+  const hasMorning   = has(t, "subah", "morning", "savere", "subeh", "10 am", "11 am", "sakali", "sakal", "सकाळी", "सुबह");
+  const hasEvening   = has(t, "shaam", "evening", "sham", "5 pm", "6 pm", "7 pm", "sandhyakal", "संध्याकाळी", "शाम");
+
+  // Day-name detection — resolve to actual upcoming date
+  const DAY_NAMES = {
+    sunday:    0, ravivar: 0, aaditwar: 0, adiwar: 0, "रविवार": 0,
+    monday:    1, somwar: 1, somavar: 1, "सोमवार": 1,
+    tuesday:   2, mangalwar: 2, mangalavar: 2, "मंगळवार": 2,
+    wednesday: 3, budhwar: 3, budhavar: 3, "बुधवार": 3,
+    thursday:  4, guruvar: 4, bruhaspativar: 4, "गुरुवार": 4,
+    friday:    5, shukrawar: 5, shukravar: 5, "शुक्रवार": 5,
+    saturday:  6, shaniwar: 6, shanivar: 6, shanivari: 6, "शनिवार": 6,
+  };
+  function getNextDayDate(targetDay) {
+    const d = new Date();
+    const diff = (targetDay - d.getDay() + 7) % 7 || 7; // always future
+    d.setDate(d.getDate() + diff);
+    return formatDate(d);
+  }
+  let detectedDayName = null;
+  for (const [name, dayNum] of Object.entries(DAY_NAMES)) {
+    if (t.includes(name)) { detectedDayName = dayNum; break; }
+  }
+
+  // Always overwrite date if a new date keyword is present in this message
+  if (hasParso) {
     session.booking.date = getDayAfter();
-  } else if (hasTomorrow && !session.booking.date) {
+  } else if (hasTomorrow) {
     if (isTomorrowThursday()) { await sendMessage(phone, "Kal Thursday hai — hum band 🙏\nKoi aur din?"); await askDate(phone); return; }
     session.booking.date = getTomorrow();
-  } else if (hasToday && !session.booking.date) {
+  } else if (hasToday) {
     if (isTodayThursday()) { await sendMessage(phone, "Aaj Thursday hai — hum band 🙏\nKoi aur din?"); await askDate(phone); return; }
     session.booking.date = getToday();
+  } else if (detectedDayName !== null) {
+    if (detectedDayName === 4) { await sendMessage(phone, "Thursday ko hum band rehte hain 🙏\nKoi aur din batao:"); await askDate(phone); return; }
+    session.booking.date = getNextDayDate(detectedDayName);
   }
-  if (hasMorning && !session.booking.slot) session.booking.slot = "Morning (10 AM – 1 PM)";
-  else if (hasEvening && !session.booking.slot) session.booking.slot = "Evening (5 PM – 8 PM)";
+
+  // Always overwrite slot if a new time keyword is present
+  if (hasMorning) session.booking.slot = "Morning (10 AM – 1 PM)";
+  else if (hasEvening) session.booking.slot = "Evening (5 PM – 8 PM)";
   const bk = session.booking;
   if (customer && bk.name && bk.address && bk.date && bk.slot) { await showBookingConfirm(phone, session); return; }
   if (bk.date && !bk.slot) { await askSlot(phone); session.step = "select_slot"; return; }
@@ -1204,7 +1310,9 @@ app.post("/send-message", async (req, res) => {
   try {
     const { phone, message } = req.body;
     if (!phone || !message) return res.status(400).json({ error: "Phone and message required" });
-    await sendMessage(normalizePhone(phone), message);
+    const normalized = normalizePhone(phone);
+    console.log(`[send-message] raw:${phone} normalized:${normalized} msg:"${message.slice(0, 40)}"`);
+    await sendMessage(normalized, message);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -1218,6 +1326,7 @@ app.get("/ratings", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.get("/dashboard", (req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
+app.get("/ping", (req, res) => res.json({ status: "ok", time: new Date().toISOString() }));
 app.get("/", (req, res) => res.send("Washkart Bot is running! 🧺"));
 
 const PORT = process.env.PORT || 3000;

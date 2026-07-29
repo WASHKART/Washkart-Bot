@@ -238,10 +238,13 @@ tr.overdue:hover td{background:#fee2e2;}
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title">All Bookings</div>
-        <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+          <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
+        </div>
       </div>
       <div class="search-bar">
-        <input class="search-input" id="search-input" placeholder="🔍 Search by name, phone, order ID..." oninput="renderBookings()">
+        <input class="search-input" id="search-input" placeholder="🔍 Search by name, phone, order ID..." oninput="currentPage=1;renderBookings()">
         <button class="btn btn-ghost btn-sm" onclick="document.getElementById('search-input').value='';renderBookings()">✕</button>
       </div>
       <div class="filter-tabs">
@@ -270,6 +273,14 @@ tr.overdue:hover td{background:#fee2e2;}
             <tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>Loading...</td></tr>
           </tbody>
         </table>
+      </div>
+      <!-- PAGINATION -->
+      <div id="pagination-bar" style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.3rem;border-top:1px solid var(--border);font-size:13px;color:var(--muted);">
+        <span id="pagination-info"></span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" id="btn-prev" onclick="changePage(-1)">← Prev</button>
+          <button class="btn btn-ghost btn-sm" id="btn-next" onclick="changePage(1)">Next →</button>
+        </div>
       </div>
     </div>
   </div>
@@ -508,7 +519,24 @@ tr.overdue:hover td{background:#fee2e2;}
 
 <script>
 const BOT_URL = 'https://washkart-bot.onrender.com';
+const DASHBOARD_PASSWORD = 'washkart2025'; // Change this password
 let allBookings = [], allCustomers = [], allRatings = [], currentFilter = 'all';
+let currentPage = 1;
+const PAGE_SIZE = 50;
+
+// ── AUTH ───────────────────────────────────────────────────────────
+function checkAuth() {
+  const stored = sessionStorage.getItem('wk_auth');
+  if (stored === DASHBOARD_PASSWORD) return true;
+  const pwd = prompt('Enter dashboard password:');
+  if (pwd === DASHBOARD_PASSWORD) {
+    sessionStorage.setItem('wk_auth', pwd);
+    return true;
+  }
+  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666">Wrong password. Refresh to try again.</div>';
+  return false;
+}
+if (!checkAuth()) throw new Error('Unauthorized');
 // Track the currently selected customer name for template personalisation
 let msgCustomerName = '';
 
@@ -614,21 +642,49 @@ function onSourceChange(source) {
 // ── RENDER BOOKINGS ─────────────────────────────────────────────────
 function filterTab(f, el) {
   currentFilter = f;
+  currentPage = 1;
   document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   renderBookings();
 }
 
-function renderBookings() {
+function changePage(dir) {
+  currentPage += dir;
+  renderBookings();
+  window.scrollTo(0, 0);
+}
+
+function getFilteredBookings() {
   const q = (document.getElementById('search-input')?.value || '').toLowerCase();
   let filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
   if (q) filtered = filtered.filter(b =>
     b.name.toLowerCase().includes(q) || b.phone.includes(q) || b.id.toLowerCase().includes(q) || (b.address||'').toLowerCase().includes(q)
   );
-  const tbody = document.getElementById('bookings-table');
-  if (!filtered.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>No bookings found</td></tr>`; return; }
+  return filtered;
+}
 
-  // Display "Walk-in (In-store)" for walk-in orders with blank/default address
+function renderBookings() {
+  const filtered = getFilteredBookings();
+  const tbody = document.getElementById('bookings-table');
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  currentPage = Math.min(currentPage, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const page  = filtered.slice(start, start + PAGE_SIZE);
+
+  // Pagination bar
+  const info = document.getElementById('pagination-info');
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  info.textContent = filtered.length
+    ? `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length} orders`
+    : '';
+  btnPrev.disabled = currentPage <= 1;
+  btnNext.disabled = currentPage >= totalPages;
+  btnPrev.style.opacity = currentPage <= 1 ? '0.4' : '1';
+  btnNext.style.opacity = currentPage >= totalPages ? '0.4' : '1';
+
+  if (!page.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>No bookings found</td></tr>`; return; }
+
   const displayAddress = (b) => {
     if (b.source === 'walkin' && (!b.address || b.address === 'Walk-in (In-store)')) {
       return '<span style="color:var(--muted);font-style:italic">Walk-in (In-store)</span>';
@@ -636,7 +692,7 @@ function renderBookings() {
     return b.address || '<span style="color:var(--muted)">—</span>';
   };
 
-  tbody.innerHTML = filtered.map(b => {
+  tbody.innerHTML = page.map(b => {
     const over = isOverdue(b);
     return `<tr class="${over ? 'overdue' : ''}">
       <td>
@@ -687,6 +743,27 @@ function renderBookings() {
       </td>
     </tr>`;
   }).join('');
+}
+
+// ── CSV EXPORT ─────────────────────────────────────────────────────
+function exportCSV() {
+  const filtered = getFilteredBookings();
+  const headers = ['Order ID','Name','Phone','Address','Date','Slot','Status','Service','Express','Delivery Date','Source','Notes','Created At'];
+  const rows = filtered.map(b => [
+    b.id, b.name, b.phone, b.address, b.date, b.slot, b.status,
+    b.service_type, b.express ? 'Yes' : 'No',
+    b.delivery_date, b.source, b.notes,
+    b.created_at ? new Date(b.created_at).toLocaleString('en-IN') : ''
+  ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`));
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `washkart-orders-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`✅ Exported ${filtered.length} orders`);
 }
 
 // ── STATUS / SERVICE / EXPRESS UPDATES ────────────────────────────
