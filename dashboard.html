@@ -161,6 +161,14 @@ tr.overdue:hover td{background:#fee2e2;}
 .rev-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
 .rev-value{font-family:'DM Mono',monospace;font-size:22px;color:var(--green);font-weight:500;}
 
+/* BRANCH SWITCHER */
+.branch-switcher{display:flex;gap:6px;align-items:center;}
+.branch-btn{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #4ade8044;color:#9ca3af;background:transparent;transition:all .15s;}
+.branch-btn.active{background:#4ade80;color:var(--dark);border-color:#4ade80;}
+.badge-payment-unpaid{background:#fee2e2;color:#991b1b;}
+.badge-payment-paid{background:#dcfce7;color:#166534;}
+.badge-payment-partial{background:#fef3c7;color:#92400e;}
+
 /* TOAST */
 .toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--dark);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:500;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;}
 .toast.show{opacity:1;transform:translateY(0);}
@@ -185,6 +193,11 @@ tr.overdue:hover td{background:#fee2e2;}
   <div class="header-left">
     <div class="logo">WASH<span>KART</span> admin</div>
     <div class="live-badge">LIVE</div>
+    <div class="branch-switcher">
+      <button class="branch-btn active" onclick="switchBranch('all',this)">All</button>
+      <button class="branch-btn" onclick="switchBranch('bavdhan',this)">Bavdhan</button>
+      <button class="branch-btn" onclick="switchBranch('baner',this)">Baner</button>
+    </div>
   </div>
   <div class="header-actions">
     <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 <span>Send Message</span></button>
@@ -200,6 +213,7 @@ tr.overdue:hover td{background:#fee2e2;}
   <div class="nav-tab" onclick="showPage('customers',this)">👥 Customers</div>
   <div class="nav-tab" onclick="showPage('ratings',this)">⭐ Ratings</div>
   <div class="nav-tab" onclick="showPage('revenue',this)">💰 Revenue</div>
+  <div class="nav-tab" onclick="showPage('payments',this)">💳 Payments</div>
 </div>
 
 <div class="container">
@@ -230,6 +244,11 @@ tr.overdue:hover td{background:#fee2e2;}
       <div class="stat-label">Customers</div>
       <div class="stat-value" id="stat-customers">0</div>
       <div class="stat-sub">Unique</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Unpaid</div>
+      <div class="stat-value" id="stat-unpaid">0</div>
+      <div class="stat-sub" id="stat-unpaid-amt">₹0 pending</div>
     </div>
   </div>
 
@@ -265,6 +284,7 @@ tr.overdue:hover td{background:#fee2e2;}
               <th>Address</th>
               <th>Date & Slot</th>
               <th>Service</th>
+              <th>Amount</th>
               <th>Status</th>
               <th>Actions</th>
             </tr>
@@ -343,16 +363,30 @@ tr.overdue:hover td{background:#fee2e2;}
   <div id="page-revenue" class="page-section">
     <div class="revenue-grid">
       <div class="rev-card">
-        <div class="rev-label">This Week (Est.)</div>
+        <div class="rev-label">Collected This Week</div>
         <div class="rev-value" id="rev-week">₹0</div>
       </div>
       <div class="rev-card">
-        <div class="rev-label">This Month (Est.)</div>
+        <div class="rev-label">Collected This Month</div>
         <div class="rev-value" id="rev-month">₹0</div>
       </div>
       <div class="rev-card">
-        <div class="rev-label">All Time (Est.)</div>
+        <div class="rev-label">Total Collected</div>
         <div class="rev-value" id="rev-total">₹0</div>
+      </div>
+    </div>
+    <div class="revenue-grid">
+      <div class="rev-card">
+        <div class="rev-label">Bavdhan Collected</div>
+        <div class="rev-value" id="rev-bavdhan">₹0</div>
+      </div>
+      <div class="rev-card">
+        <div class="rev-label">Baner Collected</div>
+        <div class="rev-value" id="rev-baner">₹0</div>
+      </div>
+      <div class="rev-card">
+        <div class="rev-label">Total Pending</div>
+        <div class="rev-value" style="color:var(--red)" id="rev-pending">₹0</div>
       </div>
     </div>
     <div class="panel">
@@ -362,6 +396,37 @@ tr.overdue:hover td{background:#fee2e2;}
     <div class="panel" style="margin-top:1rem;">
       <div class="panel-header"><div class="panel-title">📊 Orders by Source</div></div>
       <div style="padding:1.3rem;" id="source-breakdown"></div>
+    </div>
+  </div>
+
+  <!-- ═══ PAYMENTS PAGE ═══ -->
+  <div id="page-payments" class="page-section">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">💳 Pending Payments</div>
+        <span id="pending-total-badge" style="font-size:13px;font-weight:600;color:var(--red)"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Customer</th>
+              <th>Branch</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="payments-table">
+            <tr><td colspan="6" class="empty"><div class="empty-icon">💳</div>Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:1rem;">
+      <div class="panel-header"><div class="panel-title">✅ Recently Paid</div></div>
+      <div id="paid-list"><div class="empty"><div class="empty-icon">✅</div>No paid orders yet</div></div>
     </div>
   </div>
 
@@ -376,15 +441,24 @@ tr.overdue:hover td{background:#fee2e2;}
     </div>
     <div class="modal-body">
 
-      <!-- Source selector — drives smart field visibility -->
-      <div class="form-group">
-        <label class="form-label">Source *</label>
-        <select class="form-select" id="new-source" onchange="onSourceChange(this.value)">
-          <option value="walkin">🚶 Walk-in</option>
-          <option value="call">📞 Phone Call</option>
-          <option value="whatsapp">💬 WhatsApp</option>
-          <option value="other">📌 Other</option>
-        </select>
+      <!-- Source + Branch row -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Source *</label>
+          <select class="form-select" id="new-source" onchange="onSourceChange(this.value)">
+            <option value="walkin">🚶 Walk-in</option>
+            <option value="call">📞 Phone Call</option>
+            <option value="whatsapp">💬 WhatsApp</option>
+            <option value="other">📌 Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Branch *</label>
+          <select class="form-select" id="new-branch">
+            <option value="bavdhan">📍 Bavdhan</option>
+            <option value="baner">📍 Baner</option>
+          </select>
+        </div>
       </div>
 
       <!-- Walk-in info banner -->
@@ -523,6 +597,7 @@ const DASHBOARD_PASSWORD = 'washkart2025'; // Change this password
 let allBookings = [], allCustomers = [], allRatings = [], currentFilter = 'all';
 let currentPage = 1;
 const PAGE_SIZE = 50;
+let activeBranch = 'all'; // 'all' | 'bavdhan' | 'baner'
 
 // ── AUTH ───────────────────────────────────────────────────────────
 function checkAuth() {
@@ -692,12 +767,18 @@ function renderBookings() {
     return b.address || '<span style="color:var(--muted)">—</span>';
   };
 
+  const paymentBadge = (ps) => {
+    if (ps === 'paid')    return '<span class="badge badge-payment-paid">✅ Paid</span>';
+    if (ps === 'partial') return '<span class="badge badge-payment-partial">⚠️ Partial</span>';
+    return '<span class="badge badge-payment-unpaid">🔴 Unpaid</span>';
+  };
   tbody.innerHTML = page.map(b => {
     const over = isOverdue(b);
     return `<tr class="${over ? 'overdue' : ''}">
       <td>
         <div class="order-id">${b.id}</div>
         ${sourceBadge(b.source)}
+        <span style="font-size:10px;color:var(--muted);display:block;margin-top:2px">${b.branch||'bavdhan'}</span>
         ${over ? '<div class="overdue-tag">⚠️ OVERDUE</div>' : ''}
         ${b.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">📝 ${b.notes}</div>` : ''}
       </td>
@@ -720,10 +801,22 @@ function renderBookings() {
           <option value="laundry" ${b.service_type==='laundry'?'selected':''}>🫧 Laundry</option>
           <option value="shoes" ${b.service_type==='shoes'?'selected':''}>👟 Shoes</option>
           <option value="mixed" ${b.service_type==='mixed'?'selected':''}>📦 Mixed</option>
+          <option value="specialty" ${b.service_type==='specialty'?'selected':''}>✨ Specialty</option>
         </select>
         <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
           <input type="checkbox" ${b.express?'checked':''} onchange="toggleExpress('${b.id}',this.checked)"> ⚡ Express
         </label>` : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+      </td>
+      <td>
+        <input type="number" placeholder="₹ Amount" value="${b.amount||''}" min="0"
+          style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px;margin-bottom:4px"
+          onchange="updateAmount('${b.id}',this.value)">
+        <div>${paymentBadge(b.payment_status)}</div>
+        <select class="status-select" style="margin-top:4px;width:100%" onchange="updatePaymentStatus('${b.id}',this.value)">
+          <option value="unpaid"  ${b.payment_status==='unpaid' ?'selected':''}>🔴 Unpaid</option>
+          <option value="paid"    ${b.payment_status==='paid'   ?'selected':''}>✅ Paid</option>
+          <option value="partial" ${b.payment_status==='partial'?'selected':''}>⚠️ Partial</option>
+        </select>
       </td>
       <td>
         <select class="status-select" onchange="updateStatus('${b.id}',this.value)">
@@ -736,8 +829,9 @@ function renderBookings() {
         </select>
       </td>
       <td>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')" title="Send WhatsApp">💬</button>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')" title="WhatsApp">💬</button>
+          ${b.status==='delivered' && b.payment_status!=='paid' ? `<button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')" title="Payment Reminder" style="color:var(--orange)">💰</button>` : ''}
           <button class="btn btn-danger btn-sm" onclick="deleteOrder('${b.id}')" title="Delete">🗑</button>
         </div>
       </td>
@@ -771,11 +865,37 @@ function updateStatus(id, status) {
   const b = allBookings.find(x => x.id === id);
   fetch(`${BOT_URL}/bookings/${id}`, {
     method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status, service_type: b?.service_type || '', express: b?.express || false })
+    body: JSON.stringify({ status, service_type: b?.service_type || '', express: b?.express || false, amount: b?.amount || 0 })
   }).then(r => r.json()).then(data => {
     if (b) { b.status = status; if (data.delivery_date) b.delivery_date = data.delivery_date; }
     toast(`Order ${id} → ${status}`); updateAll();
   }).catch(() => toast('Update failed', 'error'));
+}
+function updateAmount(id, amount) {
+  const b = allBookings.find(x => x.id === id);
+  if (!b) return;
+  b.amount = parseInt(amount) || 0;
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status: b.status, amount: b.amount })
+  }).then(() => { updateAll(); }).catch(() => toast('Amount update failed','error'));
+}
+function updatePaymentStatus(id, payment_status) {
+  const b = allBookings.find(x => x.id === id);
+  if (!b) return;
+  b.payment_status = payment_status;
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status: b.status, payment_status, payment_method: payment_status === 'paid' ? (b.payment_method || 'manual') : b.payment_method })
+  }).then(() => { toast(`Payment marked ${payment_status}`); updateAll(); }).catch(() => toast('Failed','error'));
+}
+function sendPaymentReminder(id) {
+  const b = allBookings.find(x => x.id === id);
+  if (!b?.amount) { toast('Set amount first', 'error'); return; }
+  fetch(`${BOT_URL}/bookings/${id}`, {
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ status: b.status, send_payment_reminder: true, amount: b.amount })
+  }).then(() => toast('💰 Reminder sent!')).catch(() => toast('Failed','error'));
 }
 function updateService(id, serviceType) {
   if (!serviceType) return;
@@ -913,19 +1033,24 @@ function renderRatings() {
 }
 
 // ── REVENUE ────────────────────────────────────────────────────────
-const SERVICE_AVG = { iron: 40, dryclean: 200, laundry: 300, shoes: 300, mixed: 250 };
-function calcRevenue(bookings) {
-  return bookings.filter(b => b.status === 'delivered').reduce((s, b) => s + (SERVICE_AVG[b.service_type] || 150), 0);
+function calcCollected(bookings) {
+  return bookings.filter(b => b.payment_status === 'paid').reduce((s,b) => s + (b.amount||0), 0);
+}
+function calcPending(bookings) {
+  return bookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid' && b.amount > 0).reduce((s,b) => s + (b.amount||0), 0);
 }
 function renderRevenue() {
   const now = new Date();
-  const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+  const weekAgo  = new Date(now); weekAgo.setDate(now.getDate() - 7);
   const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
-  const weekOrders = allBookings.filter(b => b.created_at && new Date(b.created_at) >= weekAgo);
-  const monthOrders = allBookings.filter(b => b.created_at && new Date(b.created_at) >= monthAgo);
-  document.getElementById('rev-week').textContent = `₹${calcRevenue(weekOrders).toLocaleString('en-IN')}`;
-  document.getElementById('rev-month').textContent = `₹${calcRevenue(monthOrders).toLocaleString('en-IN')}`;
-  document.getElementById('rev-total').textContent = `₹${calcRevenue(allBookings).toLocaleString('en-IN')}`;
+  const weekOrders  = allBookings.filter(b => b.payment_date && new Date(b.payment_date) >= weekAgo);
+  const monthOrders = allBookings.filter(b => b.payment_date && new Date(b.payment_date) >= monthAgo);
+  document.getElementById('rev-week').textContent  = `₹${calcCollected(weekOrders).toLocaleString('en-IN')}`;
+  document.getElementById('rev-month').textContent = `₹${calcCollected(monthOrders).toLocaleString('en-IN')}`;
+  document.getElementById('rev-total').textContent = `₹${calcCollected(allBookings).toLocaleString('en-IN')}`;
+  document.getElementById('rev-bavdhan').textContent = `₹${calcCollected(allBookings.filter(b=>b.branch==='bavdhan')).toLocaleString('en-IN')}`;
+  document.getElementById('rev-baner').textContent   = `₹${calcCollected(allBookings.filter(b=>b.branch==='baner')).toLocaleString('en-IN')}`;
+  document.getElementById('rev-pending').textContent = `₹${calcPending(allBookings).toLocaleString('en-IN')}`;
 
   // Service breakdown
   const svc = {};
@@ -964,29 +1089,44 @@ function updateAll() {
   document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === today && !['cancelled'].includes(b.status)).length;
   document.getElementById('stat-deliveries').textContent = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status)).length;
   document.getElementById('stat-customers').textContent = allCustomers.length;
-  renderBookings(); renderToday(); renderCustomers(); renderRatings(); renderRevenue();
+  // Payment stats
+  const unpaidDelivered = allBookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid' && b.amount > 0);
+  const unpaidTotal = unpaidDelivered.reduce((s,b) => s + (b.amount||0), 0);
+  document.getElementById('stat-unpaid').textContent = unpaidDelivered.length;
+  document.getElementById('stat-unpaid-amt').textContent = `₹${unpaidTotal.toLocaleString('en-IN')} pending`;
+  renderBookings(); renderToday(); renderCustomers(); renderRatings(); renderRevenue(); renderPayments();
 }
 
 // ── LOAD DATA ──────────────────────────────────────────────────────
 async function loadData() {
   try {
+    const bParam = activeBranch !== 'all' ? `?branch=${activeBranch}` : '';
     const [bRes, cRes, rRes] = await Promise.all([
-      fetch(`${BOT_URL}/bookings`),
-      fetch(`${BOT_URL}/customers`),
-      fetch(`${BOT_URL}/ratings`).catch(() => ({ json: () => [] }))
+      fetch(`${BOT_URL}/bookings${bParam}`),
+      fetch(`${BOT_URL}/customers${bParam}`),
+      fetch(`${BOT_URL}/ratings${bParam}`).catch(() => ({ json: () => [] }))
     ]);
     allBookings = (await bRes.json()).map(b => ({
       id: b.order_id, name: b.name||'', phone: b.phone||'', address: b.address||'',
       date: b.date||'', slot: b.slot||'', status: b.status||'pending',
       service_type: b.service_type||'', express: b.express||false,
       delivery_date: b.delivery_date||'', source: b.source||'whatsapp',
-      notes: b.notes||'', created_at: b.created_at||''
+      branch: b.branch||'bavdhan', notes: b.notes||'', created_at: b.created_at||'',
+      amount: b.amount||0, payment_status: b.payment_status||'unpaid',
+      payment_method: b.payment_method||'', payment_date: b.payment_date||''
     }));
     allCustomers = await cRes.json();
     allRatings = await rRes.json().catch(() => []);
     populateCustomerDropdown();
     updateAll();
   } catch (e) { console.error('Load error:', e); toast('Failed to load data', 'error'); }
+}
+
+function switchBranch(branch, el) {
+  activeBranch = branch;
+  document.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  loadData();
 }
 
 function populateCustomerDropdown() {
@@ -1026,8 +1166,9 @@ async function submitNewOrder() {
     dateStr = d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
   }
 
+  const branch = document.getElementById('new-branch').value;
   const body = {
-    name, phone, source, notes,
+    name, phone, source, notes, branch,
     ...(address ? { address } : {}),
     ...(dateStr  ? { date: dateStr } : {}),
     ...((!isWalkIn && slot) ? { slot } : {}),
@@ -1113,6 +1254,49 @@ onSourceChange('walkin');
 document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
 
 loadData();
+// ── PAYMENTS PAGE ─────────────────────────────────────────────────
+function renderPayments() {
+  const unpaid = allBookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid');
+  const paid   = allBookings.filter(b => b.payment_status === 'paid').slice(0, 20);
+  const tbody  = document.getElementById('payments-table');
+  const pendingTotal = unpaid.reduce((s,b) => s + (b.amount||0), 0);
+  document.getElementById('pending-total-badge').textContent = unpaid.length ? `${unpaid.length} orders — ₹${pendingTotal.toLocaleString('en-IN')} due` : '';
+
+  if (!unpaid.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">✅</div>No pending payments!</td></tr>';
+  } else {
+    tbody.innerHTML = unpaid.map(b => `<tr>
+      <td><div class="order-id">${b.id}</div><div style="font-size:11px;color:var(--muted)">${b.date||'—'}</div></td>
+      <td><div style="font-weight:500">${b.name}</div><div style="font-size:11px;color:var(--muted)">${b.phone}</div></td>
+      <td><span style="font-size:12px;text-transform:capitalize">${b.branch||'bavdhan'}</span></td>
+      <td>
+        <input type="number" value="${b.amount||''}" placeholder="₹ Amount" min="0"
+          style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px"
+          onchange="updateAmount('${b.id}',this.value)">
+      </td>
+      <td><span class="badge badge-payment-unpaid">🔴 Unpaid</span></td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="updatePaymentStatus('${b.id}','paid')">✅ Mark Paid</button>
+          <button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')" title="Send reminder">💰 Remind</button>
+          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')">💬</button>
+        </div>
+      </td>
+    </tr>`).join('');
+  }
+
+  const paidEl = document.getElementById('paid-list');
+  if (!paid.length) {
+    paidEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No paid orders yet</div>';
+  } else {
+    paidEl.innerHTML = paid.map(b => `<div class="today-item">
+      <div class="today-name">${b.name} <span class="order-id">${b.id}</span> <span class="badge badge-payment-paid">✅ Paid</span></div>
+      <div class="today-address">₹${b.amount||0} via ${b.payment_method||'—'} | ${b.payment_date ? new Date(b.payment_date).toLocaleDateString('en-IN') : '—'}</div>
+      <div class="today-phone">${b.phone}</div>
+    </div>`).join('');
+  }
+}
+
 setInterval(loadData, 30000);
 </script>
 </body>
