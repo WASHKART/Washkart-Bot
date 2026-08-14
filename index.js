@@ -158,7 +158,8 @@ const TRACK_KW = [
   "ऑर्डर कुठे आहे","कपडे कुठे आहेत","स्टेटस सांगा",
   "bhai order kahan hai","yaar status kya hai","order track karo","mujhe batao order kahan hai","kapde kab aayenge bhai",
   "ready hue","ready hai","tayar hue","kapde aaye","order ready","ready ho gaya","ho gaye kya",
-  "tayar zale","kapde aale ka","ready aahe ka","कपडे तयार",
+  "tayar zale","kapde aale ka","ready aahe ka",
+  "kab milega","kab aayega","kab tak aayega","kab deliver","kab pahunchega","kev milel","kev yenar","कपडे तयार",
 ];
 const CANCEL_KW = [
   "cancel","cancellation","cancel order","cancel booking","don't want","dont want","stop","drop it","nevermind",
@@ -214,6 +215,10 @@ const RATES_KW = [
   // Short queries like "saree dryclean ka?" "shirt press ka?"
   "dryclean ka","dry clean ka","iron ka","press ka","wash ka","laundry ka","clean ka","shoe ka",
   "dryclean chi","press chi","istri chi","wash chi",
+  // Natural Hindi/Marathi queries without "kitna"
+  "kitna lagega","kitna padega","kitna hoga","cost kitna","lagega kitna",
+  "kiti lagel","kiti padel","dar sanga","kiti rupay",
+  "price of","cost of","charge for","rate for",
 ];
 const GREET_KW = [
   "hi","hello","hey","hii","helo","heya","howdy","good morning","good evening","good afternoon","good night","good day","sup","wassup","whatsup","what's up",
@@ -250,6 +255,15 @@ const WEBSITE_KW = [
   "website","site","instagram","insta","social media","online","web",
   "www","washkart.co.in","_washkart_","facebook","fb page",
   "online dekhna","website dekho",
+];
+
+// ── THANKS / ACKNOWLEDGEMENT KEYWORDS ───────────────────────────
+const THANKS_KW = [
+  "thank you","thanks","thankyou","thank u","thx","ty",
+  "shukriya","dhanyawad","shukriyaa","bahut shukriya","bahut dhanyawad",
+  "aabhar","dhanya","aabhari","खूप आभारी",
+  "bhai thanks","yaar thanks","thanks bhai","thanks yaar",
+  "accha","acha","achha","thik hai","theek hai bhai",
 ];
 
 // ── WRONG NUMBER / WHO ARE YOU KEYWORDS ───────────────────────────
@@ -938,8 +952,27 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   // ── Order ready / is it done ──────────────────────────────────────
-  if (has(t, ...ORDER_READY_KW)) {
+  if (has(t, ...ORDER_READY_KW) || has(t, "ready hua","ready hue","kapde ready","tayar hua","order complete","complete hua","clean hua","ho gaye")) {
     await handleTrack(phone, session, rawText, phoneNumberId); return;
+  }
+
+  // Thanks / acknowledgements — short friendly reply, no Gemini
+  if (has(t, ...THANKS_KW)) {
+    const customer = await getCustomer(phone);
+    const name = customer?.name ? customer.name + " ji" : "aapka";
+    await send("Shukriya " + name + "! 😊 Koi aur kaam ho to batana. *pickup* — booking 🧺");
+    return;
+  }
+
+  // Standalone "ok/done/theek" outside of a session step — just acknowledge
+  if (!session.step || session.step === "idle") {
+    const ackWords = ["ok","okay","done","theek","theek hai","accha","acha","achha","sahi","noted","hmm","hm"];
+    if (ackWords.some(w => t.trim() === w || t.trim() === w + " ji" || t.trim() === w + " bhai")) {
+      await sendBtn("Theek hai! 😊 Kuch aur chahiye?",
+        [{ id:"btn_book", title:"📦 Book Pickup" }, { id:"btn_price", title:"💰 Rates" }, { id:"btn_track", title:"🔍 Track Order" }]
+      );
+      return;
+    }
   }
 
   if (has(t, ...HELP_KW))           { await send(HELP_MSG); return; }
@@ -975,6 +1008,31 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   // Rates
+  // ── "Do you do X?" service availability questions ───────────────
+  const SERVICE_AVAIL = [
+    { kw:["curtain","parda","curtains"],       reply:"Yes! 🏠 *Curtain Cleaning* karte hain\n\nDry Clean — ₹15/sq.ft\nPickup & delivery included!\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["carpet","rug","darri"],             reply:"Yes! 🏠 *Carpet Dry Cleaning* karte hain\n\nFrom ₹40/sq.ft\nPickup & delivery included!\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["helmet","helmet clean"],            reply:"Yes! 🪖 *Helmet Cleaning* karte hain\n\nFrom ₹150/helmet\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["soft toy","teddy","stuffed toy","toy clean"], reply:"Yes! 🧸 *Soft Toy Cleaning* karte hain\n\nFrom ₹200\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["sofa","sofa cover","upholstery"],   reply:"Yes! 🛋 *Sofa Cover Cleaning* karte hain\n\nPricing depends on size — please call or book a pickup and our team will assess!\n\nPickup: *pickup* 🧺" },
+    { kw:["bag","purse","handbag"],            reply:"Yes! 👜 *Bag & Purse Cleaning* karte hain\n\nFrom ₹200\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["shoe","joote","sneaker","footwear"], reply:"Yes! 👟 *Shoe Cleaning* karte hain\n\nCanvas — ₹300 | Sneakers/Sports — ₹350 | Leather — from ₹400\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["lehenga","lehnga"],                 reply:"Yes! 💃 *Lehenga* dry clean karte hain\n\nFrom ₹350\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["saree","sari"],                     reply:"Yes! 🥻 *Saree* dry clean karte hain\n\nRegular ₹350 | Silk ₹400 | With work ₹450\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["blanket","razai","comforter","quilt"], reply:"Yes! 🛌 *Blanket/Comforter* wash karte hain\n\nSingle ₹350 | Double ₹450\n\nPickup ke liye: *pickup* 🧺" },
+    { kw:["bedsheet","bed sheet","chadar"],    reply:"Yes! 🛏 *Bedsheet* wash karte hain\n\nSingle ₹150 | Double ₹200\n\nPickup ke liye: *pickup* 🧺" },
+  ];
+  // Match "kya aap X karte ho", "X clean karte ho", "X hoti hai", "X milti hai" etc.
+  const isAvailQuery = has(t, "kya aap","karte ho","karte hain","milti hai","hoti hai","available","karta ho","karta hai","do you","can you","aap karte","tum karte","tumhare paas","hoga","hote hain","ho sakta","ho sakti","hai kya","karte ka","karte ka","karto ka","milega kya","hota hai");
+  if (isAvailQuery) {
+    for (const s of SERVICE_AVAIL) {
+      if (s.kw.some(k => t.includes(k))) {
+        await send(s.reply);
+        return;
+      }
+    }
+  }
+
   if (has(t, ...RATES_KW)) {
     // ── Smart item-specific price lookup ─────────────────────────
     // Detect item + service combination and reply with exact price
@@ -1034,7 +1092,7 @@ Pickup ke liye: *pickup* 🧺`);
     if (has(t, "dry","dryclean","dry clean","dc"))                 { await send(RATES.dryclean); return; }
     if (has(t, "wash","laundry","dhulai","fold"))                  { await send(RATES.laundry); return; }
     if (has(t, "shoe","sneaker","joote","footwear"))               { await send(RATES.shoes); return; }
-    if (has(t, "specialty","carpet","helmet","toy","bag clean"))   { await send(RATES.specialty); return; }
+    if (has(t, "specialty","carpet","helmet","toy","bag clean","curtain","parda","rug","sofa"))   { await send(RATES.specialty); return; }
     await askPriceCategory(phone, phoneNumberId); return;
   }
 
