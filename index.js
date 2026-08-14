@@ -59,6 +59,7 @@ async function getSession(phone) {
 
 const sessionWriteTimers = {};
 function saveSession(phone, session) {
+  // Always update in-memory cache immediately — Supabase is best-effort
   sessionCache[phone] = session;
   if (sessionWriteTimers[phone]) clearTimeout(sessionWriteTimers[phone]);
   sessionWriteTimers[phone] = setTimeout(async () => {
@@ -67,7 +68,10 @@ function saveSession(phone, session) {
       const payload = { phone, step: session.step || "idle", booking: session.booking || {}, history: (session.history || []).slice(-12), updated_at: new Date().toISOString() };
       if (rows.length) await dbUpdate("sessions", `phone=eq.${phone}`, payload);
       else             await dbInsert("sessions", payload);
-    } catch (e) { console.error("saveSession error:", e.message); }
+    } catch (e) {
+      // Silently fail — in-memory cache still works for current session
+      console.log(`[session] DB write skipped for ${phone}: ${e.message}`);
+    }
   }, 2000);
 }
 
