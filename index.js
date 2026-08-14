@@ -4,6 +4,22 @@ const path    = require("path");
 const app     = express();
 app.use(express.json());
 
+// ── CORS ──────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = [
+  'https://www.washkart.co.in',
+  'https://washkart.co.in',
+  'https://super-glade-8ea3.bhavin2267.workers.dev'
+];
+app.use((req, res, next) => {
+  if (ALLOWED_ORIGINS.includes(req.headers.origin)) {
+    res.header('Access-Control-Allow-Origin', req.headers.origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
 // ── BRANCH CONFIG ─────────────────────────────────────────────────
 // Add Baner Phone Number ID here when ready — bot goes live instantly
 const BRANCHES = {
@@ -1452,9 +1468,11 @@ app.post("/webhook", async (req, res) => {
 // ── DASHBOARD API ─────────────────────────────────────────────────
 app.get("/bookings", async (req, res) => {
   try {
-    const branch = req.query.branch;
-    const filter = branch && branch !== "all" ? `branch=eq.${branch}&order=created_at.desc` : "order=created_at.desc";
-    res.json(await dbSelect("bookings", filter));
+    const { branch, phone } = req.query;
+    const filters = ["order=created_at.desc"];
+    if (branch && branch !== "all") filters.push(`branch=eq.${branch}`);
+    if (phone) filters.push(`phone=eq.${normalizePhone(phone)}`);
+    res.json(await dbSelect("bookings", filters.join("&")));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
