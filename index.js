@@ -944,8 +944,33 @@ async function handleDateButton(phone, session, which, phoneNumberId) {
 async function handleSlotSelected(phone, session, phoneNumberId) {
   session.step = "idle";
   const bk = session.booking;
-  if (bk.name && bk.address && bk.date && bk.slot) { await showBookingConfirm(phone, session, phoneNumberId); }
-  else if (!bk.date) { await askDate(phone, phoneNumberId); session.step = "select_date"; }
+  console.log(`[slotSelected] name:${bk.name} address:${bk.address} date:${bk.date} slot:${bk.slot}`);
+
+  // Load customer data if name/address missing
+  if (!bk.name || !bk.address) {
+    const customer = await getCustomer(phone);
+    if (customer) {
+      if (!bk.name)    bk.name    = customer.name;
+      if (!bk.address) bk.address = customer.address;
+    }
+  }
+
+  if (bk.name && bk.address && bk.date && bk.slot) {
+    await showBookingConfirm(phone, session, phoneNumberId);
+  } else if (!bk.date) {
+    await askDate(phone, phoneNumberId);
+    session.step = "select_date";
+  } else if (!bk.name) {
+    await sendMessage(phone, "Apna naam batao 😊", phoneNumberId);
+    session.step = "get_name";
+  } else if (!bk.address) {
+    await sendMessage(phone, "📍 Apna pickup address bhejein:", phoneNumberId);
+    session.step = "get_address";
+  } else {
+    // All data present but something still missing — force confirm
+    console.log(`[slotSelected] fallback — forcing confirm`);
+    await showBookingConfirm(phone, session, phoneNumberId);
+  }
   saveSession(phone, session);
 }
 async function handleTrack(phone, session, rawText, phoneNumberId) {
