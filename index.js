@@ -816,10 +816,74 @@ async function handleMessage(phone, rawText, phoneNumberId) {
 
   // Rates
   if (has(t, ...RATES_KW)) {
-    if (has(t, "iron","press","istri"))                         { await send(RATES.iron); return; }
-    if (has(t, "dry","dryclean","dry clean","dc"))              { await send(RATES.dryclean); return; }
-    if (has(t, "wash","laundry","dhulai","fold"))               { await send(RATES.laundry); return; }
-    if (has(t, "shoe","sneaker","joote","footwear"))            { await send(RATES.shoes); return; }
+    // ── Smart item-specific price lookup ─────────────────────────
+    // Detect item + service combination and reply with exact price
+    const ITEM_PRICE_QUICK = [
+      // Laundry
+      { items:["saree","sari"], svc:["wash","laundry","dhulai"],    reply:"🥻 Saree Laundry — ₹150/kg
+⚡ Express available" },
+      { items:["bedsheet","bed sheet","chadar"], svc:["wash","laundry"], reply:"🛏 Bedsheet Wash
+Single — ₹150 | Double — ₹200" },
+      { items:["blanket","razai","comforter"], svc:["wash","laundry"],   reply:"🛌 Blanket/Comforter Wash
+Single — ₹350 | Double — ₹450" },
+      { items:["shirt","t-shirt","tshirt","top"], svc:["wash","laundry"], reply:"👕 Shirt/T-Shirt Wash & Fold — ₹80/kg
+Wash & Iron — ₹110/kg" },
+      // Dry clean
+      { items:["saree","sari"], svc:["dry","dryclean","dc"],        reply:"🥻 Saree Dry Clean
+Regular — ₹350
+Silk — ₹400
+With work — ₹450" },
+      { items:["lehenga","lehnga"], svc:["dry","dryclean","dc"],    reply:"💃 Lehenga Dry Clean — from ₹350" },
+      { items:["suit"], svc:["dry","dryclean","dc"],                reply:"👔 Suit Dry Clean
+2 Piece — ₹400
+3 Piece — from ₹350" },
+      { items:["blazer","coat"], svc:["dry","dryclean","dc"],       reply:"🧥 Blazer/Coat Dry Clean — ₹300" },
+      { items:["jacket"], svc:["dry","dryclean","dc"],              reply:"🧥 Jacket Dry Clean — ₹250" },
+      { items:["kurta"], svc:["dry","dryclean","dc"],               reply:"👘 Kurta Dry Clean — ₹100" },
+      { items:["shirt","pant","trouser","jeans","tshirt","top"], svc:["dry","dryclean","dc"], reply:"👔 Shirt/Pant/Jeans/Top Dry Clean — ₹100/piece" },
+      { items:["blouse"], svc:["dry","dryclean","dc"],              reply:"👚 Blouse Dry Clean — ₹100
+With work — ₹120" },
+      { items:["sweater","sweatshirt","woolen"], svc:["dry","dryclean","dc"], reply:"🧶 Sweater/Sweatshirt Dry Clean — from ₹200" },
+      { items:["dupatta"], svc:["dry","dryclean","dc"],             reply:"🧣 Dupatta Dry Clean — from ₹120" },
+      { items:["curtain","parda"], svc:["dry","dryclean","dc"],     reply:"🏠 Curtain Dry Clean — ₹15/sq.ft" },
+      { items:["bag","purse","handbag"], svc:["dry","dryclean","dc","clean"], reply:"👜 Bag/Purse Dry Clean — from ₹200" },
+      // Steam iron
+      { items:["saree","sari"], svc:["iron","press","istri","steam"], reply:"🥻 Saree Steam Iron — ₹120/piece" },
+      { items:["lehenga","lehnga"], svc:["iron","press","istri","steam"], reply:"💃 Lehenga Steam Iron — ₹120/piece" },
+      { items:["blazer","coat"], svc:["iron","press","istri","steam"], reply:"🧥 Blazer Steam Iron — ₹120/piece" },
+      { items:["kurta"], svc:["iron","press","istri","steam"],      reply:"👘 Kurta Steam Iron — ₹30/piece" },
+      { items:["shirt","pant","trouser","jeans"], svc:["iron","press","istri","steam"], reply:"👔 Shirt/Pant Steam Iron — ₹20/piece" },
+      { items:["bedsheet","bed sheet"], svc:["iron","press","istri","steam"], reply:"🛏 Bedsheet Steam Iron — ₹60/piece" },
+      // Shoes
+      { items:["sneaker","canvas","white shoe"], svc:["clean","wash","shoe"], reply:"👟 Canvas/Sneaker Cleaning — ₹300/pair" },
+      { items:["leather shoe","formal shoe","suede"], svc:["clean","wash","shoe"], reply:"👞 Leather/Suede Shoe Cleaning — from ₹400/pair" },
+      { items:["sports shoe","running shoe"], svc:["clean","wash","shoe"], reply:"🏃 Sports Shoe Cleaning — ₹350/pair" },
+      // Specialty
+      { items:["helmet"], svc:["clean","wash"],                    reply:"🪖 Helmet Cleaning — from ₹150" },
+      { items:["soft toy","teddy","stuffed toy"], svc:["clean","wash"], reply:"🧸 Soft Toy Cleaning — from ₹200" },
+      { items:["carpet","rug"], svc:["clean","wash","dry"],        reply:"🏠 Carpet Dry Cleaning — from ₹40/sq.ft" },
+    ];
+
+    for (const entry of ITEM_PRICE_QUICK) {
+      const itemMatch = entry.items.some(i => t.includes(i));
+      const svcMatch  = entry.svc.some(s => t.includes(s));
+      if (itemMatch && svcMatch) {
+        await send(`💰 *Price*
+━━━━━━━━━━━━━━━
+${entry.reply}
+━━━━━━━━━━━━━━━
+⚠️ Final price confirmed before cleaning
+
+Pickup ke liye: *pickup* 🧺`);
+        return;
+      }
+    }
+
+    // ── Service category fallback ─────────────────────────────────
+    if (has(t, "iron","press","istri"))                            { await send(RATES.iron); return; }
+    if (has(t, "dry","dryclean","dry clean","dc"))                 { await send(RATES.dryclean); return; }
+    if (has(t, "wash","laundry","dhulai","fold"))                  { await send(RATES.laundry); return; }
+    if (has(t, "shoe","sneaker","joote","footwear"))               { await send(RATES.shoes); return; }
     if (has(t, "specialty","carpet","helmet","toy","bag clean"))   { await send(RATES.specialty); return; }
     await askPriceCategory(phone, phoneNumberId); return;
   }
