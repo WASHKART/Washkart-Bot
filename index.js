@@ -115,7 +115,17 @@ function genOrderId() { return `FW-${Date.now().toString().slice(-4)}${Math.floo
 
 // ── TEXT HELPERS ──────────────────────────────────────────────────
 function norm(t) { return t.toLowerCase().trim().replace(/[^\w\s]/g, " ").replace(/\s+/g, " "); }
-function has(t, ...words) { return words.some(w => t.includes(w)); }
+function has(t, ...words) {
+  return words.some(w => {
+    if (w.length <= 3) {
+      // Short words need word boundary check to avoid false matches
+      // e.g. "na" should not match inside "kitna", "na" should match as standalone
+      const regex = new RegExp(`(?:^|\\s)${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`);
+      return regex.test(t);
+    }
+    return t.includes(w);
+  });
+}
 
 // ── KEYWORD GROUPS ────────────────────────────────────────────────
 const BOOKING_KW = [
