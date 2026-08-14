@@ -157,6 +157,8 @@ const TRACK_KW = [
   "kapde aale ka","order update sanga","kath aahe maza order",
   "ऑर्डर कुठे आहे","कपडे कुठे आहेत","स्टेटस सांगा",
   "bhai order kahan hai","yaar status kya hai","order track karo","mujhe batao order kahan hai","kapde kab aayenge bhai",
+  "ready hue","ready hai","tayar hue","kapde aaye","order ready","ready ho gaya","ho gaye kya",
+  "tayar zale","kapde aale ka","ready aahe ka","कपडे तयार",
 ];
 const CANCEL_KW = [
   "cancel","cancellation","cancel order","cancel booking","don't want","dont want","stop","drop it","nevermind",
@@ -209,6 +211,9 @@ const RATES_KW = [
   "किती लागेल","दर काय","रेट सांगा","किती रुपये",
   "bhai kitna lagega","yaar rate kya hai","kitna dena padega","rate de do","price de do","charge bata do",
   "specialty","carpet clean","helmet clean","toy wash","bag clean","specialty rates",
+  // Short queries like "saree dryclean ka?" "shirt press ka?"
+  "dryclean ka","dry clean ka","iron ka","press ka","wash ka","laundry ka","clean ka","shoe ka",
+  "dryclean chi","press chi","istri chi","wash chi",
 ];
 const GREET_KW = [
   "hi","hello","hey","hii","helo","heya","howdy","good morning","good evening","good afternoon","good night","good day","sup","wassup","whatsup","what's up",
@@ -222,6 +227,57 @@ const PAYMENT_KW = [
   "payment kela","paisa dila","pay kela","upi kela",
   "पेमेंट केले","पैसे दिले",
   "bhai paid","paid bhai","payment ho gaya","ho gaya payment",
+];
+
+// ── DELIVERY TIME KEYWORDS ─────────────────────────────────────────
+const DELIVERY_TIME_KW = [
+  "how long","kitna time","kab milega","kab tak","delivery time","kitne din","kab ready",
+  "kab deliver","when will","time lagega","kitne ghante","turnaround",
+  "kiti vel","kev milel","kev tayar","केव मिळेल","कितीवेळ",
+  "bhai kab milega","yaar kab aayega","kab tak aayenge kapde",
+];
+
+// ── LOCATION KEYWORDS ─────────────────────────────────────────────
+const LOCATION_KW = [
+  "location","address","where are you","kahan ho","shop kahan","store kahan",
+  "kahan hai washkart","office kahan","dukan kahan","shop address",
+  "kuth aahe","shop kuth","address sanga","lokeshon","कुठे आहे","पत्ता",
+  "bhai kahan ho","washkart kahan hai","where is washkart",
+];
+
+// ── WEBSITE / SOCIAL KEYWORDS ──────────────────────────────────────
+const WEBSITE_KW = [
+  "website","site","instagram","insta","social media","online","web",
+  "www","washkart.co.in","_washkart_","facebook","fb page",
+  "online dekhna","website dekho",
+];
+
+// ── WRONG NUMBER / WHO ARE YOU KEYWORDS ───────────────────────────
+const WRONG_NUMBER_KW = [
+  "wrong number","galat number","wrong no","who are you","kaun ho","kya hai ye",
+  "ye kaun hai","kiska number","kya number hai","wrong","galat",
+  "chukicha number","he kon","kaay ahe he",
+];
+
+// ── BULK ORDER KEYWORDS ───────────────────────────────────────────
+const BULK_KW = [
+  "bulk","large order","bahut saare","bohot kapde","zyada kapde","bulk order",
+  "office laundry","hotel laundry","hostel laundry","commercial",
+  "20 kapde","25 kapde","30 kapde","50 kapde","100 kapde",
+  "bulk kara","jaast kapde","mothi order",
+];
+
+// ── "IS ORDER READY" AS TRACK ─────────────────────────────────────
+const ORDER_READY_KW = [
+  "ready hue","ready hai","tayar hue","tayar hai","kapde aaye","kapde aa gaye",
+  "order ready","ready ho gaya","ready kab","kab ready","ho gaye kya",
+  "tayar zale","ready zale ka","kapde aale ka","ready aahe ka",
+  "कपडे तयार","रेडी झाले",
+];
+
+// ── THURSDAY CHECK ────────────────────────────────────────────────
+const THURSDAY_KW = [
+  "thursday","guruvar","bruhaspativar","गुरुवार","aaj book","aaj pickup",
 ];
 
 // ── STATUS CONFIG ─────────────────────────────────────────────────
@@ -331,6 +387,8 @@ function detectServiceNear(fullText, matchIndex, matchLength) {
   return null;
 }
 function extractEstimateItems(rawText) {
+  // Normalize Marathi/Hindi conjunctions to "and"
+  rawText = rawText.replace(/\bani\b/gi, "and").replace(/\baur\b/gi, "and").replace(/\bor\b/gi, "and");
   const itemRegex = /(\d+)\s*(sarees?|shirts?|pants?|trousers?|jeans?|kurtas?|kurtis?|suits?|dresses?|jackets?|sweaters?|lehengas?|lehnga|blazers?|dupattas?|bedsheets?|blankets?|sneakers?|shoes?|slides?|tshirts?|t-shirts?|gowns?|anarkali|sherwanis?)/gi;
   const tl = rawText.toLowerCase();
   let globalService = "dryclean";
@@ -519,6 +577,13 @@ async function confirmBooking(phone, booking, branch, phoneNumberId) {
     `Our team will arrive within your slot. 💚\n💰 Payment via UPI QR / Cash at delivery.\n\nCancel karne ke liye: *cancel*`,
     phoneNumberId
   );
+  // Post-booking express upsell
+  setTimeout(async () => {
+    await sendMessage(phone,
+      `⚡ *Express chahiye?*\n\nPickup ke baad *EXPRESS* reply karein — 4-8 hours mein kapde deliver! (1.5x charge)`,
+      phoneNumberId
+    );
+  }, 3000);
   await notifyAdmin(booking, br, phoneNumberId);
 }
 
@@ -639,7 +704,22 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   if (session.step === "get_custom_date") {
-    if (isThursdayStr(rawText)) { await send("Thursday ko hum band rehte hain 🙏\nKoi aur din batao:"); return; }
+    if (isThursdayStr(rawText)) {
+      await send("Thursday ko hum band rehte hain 🙏\nKoi aur din batao:");
+      await askDate(phone, phoneNumberId);
+      return;
+    }
+    // Also check if typed date is a past date
+    const typed = rawText.trim().toLowerCase();
+    // Basic check — if they type just a number that's less than today's date in same month
+    const dayNum = parseInt(typed);
+    if (!isNaN(dayNum)) {
+      const today = new Date();
+      if (dayNum < today.getDate() && typed.length <= 2) {
+        await send("Ye date toh nikal gayi 😊 Aage ki date batao:");
+        return;
+      }
+    }
     session.booking.date = rawText.trim(); session.step = "idle";
     if (!session.booking.slot) { await askSlot(phone, phoneNumberId); session.step = "select_slot"; }
     else { await showBookingConfirm(phone, session, phoneNumberId); }
@@ -657,7 +737,12 @@ async function handleMessage(phone, rawText, phoneNumberId) {
       } else { await send("Order nahi mila. ID check karein 😊"); }
       session.step = "idle"; saveSession(phone, session); return;
     }
-    await send("Valid Order ID bhejein, jaise *FW-1234* 😊"); return;
+    // After invalid ID, give them an escape option
+    session.step = "idle"; saveSession(phone, session);
+    await sendBtn("Valid Order ID bhejein, jaise *FW-1234* 😊\n\nYa naya pickup book karein:",
+      [{ id:"btn_book", title:"📦 Book Pickup" }, { id:"btn_track", title:"🔍 Try Again" }]
+    );
+    return;
   }
 
   if (session.step === "confirm_cancel") {
@@ -782,11 +867,81 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (rawText === "use_saved")      { const s = await getCustomer(phone); if (s) { session.booking.name = s.name; session.booking.address = s.address; } await askDate(phone, phoneNumberId); session.step = "select_date"; saveSession(phone, session); return; }
   if (rawText === "update_details") { session.booking = {}; session.step = "get_address"; saveSession(phone, session); await send("📍 Naya address bhejein:"); return; }
   if (rawText === "no_cancel")      { await send("Theek hai! Order still active 👍"); return; }
-  if (rawText === "confirm_direct") { if (session.step === "direct_confirm") { session.step = "idle"; await confirmBooking(phone, session.booking, branch, phoneNumberId); session.booking = {}; saveSession(phone, session); } return; }
+  if (rawText === "confirm_direct") {
+    // Fix: if step is idle but booking data is complete, still confirm
+    const bk = session.booking;
+    if (session.step === "direct_confirm" || (bk.name && bk.address && bk.date && bk.slot)) {
+      session.step = "idle";
+      if (bk.name && bk.address && bk.date && bk.slot) {
+        await confirmBooking(phone, bk, branch, phoneNumberId);
+        session.booking = {};
+      } else {
+        await send("Kuch details missing hain. *pickup* se dobara try karein.");
+      }
+      saveSession(phone, session);
+    }
+    return;
+  }
   if (rawText === "btn_book")       { session.booking = {}; }
 
   // ══ LAYER 3: Keyword shortcuts ════════════════════════════════════
-  if (rawText === "__audio__")      { await send("Voice notes nahi sun sakta 😊 Please type karein!"); return; }
+
+  // ── Media types ──────────────────────────────────────────────────
+  if (rawText === "__audio__")    { await send("Voice notes nahi sun sakta 😊 Please type karein!"); return; }
+  if (rawText === "__image__")    { await send("Photos nahi dekh sakta 😊 Please describe karein ya *pickup* book karein!"); return; }
+  if (rawText === "__video__")    { await send("Videos nahi dekh sakta 😊 Please type karein!"); return; }
+  if (rawText === "__document__") { await send("Documents nahi open kar sakta 😊 Please type karein!"); return; }
+  if (rawText === "__sticker__")  { await send("😊 Washkart mein aapka swagat hai!\n\n*pickup* — booking\n*rates* — prices\n*track* — order status"); return; }
+
+  // Thursday check
+  if (isTodayThursday() && !has(t, "track","status","order","cancel","paid","rating","feedback")) {
+    await sendBtn("Aaj *Thursday* hai — Washkart band hai 🙏 Kal se phir open! Kal ke liye book karein?",
+      [{ id:"date_tomorrow", title:"📅 Book Tomorrow" }, { id:"btn_track", title:"🔍 Track Order" }]
+    );
+    return;
+  }
+
+  // Wrong number
+  if (has(t, ...WRONG_NUMBER_KW)) {
+    await send("Hi! Yeh *Washkart " + branch.name + "* ka WhatsApp bot hai. Pune mein premium laundry service. www.washkart.co.in | @_washkart_ | Kuch chahiye? *pickup* ya *rates* type karein");
+    return;
+  }
+
+  // Location
+  if (has(t, ...LOCATION_KW)) {
+    await send("Washkart Locations\n━━━━━━━━━━━━━━━\nBavdhan: Near DSK Vishwa, Bavdhan, Pune\nBaner: Baner, Pune\n\nDoorstep pickup & delivery!\nwww.washkart.co.in");
+    return;
+  }
+
+  // Website
+  if (has(t, ...WEBSITE_KW)) {
+    await send("Washkart Online\n━━━━━━━━━━━━━━━\nWebsite: www.washkart.co.in\nInstagram: @_washkart_\n\nPickup ke liye: *pickup*");
+    return;
+  }
+
+  // Delivery time
+  if (has(t, ...DELIVERY_TIME_KW)) {
+    const activeForTime = await getActiveOrder(phone);
+    if (activeForTime && activeForTime.delivery_date) {
+      await send("Order " + activeForTime.order_id + "\n" + (STATUS_MAP[activeForTime.status]?.label || activeForTime.status) + "\nEst. Delivery: " + activeForTime.delivery_date);
+    } else {
+      await send("Delivery Time\n━━━━━━━━━━━━━━━\nSteam Iron: 24-36 hrs\nLaundry: 2-3 days\nDry Clean: 3-4 days\nShoes: 2 days\nExpress: 4-8 hours (1.5x)\n\nClosed Thursdays");
+    }
+    return;
+  }
+
+  // Bulk order
+  if (has(t, ...BULK_KW)) {
+    await send("Bulk Order? Bahut badhiya! Bulk orders ke liye special rates available hain. Hamara team aapko call karega. Ya *pickup* type karein.");
+    await sendMessage(branch.admin, "Bulk Order Inquiry from " + phone + ": " + rawText + " - Please follow up!", phoneNumberId);
+    return;
+  }
+
+  // ── Order ready / is it done ──────────────────────────────────────
+  if (has(t, ...ORDER_READY_KW)) {
+    await handleTrack(phone, session, rawText, phoneNumberId); return;
+  }
+
   if (has(t, ...HELP_KW))           { await send(HELP_MSG); return; }
   if (has(t, ...CANCEL_KW))         { await handleCancel(phone, session, rawText, branch, phoneNumberId); return; }
   if (has(t, ...TRACK_KW))          { await handleTrack(phone, session, rawText, phoneNumberId); return; }
@@ -800,14 +955,19 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     const active   = await getActiveOrder(phone);
     if (customer) {
       if (active) {
-        await send(`${customer.name} ji, swagat hai! 👋\n\nAapka order *${active.order_id}* — ${STATUS_MAP[active.status]?.label} 📦\n\n*track* — status | *pickup* — new booking | *rates* — prices`);
+        // Short and to the point for returning customers with active order
+        await sendBtn(`${customer.name} ji! 👋 Order *${active.order_id}* — ${STATUS_MAP[active.status]?.label}`,
+          [{ id:"btn_track", title:"🔍 Track Order" }, { id:"btn_book", title:"📦 New Booking" }]
+        );
       } else {
-        await sendBtn(`${customer.name} ji, swagat hai Washkart ${branch.name} mein! 👋\n\nKya karu aapke liye? 😊`,
+        // Returning customer, no active order
+        await sendBtn(`${customer.name} ji, swagat hai! 👋`,
           [{ id:"btn_book", title:"📦 Book Pickup" }, { id:"btn_price", title:"💰 Rates" }, { id:"btn_track", title:"🔍 Track Order" }]
         );
       }
     } else {
-      await sendBtn(`Hi! 👋 *Washkart ${branch.name}* mein aapka swagat hai!\n\nPune ka trusted laundry service 🧺`,
+      // New customer
+      await sendBtn(`Hi! 👋 *Washkart ${branch.name}* mein swagat hai!\n\nPune ka trusted laundry 🧺`,
         [{ id:"btn_book", title:"📦 Book Pickup" }, { id:"btn_price", title:"💰 Rates" }, { id:"btn_track", title:"🔍 Track Order" }]
       );
     }
@@ -945,7 +1105,17 @@ Pickup ke liye: *pickup* 🧺`);
           msg += `━━━━━━━━━━━━━━━\n*Total: ₹${total}*\n⚡ Express (4–8hr): ₹${Math.ceil(total*1.5)}\n\n_Final bill may vary_\n\nPickup ke liye: *pickup* 🧺`;
           await send(msg);
         } else { await send(ai.reply || "Items aur service batao 😊"); }
-      } else { await send(ai.reply || "e.g. *3 shirt dry clean, 2 saree iron* 😊"); }
+      } else {
+        // No items found — check if they just gave item count with no service
+        const numMatch = rawText.match(/(\d+)\s*(kapde|clothes|shirts?|pants?|sarees?)/i);
+        if (numMatch) {
+          await sendBtn(`Kaunsi service chahiye? 😊`,
+            [{ id:"price_dc", title:"🧥 Dry Clean" }, { id:"price_iron", title:"🔥 Steam Iron" }, { id:"price_wash", title:"🫧 Laundry" }]
+          );
+        } else {
+          await send(ai.reply || "e.g. *3 shirt dry clean, 2 saree iron* 😊");
+        }
+      }
       break;
     }
     default:
@@ -1070,11 +1240,15 @@ async function handleCancel(phone, session, rawText, branch, phoneNumberId) {
 async function handleExpress(phone, branch, phoneNumberId) {
   const send = (msg) => sendMessage(phone, msg, phoneNumberId);
   const active = await getActiveOrder(phone);
-  if (active?.status === "picked") {
+  if (active?.status === "picked" || active?.status === "inprogress") {
     if (isTodayThursday()) { await send("Thursday ko express nahi hai 🙏"); return; }
     await dbUpdate("bookings", `order_id=eq.${active.order_id}`, { express: true });
     await send(`⚡ *Express Confirmed!*\n\n4–8 hours mein deliver! 🙌\n💰 1.5x charges at delivery.\n\n🆔 ${active.order_id}`);
     await sendMessage(branch.admin, `⚡ *Express!*\n🆔 ${active.order_id}\n👤 ${active.name}\n📱 +${active.phone}`, phoneNumberId);
+    return;
+  }
+  if (active) {
+    await send(`Express abhi available nahi hai 😊\nOrder status: ${STATUS_MAP[active.status]?.label}\n\nPickup ke baad ya cleaning ke dauran request karein.`);
     return;
   }
   await send("Express pickup ke baad request hota hai. Pehle *pickup* book karein 🧺");
@@ -1202,7 +1376,11 @@ app.post("/webhook", async (req, res) => {
     processedMessages.add(msg.id);
     setTimeout(() => processedMessages.delete(msg.id), 60000);
     const phone = normalizePhone(msg.from);
-    if (msg.type === "audio") { await handleMessage(phone, "__audio__", phoneNumberId); return res.sendStatus(200); }
+    if (msg.type === "audio")    { await handleMessage(phone, "__audio__",    phoneNumberId); return res.sendStatus(200); }
+    if (msg.type === "image")    { await handleMessage(phone, "__image__",    phoneNumberId); return res.sendStatus(200); }
+    if (msg.type === "video")    { await handleMessage(phone, "__video__",    phoneNumberId); return res.sendStatus(200); }
+    if (msg.type === "document") { await handleMessage(phone, "__document__", phoneNumberId); return res.sendStatus(200); }
+    if (msg.type === "sticker")  { await handleMessage(phone, "__sticker__",  phoneNumberId); return res.sendStatus(200); }
     let text = "";
     if (msg.type === "text") text = msg.text.body;
     else if (msg.type === "interactive") {
