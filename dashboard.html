@@ -370,6 +370,7 @@ tr.overdue td{background:#fef2f2;}
           <div class="card-header">
             <div class="card-title">All Bookings</div>
             <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="printDailySummary()">🖨 Print Today</button>
               <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
               <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
             </div>
@@ -441,9 +442,14 @@ tr.overdue td{background:#fef2f2;}
               <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">SAT</div>
             </div>
             <div class="calendar" id="calendar-grid"></div>
-            <div style="display:flex;gap:1rem;margin-top:1rem;font-size:12px">
+            <div style="display:flex;gap:1rem;margin-top:1rem;font-size:12px;flex-wrap:wrap">
               <span><span style="display:inline-block;width:12px;height:12px;background:#dbeafe;border-radius:2px;margin-right:4px"></span>Pickup</span>
               <span><span style="display:inline-block;width:12px;height:12px;background:#fed7aa;border-radius:2px;margin-right:4px"></span>Delivery</span>
+              <span><span style="display:inline-block;width:12px;height:12px;background:#ede9fe;border-radius:2px;margin-right:4px"></span>Walk-in</span>
+            </div>
+            <div style="margin-top:1rem">
+              <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">WALK-INS TODAY</div>
+              <div id="cal-walkins" style="display:flex;flex-wrap:wrap;gap:6px;font-size:12px"></div>
             </div>
           </div>
         </div>
@@ -505,10 +511,12 @@ tr.overdue td{background:#fef2f2;}
 
       <!-- ═══ REVENUE ═══ -->
       <div id="page-revenue" class="page-section" style="display:none">
-        <div class="grid-3" style="margin-bottom:1rem">
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1rem">
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Week</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-week">Rs 0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Month</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-month">Rs 0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Total Collected</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-total">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Uncollected</div><div style="font-size:18px;font-weight:700;color:var(--red)" id="rev-pending-amt">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">In Pipeline</div><div style="font-size:18px;font-weight:700;color:var(--orange)" id="rev-pipeline-amt">Rs 0</div></div></div>
         </div>
         <div class="grid-2">
           <div class="card"><div class="card-header"><div class="card-title">By Branch</div></div><div class="card-body" id="rev-branch"></div></div>
@@ -587,9 +595,10 @@ tr.overdue td{background:#fef2f2;}
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Service</label><select class="form-select" id="new-service"><option value="">Not known yet</option><option value="iron">Steam Iron</option><option value="dryclean">Dry Clean</option><option value="laundry">Laundry</option><option value="shoes">Shoes</option><option value="specialty">Specialty</option><option value="mixed">Mixed</option></select></div>
-        <div class="form-group"><label class="form-label">Initial Status</label><div id="status-indicator" style="padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe">Picked Up (Walk-in)</div></div>
+        <div class="form-group"><label class="form-label">Amount (Rs)</label><input class="form-input" id="new-amount" type="number" min="0" placeholder="Bill amount if known"></div>
       </div>
-      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="new-notes" placeholder="Special instructions..."></textarea></div>
+      <div class="form-group"><label class="form-label">Initial Status</label><div id="status-indicator" style="padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe">Picked Up (Walk-in)</div></div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="new-notes" placeholder="Special instructions (e.g. handle saree carefully)..."></textarea></div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-order')">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create Order</button></div>
   </div>
@@ -601,7 +610,11 @@ tr.overdue td{background:#fef2f2;}
     <div class="modal-header"><div class="modal-title">💬 Send WhatsApp Message</div><button class="modal-close" onclick="closeModal('modal-message')">✕</button></div>
     <div class="modal-body">
       <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="msg-phone" placeholder="10-digit" type="tel"></div>
-      <div class="form-group"><label class="form-label">Quick Select</label><select class="form-select" id="msg-customer-select" onchange="selectMsgCustomer(this.value)"><option value="">— Select customer —</option></select></div>
+      <div class="form-group">
+        <label class="form-label">Search Customer</label>
+        <input class="form-input" id="msg-customer-search" placeholder="Type name or phone..." oninput="filterMsgCustomers()" autocomplete="off">
+        <div id="msg-customer-results" style="border:1px solid var(--border);border-radius:8px;max-height:160px;overflow-y:auto;display:none;margin-top:4px;background:var(--white)"></div>
+      </div>
       <div class="form-group"><label class="form-label">Message *</label><textarea class="form-textarea" id="msg-text" placeholder="Type message..." style="min-height:100px" oninput="document.getElementById('tpl-preview').style.display='none';document.querySelectorAll('.tpl-btn').forEach(b=>b.classList.remove('active'))"></textarea></div>
       <div class="form-group">
         <label class="form-label">Quick Templates</label>
@@ -648,7 +661,13 @@ function showPage(name, el) {
   if (target) target.style.display = 'block';
   if (el) el.classList.add('active');
   document.getElementById('page-title').textContent = PAGE_TITLES[name]||name;
-  if(name==='chats') loadConversations();
+  if(name==='chats') {
+    loadConversations();
+    if(chatRefreshInterval) clearInterval(chatRefreshInterval);
+    chatRefreshInterval = setInterval(loadConversations, 30000);
+  } else {
+    if(chatRefreshInterval) { clearInterval(chatRefreshInterval); chatRefreshInterval=null; }
+  }
   if(name==='calendar') renderCalendar();
   if(name==='analytics') renderAnalytics();
 }
@@ -925,6 +944,8 @@ function renderKanban() {
             ${b.date||'Walk-in'} ${b.slot?.includes('Morning')?'🌅':b.slot==='Walk-in'?'🚶':'🌆'}<br>
             ${b.address||'Walk-in'}
             ${b.express?'<br><span style="color:#d97706;font-weight:600">⚡ Express</span>':''}
+            ${b.service_type?'<br><span style="font-size:10px;background:#f3f4f6;padding:1px 5px;border-radius:3px">'+svcLabel(b.service_type)+'</span>':''}
+            ${b.notes?'<br><span style="font-size:10px;color:#6b7280;font-style:italic">'+b.notes.slice(0,40)+'</span>':''}
             ${isOverdue(b)?'<br><span class="tag overdue-tag">OVERDUE</span>':''}
           </div>
           ${b.amount?`<div class="k-card-amount">Rs ${b.amount} — ${payBadge(b.payment_status)}</div>`:''}
@@ -1009,6 +1030,40 @@ function renderOrders() {
   }).join('');
 }
 function changePage(dir){currentPage+=dir;renderOrders();}
+function printDailySummary() {
+  const today = getToday();
+  const todayOrders = allBookings.filter(b=>b.date===today||b.delivery_date===today);
+  const pickups = todayOrders.filter(b=>b.date===today&&!['cancelled','delivered'].includes(b.status));
+  const deliveries = todayOrders.filter(b=>b.delivery_date===today&&!['delivered','cancelled'].includes(b.status));
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Washkart Daily — ${today}</title>
+  <style>body{font-family:Arial,sans-serif;margin:20px;font-size:13px}h1{font-size:18px;margin-bottom:4px}h2{font-size:14px;margin:16px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th,td{border:1px solid #ddd;padding:6px 8px;text-align:left}th{background:#f5f5f5;font-weight:600}.badge{padding:2px 6px;border-radius:4px;font-size:11px}.footer{margin-top:20px;font-size:11px;color:#999}@media print{button{display:none}}</style></head><body>
+  <button onclick="window.print()" style="margin-bottom:12px;padding:6px 16px;cursor:pointer">🖨 Print</button>
+  <h1>Washkart Daily Summary</h1><p style="color:#666">${today}</p>
+  <h2>Pickups Today (${pickups.length})</h2>
+  <table><tr><th>Order</th><th>Name</th><th>Phone</th><th>Slot</th><th>Address</th><th>Service</th><th>Notes</th></tr>
+  ${pickups.map(b=>`<tr><td>${b.id}</td><td>${b.name}</td><td>${b.phone}</td><td>${b.slot?.includes('Morning')?'Morning':'Evening'}</td><td>${b.address||'-'}</td><td>${b.service_type||'-'}</td><td>${b.notes||'-'}</td></tr>`).join('')||'<tr><td colspan="7">No pickups today</td></tr>'}
+  </table>
+  <h2>Deliveries Today (${deliveries.length})</h2>
+  <table><tr><th>Order</th><th>Name</th><th>Phone</th><th>Address</th><th>Amount</th><th>Payment</th></tr>
+  ${deliveries.map(b=>`<tr><td>${b.id}</td><td>${b.name}</td><td>${b.phone}</td><td>${b.address||'-'}</td><td>Rs ${b.amount||0}</td><td>${b.payment_status||'unpaid'}</td></tr>`).join('')||'<tr><td colspan="6">No deliveries today</td></tr>'}
+  </table>
+  <div class="footer">Generated: ${new Date().toLocaleString('en-IN')}</div>
+  </body></html>`);
+  win.document.close();
+}
+
+function exportLeadsCSV() {
+  const h=['Phone','Stage','Branch','First Message','Last Message','Updated'];
+  const rows=allLeads.map(l=>[l.phone,l.stage,l.branch||'bavdhan',l.first_message||'',l.last_message||'',l.updated_at||''].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`));
+  const csv=[h.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`washkart-leads-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast(`Exported ${allLeads.length} leads`);
+}
+
 function exportCSV(){
   const f=getFilteredOrders();
   const h=['Order ID','Name','Phone','Address','Date','Slot','Status','Service','Express','Amount','Payment','Branch','Source','Notes','Created'];
@@ -1121,6 +1176,17 @@ function renderCalendar() {
     </div>`;
   }
   document.getElementById('calendar-grid').innerHTML=html;
+  // Show walk-ins separately
+  const walkins = allBookings.filter(b=>b.source==='walkin'||!b.date||b.date==='Walk-in');
+  const walkinEl = document.getElementById('cal-walkins');
+  if(walkinEl) {
+    walkinEl.innerHTML = walkins.length ? walkins.map(b=>`
+      <div style="background:#ede9fe;border-radius:6px;padding:4px 8px;font-size:11px">
+        <span style="font-weight:500">${b.name}</span>
+        <span style="color:var(--muted);margin-left:4px">${b.id}</span>
+        <span style="margin-left:4px">${statusBadge(b.status)}</span>
+      </div>`).join('') : '<span style="color:var(--muted);font-size:12px">No walk-ins</span>';
+  }
 }
 
 // ── LEADS ─────────────────────────────────────────────────────────
@@ -1137,6 +1203,15 @@ function renderLeads() {
     </div>`).join('');
   const filtered=leadFilter==='all'?allLeads:allLeads.filter(l=>l.stage===leadFilter);
   document.getElementById('leads-count').textContent=`${filtered.length} leads`;
+  // Add export button if not already there
+  const leadHeader = document.querySelector('#page-leads .card-header');
+  if(leadHeader && !leadHeader.querySelector('.leads-export-btn')) {
+    const exportBtn = document.createElement('button');
+    exportBtn.className='btn btn-ghost btn-sm leads-export-btn';
+    exportBtn.textContent='⬇ Export CSV';
+    exportBtn.onclick=exportLeadsCSV;
+    leadHeader.appendChild(exportBtn);
+  }
   const tbody=document.getElementById('leads-table');
   if(!filtered.length){tbody.innerHTML='<tr><td colspan="6" class="empty"><div class="empty-icon">🎯</div>No leads</td></tr>';return;}
   tbody.innerHTML=filtered.map(l=>`<tr>
@@ -1158,11 +1233,12 @@ function renderCustomers() {
   const el=document.getElementById('cust-list');
   el.innerHTML=custs.map(c=>{
     const orders=allBookings.filter(b=>b.phone===c.phone);
+    const activeOrder=orders.find(b=>!['delivered','cancelled'].includes(b.status));
     const spent=orders.filter(b=>b.payment_status==='paid').reduce((s,b)=>s+(b.amount||0),0);
     return `<div style="padding:.8rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:12px">
       <div style="width:36px;height:36px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--green);flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-weight:500">${c.name}</div>
+        <div style="font-weight:500">${c.name}${activeOrder?` <span style="font-size:10px;background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:10px">${activeOrder.id}</span>`:''}</div>
         <div style="font-size:11px;color:var(--muted);font-family:monospace">${c.phone}</div>
         <div style="font-size:11px;color:var(--muted)">${c.address||''}</div>
       </div>
@@ -1210,11 +1286,25 @@ function openCustomerProfile(phone) {
 // ── CHATS ─────────────────────────────────────────────────────────
 async function loadConversations() {
   try {
-    const res=await fetch(`${BOT_URL}/conversations`);
+    const res=await fetch(`${BOT_URL}/conversations`,{cache:'no-store'});
     allConversations=await res.json();
     renderChatList();
-  } catch(e) { console.error(e); }
+    // If a chat is selected, refresh it too
+    if(selectedChat) {
+      const updated = allConversations.find(c=>c.phone===selectedChat);
+      if(updated) {
+        const msgs = updated.history||[];
+        const msgEl = document.getElementById('chat-messages');
+        const atBottom = msgEl.scrollHeight - msgEl.scrollTop - msgEl.clientHeight < 50;
+        msgEl.innerHTML = msgs.length ? msgs.map(m=>`<div style="display:flex;justify-content:${m.role==='customer'?'flex-start':'flex-end'}"><div class="msg-bubble ${m.role==='customer'?'msg-customer':'msg-bot'}">${m.text.replace(/\n/g,'<br>')}</div></div>`).join('') : '<div class="empty" style="margin:auto">No messages</div>';
+        if(atBottom) msgEl.scrollTop = msgEl.scrollHeight;
+        const bk=updated.booking||{};
+        document.getElementById('chat-session-info').textContent=`Step: ${updated.step||'idle'} | Name: ${bk.name||'-'} | Date: ${bk.date||'-'} | Slot: ${bk.slot||'-'}`;
+      }
+    }
+  } catch(e) { console.error('loadConversations:', e); }
 }
+let chatRefreshInterval = null;
 function filterChats() { renderChatList(); }
 function renderChatList() {
   const q=(document.getElementById('chat-search')?.value||'').toLowerCase();
@@ -1315,9 +1405,23 @@ function renderRevenue() {
   const monthAgo=new Date(now); monthAgo.setMonth(now.getMonth()-1);
   const paid=b=>b.payment_status==='paid';
   const collect=arr=>arr.filter(paid).reduce((s,b)=>s+(b.amount||0),0);
-  document.getElementById('rev-week').textContent=`Rs ${collect(allBookings.filter(b=>b.payment_date&&new Date(b.payment_date)>=weekAgo)).toLocaleString('en-IN')}`;
-  document.getElementById('rev-month').textContent=`Rs ${collect(allBookings.filter(b=>b.payment_date&&new Date(b.payment_date)>=monthAgo)).toLocaleString('en-IN')}`;
-  document.getElementById('rev-total').textContent=`Rs ${collect(allBookings).toLocaleString('en-IN')}`;
+  // Revenue: use created_at for delivered+paid orders, show pending separately
+  const deliveredPaid = allBookings.filter(b=>b.status==='delivered'&&b.payment_status==='paid'&&b.amount>0);
+  const deliveredUnpaid = allBookings.filter(b=>b.status==='delivered'&&b.payment_status!=='paid'&&b.amount>0);
+  const inProgress = allBookings.filter(b=>!['delivered','cancelled'].includes(b.status)&&b.amount>0);
+  const weekPaid = deliveredPaid.filter(b=>b.payment_date&&new Date(b.payment_date)>=weekAgo);
+  const monthPaid = deliveredPaid.filter(b=>b.payment_date&&new Date(b.payment_date)>=monthAgo);
+  document.getElementById('rev-week').textContent=`Rs ${weekPaid.reduce((s,b)=>s+(b.amount||0),0).toLocaleString('en-IN')}`;
+  document.getElementById('rev-month').textContent=`Rs ${monthPaid.reduce((s,b)=>s+(b.amount||0),0).toLocaleString('en-IN')}`;
+  document.getElementById('rev-total').textContent=`Rs ${deliveredPaid.reduce((s,b)=>s+(b.amount||0),0).toLocaleString('en-IN')}`;
+  // Add pending and pipeline amounts
+  const pendingAmt = deliveredUnpaid.reduce((s,b)=>s+(b.amount||0),0);
+  const pipelineAmt = inProgress.reduce((s,b)=>s+(b.amount||0),0);
+  // Update stat cards if elements exist
+  const revPendingEl = document.getElementById('rev-pending-amt');
+  const revPipelineEl = document.getElementById('rev-pipeline-amt');
+  if(revPendingEl) revPendingEl.textContent = `Rs ${pendingAmt.toLocaleString('en-IN')} uncollected`;
+  if(revPipelineEl) revPipelineEl.textContent = `Rs ${pipelineAmt.toLocaleString('en-IN')} in pipeline`;
   const pending=allBookings.filter(b=>b.status==='delivered'&&!paid(b)).reduce((s,b)=>s+(b.amount||0),0);
   // Branch
   const bAvd=collect(allBookings.filter(b=>b.branch==='bavdhan'));
@@ -1409,11 +1513,12 @@ async function submitNewOrder() {
   if(!isWi&&(!address||!dateInp||!slot)){toast('Fill address, date and slot','error');return;}
   let dateStr='';
   if(dateInp){const d=new Date(dateInp);dateStr=d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});}
-  const body={name,phone,source,notes,branch,...(address?{address}:{}),...(dateStr?{date:dateStr}:{}),...(!isWi&&slot?{slot}:{}),...(service?{service_type:service}:{})};
+  const amountVal = parseInt(document.getElementById('new-amount')?.value)||0;
+  const body={name,phone,source,notes,branch,...(address?{address}:{}),...(dateStr?{date:dateStr}:{}),...(!isWi&&slot?{slot}:{}),...(service?{service_type:service}:{}),...(amountVal>0?{amount:amountVal}:{})};
   try {
     const res=await fetch(`${BOT_URL}/bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data=await res.json();
-    if(data.success){toast(`Order ${data.order_id} created!`);closeModal('modal-order');['new-name','new-phone','new-address','new-date','new-notes'].forEach(i=>document.getElementById(i).value='');document.getElementById('new-source').value='walkin';document.getElementById('new-service').value='';onSourceChange('walkin');loadData();}
+    if(data.success){toast(`Order ${data.order_id} created!`);closeModal('modal-order');['new-name','new-phone','new-address','new-date','new-notes','new-amount'].forEach(i=>{if(document.getElementById(i))document.getElementById(i).value=''});document.getElementById('new-source').value='walkin';document.getElementById('new-service').value='';onSourceChange('walkin');loadData();}
     else toast(data.error||'Failed','error');
   } catch { toast('Network error','error'); }
 }
@@ -1439,8 +1544,31 @@ function openSendMsg(phone,name) {
 function selectMsgCustomer(phone) {
   if(!phone) return;
   document.getElementById('msg-phone').value=phone;
-  const sel=document.getElementById('msg-customer-select');
-  msgCustomerName=sel.options[sel.selectedIndex]?.dataset?.name||'';
+}
+
+function filterMsgCustomers() {
+  const q = (document.getElementById('msg-customer-search')?.value||'').toLowerCase();
+  const resultsEl = document.getElementById('msg-customer-results');
+  if(!q || q.length < 2) { resultsEl.style.display='none'; return; }
+  const matches = allCustomers.filter(c=>
+    c.name?.toLowerCase().includes(q) || c.phone?.includes(q)
+  ).slice(0,8);
+  if(!matches.length) { resultsEl.style.display='none'; return; }
+  resultsEl.style.display='block';
+  resultsEl.innerHTML = matches.map(c=>`
+    <div onclick="selectMsgCustomerDirect('${c.phone}','${c.name?.replace(/'/g,"\'")||""}')"
+      style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--border);font-size:13px"
+      onmouseover="this.style.background='var(--green-light)'" onmouseout="this.style.background=''">
+      <div style="font-weight:500">${c.name||'Unknown'}</div>
+      <div style="font-size:11px;color:var(--muted);font-family:monospace">+${c.phone}</div>
+    </div>`).join('');
+}
+
+function selectMsgCustomerDirect(phone, name) {
+  msgCustomerName = name || '';
+  document.getElementById('msg-phone').value = phone;
+  document.getElementById('msg-customer-search').value = name ? name + ' — +' + phone : phone;
+  document.getElementById('msg-customer-results').style.display = 'none';
 }
 const TEMPLATES = {
   walkin: function(n, orderId, amount) {
