@@ -1860,7 +1860,28 @@ app.get("/leads",          async(req,res)=>{ try{ const {branch}=req.query; cons
 app.get("/conversations",  async(req,res)=>{ try{ const {phone}=req.query; if(phone){const rows=await dbSelect("sessions",`phone=eq.${normalizePhone(phone)}`);res.json(rows[0]||{});}else{const rows=await dbSelect("sessions","order=updated_at.desc&limit=100");res.json(rows);} }catch(e){res.status(500).json({error:e.message});} });
 app.post("/takeover",      async(req,res)=>{ try{ const {phone,active}=req.body; const num=normalizePhone(phone); if(!sessionCache[num])sessionCache[num]={step:"idle",booking:{},history:[]}; sessionCache[num].takeoverActive=!!active; res.json({success:true,takeover:!!active}); }catch(e){res.status(500).json({error:e.message});} });
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
-app.get("/ping",           (req,res)=>res.json({status:"ok",time:new Date().toISOString()}));
+app.get("/ping", (req,res)=>res.json({
+  status:"ok",
+  time: new Date().toISOString(),
+  token: TOKEN ? `${TOKEN.slice(0,10)}...${TOKEN.slice(-6)}` : "MISSING",
+  branch: DEFAULT_BRANCH.name,
+  phoneNumberId: Object.keys(BRANCHES)[0],
+}));
+
+// Test message endpoint — send test to yourself
+app.get("/test-send", async (req,res)=>{ 
+  const to = req.query.to || "919552552167";
+  try {
+    const result = await axios.post(
+      `https://graph.facebook.com/v25.0/1136879376186203/messages`,
+      { messaging_product:"whatsapp", to, type:"text", text:{body:"Washkart bot test message. If you see this, sending works!"} },
+      { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type":"application/json" } }
+    );
+    res.json({success:true, data: result.data});
+  } catch(e) {
+    res.json({success:false, error: e?.response?.data || e.message, status: e?.response?.status});
+  }
+});
 app.get("/",               (req,res)=>res.send("Washkart Bot running."));
 
 const PORT = process.env.PORT || 3000;
