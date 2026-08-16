@@ -575,12 +575,18 @@ async function logLead(phone, stage, firstMessage, branch, phoneNumberId) {
 }
 
 // NOTIFICATIONS
+function safeNumId(numId) {
+  // Never use BANER_NUMBER_ID placeholder — fall back to Bavdhan
+  return (!numId || numId === "BANER_NUMBER_ID") ? "1136879376186203" : numId;
+}
+
 async function notifyAdmin(booking, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
   const src = booking.source ? ` [${booking.source}]` : "";
   const msg = `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}`;
-  await sendMessage(br.admin, msg, phoneNumberId);
-  if (br.admin !== OWNER_NUMBER) await sendMessage(OWNER_NUMBER, msg, phoneNumberId);
+  const nid = safeNumId(phoneNumberId);
+  await sendMessage(br.admin, msg, nid);
+  if (br.admin !== OWNER_NUMBER) await sendMessage(OWNER_NUMBER, msg, nid);
 }
 async function notifyAdminComplaint(phone, name, message, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
@@ -614,21 +620,29 @@ async function askDate(phone, phoneNumberId) {
   await sendButtons(phone, "Which day should we pick up?\n(Closed Thursdays)", buttons, phoneNumberId);
 }
 
-async function askSlot(phone, phoneNumberId) {
+async function askSlot(phone, phoneNumberId, forDate) {
   const now = new Date();
   const hour = now.getHours();
   const min  = now.getMinutes();
   const morningOpen = hour < 9 || (hour === 9 && min < 30);
-  if (hour >= 16) {
-    await sendMessage(phone, "Today's slots are full. Let me schedule for tomorrow.", phoneNumberId);
-    await delay(400);
-    await askDate(phone, phoneNumberId);
+
+  // If slot is being asked for a future date (not today), show both slots
+  const isToday = !forDate || forDate === getToday();
+
+  if (isToday && hour >= 16) {
+    // Today is too late — but DON'T show date picker again, just show tomorrow slots
+    await sendButtons(phone,
+      "Evening slot is closed for today. Morning or Evening tomorrow?",
+      [{ id: "slot_morning_tomorrow", title: "Morning tomorrow" }, { id: "slot_evening_tomorrow", title: "Evening tomorrow" }],
+      phoneNumberId
+    );
     return;
   }
+
   const buttons = [];
-  if (morningOpen) buttons.push({ id: "slot_morning", title: "Morning 10 AM - 1 PM" });
+  if (!isToday || morningOpen) buttons.push({ id: "slot_morning", title: "Morning 10 AM - 1 PM" });
   buttons.push({ id: "slot_evening", title: "Evening 5 PM - 8 PM" });
-  const note = morningOpen ? "Choose a time slot:" : "Morning slot is closed. Evening slot available:";
+  const note = (isToday && !morningOpen) ? "Morning slot is closed. Evening slot available:" : "Choose a time slot:";
   await sendButtons(phone, note, buttons, phoneNumberId);
 }
 
@@ -700,7 +714,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId) {
     `Your clothes are in good hands! 🧺\n\nWe'll have them fresh and ready within 3 days.\nNeed them sooner? Reply *express* after pickup for our 120-minute turnaround.`,
     phoneNumberId
   );
-  await notifyAdmin(booking, br, phoneNumberId);
+  await notifyAdmin(booking, br, safeNumId(phoneNumberId));
 }
 
 // Drop-off timer
@@ -880,7 +894,10 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     const dayNum = parseInt(rawText.trim());
     if (!isNaN(dayNum) && rawText.trim().length <= 2 && dayNum < new Date().getDate()) { await send("That date has passed. Please enter an upcoming date."); return; }
     session.booking.date = rawText.trim(); session.step = "idle";
-    if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; }
+    if (!session.booking.slot) {
+      await askSlot(phone, phoneNumberId, session.booking.date);
+      session.step="select_slot";
+    }
     else { await showBookingConfirm(phone,session,phoneNumberId); }
     saveSession(phone,session); return;
   }
@@ -1076,6 +1093,16 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (rawText==="date_custom")     { session.step="get_custom_date"; saveSession(phone,session); await send("Enter a date (e.g. 25 August):\n(Closed Thursdays)"); return; }
   if (rawText==="slot_morning")    { session.booking.slot="Morning (10 AM - 1 PM)"; await handleSlotSelected(phone,session,phoneNumberId); return; }
   if (rawText==="slot_evening")    { session.booking.slot="Evening (5 PM - 8 PM)";  await handleSlotSelected(phone,session,phoneNumberId); return; }
+  if (rawText==="slot_morning_tomorrow") {
+    if (!session.booking.date || session.booking.date === getToday()) session.booking.date = getTomorrow();
+    session.booking.slot = "Morning (10 AM - 1 PM)";
+    await handleSlotSelected(phone, session, phoneNumberId); return;
+  }
+  if (rawText==="slot_evening_tomorrow") {
+    if (!session.booking.date || session.booking.date === getToday()) session.booking.date = getTomorrow();
+    session.booking.slot = "Evening (5 PM - 8 PM)";
+    await handleSlotSelected(phone, session, phoneNumberId); return;
+  }
   if (rawText==="branch_bavdhan" || rawText==="branch_baner") {
     session.booking.branch = rawText==="branch_bavdhan" ? "bavdhan" : "baner";
     const cust = await getCustomer(phone);
@@ -1347,15 +1374,32 @@ async function handleMessage(phone, rawText, phoneNumberId) {
 
 // FLOW HELPERS
 async function handleDateButton(phone, session, which, phoneNumberId) {
+  const now = new Date();
+  const hour = now.getHours();
+
   if (which==="today") {
-    if (isTodayThursday()) { await sendMessage(phone,"Today is Thursday - we are closed.",phoneNumberId); await askDate(phone,phoneNumberId); return; }
+    if (isTodayThursday()) {
+      await sendMessage(phone,"Today is Thursday - we are closed.",phoneNumberId);
+      await askDate(phone,phoneNumberId); return;
+    }
+    if (hour >= 20) {
+      // After 8 PM — too late even for evening slot
+      await sendMessage(phone,"We are closed for today. Let us schedule for tomorrow.",phoneNumberId);
+      if (isTomorrowThursday()) { await sendMessage(phone,"Tomorrow is Thursday too. Let us find another day.",phoneNumberId); await askDate(phone,phoneNumberId); return; }
+      session.booking.date = getTomorrow();
+      session.step = "select_slot"; saveSession(phone,session);
+      await askSlot(phone,phoneNumberId,session.booking.date); return;
+    }
     session.booking.date = getToday();
   } else {
-    if (isTomorrowThursday()) { await sendMessage(phone,"Tomorrow is Thursday - we are closed.",phoneNumberId); await askDate(phone,phoneNumberId); return; }
+    if (isTomorrowThursday()) {
+      await sendMessage(phone,"Tomorrow is Thursday - we are closed.",phoneNumberId);
+      await askDate(phone,phoneNumberId); return;
+    }
     session.booking.date = getTomorrow();
   }
   session.step = "select_slot"; saveSession(phone,session);
-  await askSlot(phone,phoneNumberId);
+  await askSlot(phone,phoneNumberId,session.booking.date);
 }
 
 async function handleSlotSelected(phone, session, phoneNumberId) {
@@ -1579,7 +1623,7 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
     else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
   }
   if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
-  if (!bk.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; saveSession(phone,session); return; }
+  if (!bk.slot) { await askSlot(phone,phoneNumberId,bk.date); session.step="select_slot"; saveSession(phone,session); return; }
   if (customer) {
     clearDropoffTimer(phone);
     await confirmBooking(phone,bk,getBranchBySlug(bk.branch)||branch,phoneNumberId);
@@ -1785,7 +1829,8 @@ app.patch("/bookings/:orderId", async (req,res) => {
     const b    = rows[0];
     const brSlug = b?.branch||"bavdhan";
     const br   = getBranchBySlug(brSlug)||DEFAULT_BRANCH;
-    const numId = getBranchNumId(brSlug);
+    let numId = getBranchNumId(brSlug);
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203"; // Baner not live yet
     const finalStatus = updateData.status||status;
     const statusChanged = finalStatus && finalStatus !== prevStatus;
     console.log(`[patch] ${orderId} ${prevStatus}→${finalStatus} changed:${statusChanged}`);
@@ -1844,7 +1889,9 @@ app.post("/send-message", async (req,res) => {
     const {phone, message, branch} = req.body;
     if (!phone||!message) return res.status(400).json({error:"Phone and message required"});
     const normalized = normalizePhone(phone);
-    const numId = getBranchNumId(branch||"bavdhan");
+    let numId = getBranchNumId(branch||"bavdhan");
+    // Fallback to Bavdhan if Baner not yet configured
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
     console.log(`[send-message] to:${normalized} branch:${branch||"bavdhan"} numId:${numId}`);
     const ok = await sendMessage(normalized, message, numId, true); // throwOnError=true
     res.json({success:ok});
