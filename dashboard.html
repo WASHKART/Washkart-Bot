@@ -272,7 +272,7 @@ tr.overdue td{background:#fef2f2;}
       </div>
       <div class="topbar-right">
         <div class="clock" id="clock"></div>
-        <button class="btn-icon" onclick="soundNewOrder()" title="Test sound">🔔</button>
+        <button class="btn-icon" onclick="unlockAudio();soundNewOrder();toast('🔔 Sound test!')" title="Test notification sound">🔔</button>
         <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 Message</button>
         <button class="btn btn-primary btn-sm" onclick="openModal('modal-order')">+ New Order</button>
       </div>
@@ -624,6 +624,25 @@ tr.overdue td{background:#fef2f2;}
 <div class="toast" id="toast"></div>
 
 <script>
+// Page list must be defined first — used by onclick handlers in HTML
+const ALL_PAGES = ['home','kanban','orders','payments','calendar','leads','customers','chats','revenue','analytics','ratings'];
+
+const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',chats:'Chats',revenue:'Revenue',analytics:'Analytics',ratings:'Ratings'};
+function showPage(name, el) {
+  ALL_PAGES.forEach(p => {
+    const e = document.getElementById('page-'+p);
+    if (e) e.style.display = 'none';
+  });
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const target = document.getElementById('page-'+name);
+  if (target) target.style.display = 'block';
+  if (el) el.classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[name]||name;
+  if(name==='chats') loadConversations();
+  if(name==='calendar') renderCalendar();
+  if(name==='analytics') renderAnalytics();
+}
+
 const BOT_URL = 'https://washkart-bot.onrender.com';
 const DASHBOARD_PASSWORD = 'washkart2025';
 
@@ -631,11 +650,19 @@ const DASHBOARD_PASSWORD = 'washkart2025';
 function checkAuth() {
   if (sessionStorage.getItem('wk_auth') === DASHBOARD_PASSWORD) return true;
   const pwd = prompt('Washkart Admin Password:');
-  if (pwd === DASHBOARD_PASSWORD) { sessionStorage.setItem('wk_auth', pwd); return true; }
-  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666">Wrong password. Refresh to try again.</div>';
+  if (pwd === null) {
+    // User cancelled prompt — show login screen, don't crash
+    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:24px;font-weight:700">WASHKART Admin</div><button onclick="location.reload()" style="padding:10px 24px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Login</button></div>';
+    return false;
+  }
+  if (pwd === DASHBOARD_PASSWORD) {
+    sessionStorage.setItem('wk_auth', pwd);
+    return true;
+  }
+  document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:18px;color:#dc2626">Wrong password.</div><button onclick="location.reload()" style="padding:10px 24px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Try Again</button></div>';
   return false;
 }
-if (!checkAuth()) throw new Error('Unauthorized');
+if (!checkAuth()) { /* Auth failed — page already replaced */ }
 
 // STATE
 let allBookings=[], allCustomers=[], allRatings=[], allLeads=[], allConversations=[];
@@ -661,17 +688,8 @@ function closeModal(id) { document.getElementById(id).classList.remove('open'); 
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 
 // PAGE NAV
-const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',chats:'Chats',revenue:'Revenue',analytics:'Analytics',ratings:'Ratings'};
-function showPage(name, el) {
-  document.querySelectorAll('.page-section').forEach(p=>p.style.display='none');
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.getElementById('page-'+name).style.display='block';
-  if(el) el.classList.add('active');
-  document.getElementById('page-title').textContent = PAGE_TITLES[name]||name;
-  if(name==='chats') loadConversations();
-  if(name==='calendar') renderCalendar();
-  if(name==='analytics') renderAnalytics();
-}
+// PAGE_TITLES moved to top
+// showPage defined at top of script
 
 // BRANCH SWITCHER
 function switchBranch(branch, el) {
@@ -709,11 +727,12 @@ async function loadData() {
   try {
     const bp = activeBranch!=='all'?`?branch=${activeBranch}`:'';
     const [bRes,cRes,rRes,lRes] = await Promise.all([
-      fetch(`${BOT_URL}/bookings${bp}`),
-      fetch(`${BOT_URL}/customers${bp}`),
-      fetch(`${BOT_URL}/ratings${bp}`).catch(()=>({json:()=>[]})),
-      fetch(`${BOT_URL}/leads${bp}`).catch(()=>({json:()=>[]})),
+      fetch(`${BOT_URL}/bookings${bp}`, {cache:'no-store'}),
+      fetch(`${BOT_URL}/customers${bp}`, {cache:'no-store'}),
+      fetch(`${BOT_URL}/ratings${bp}`, {cache:'no-store'}).catch(()=>({json:()=>[]})),
+      fetch(`${BOT_URL}/leads${bp}`, {cache:'no-store'}).catch(()=>({json:()=>[]})),
     ]);
+    if (!bRes.ok) { console.error('Bookings fetch failed:', bRes.status); toast('Failed to load data','error'); return; }
     allBookings = (await bRes.json()).map(b=>({
       id:b.order_id,name:b.name||'',phone:b.phone||'',address:b.address||'',
       date:b.date||'',slot:b.slot||'',status:b.status||'pending',
@@ -762,9 +781,9 @@ function updateAll() {
   }
   prevOrderCount = total;
   // Overdue sound — only once per session
-  const overdue=allBookings.filter(isOverdue);
-  if(overdue.length>0 && !window._overdueAlerted) { soundOverdue(); window._overdueAlerted=true; }
-  if(overdue.length===0) window._overdueAlerted=false;
+  const overdueList=allBookings.filter(isOverdue);
+  if(overdueOrders.length>0 && !window._overdueAlerted) { soundOverdue(); window._overdueAlerted=true; }
+  if(overdueOrders.length===0) window._overdueAlerted=false;
   renderHome(); renderKanban(); renderOrders(); renderPayments(); renderRatings(); renderLeads(); renderCustomers(); renderRevenue();
 }
 
@@ -931,6 +950,7 @@ function renderOrders() {
           <button class="btn-icon" onclick="openSendMsg('${b.phone}','${b.name}')" title="Message">💬</button>
           ${b.status==='delivered'&&b.payment_status!=='paid'?`<button class="btn-icon" onclick="sendPaymentReminder('${b.id}')" title="Payment reminder">💰</button>`:''}
           <button class="btn-icon" onclick="openCustomerProfile('${b.phone}')" title="Profile">👤</button>
+          <button class="btn-icon" onclick="printTag('${b.id}')" title="Print Tag">🏷️</button>
           <button class="btn-icon" style="color:var(--red)" onclick="deleteOrder('${b.id}')" title="Delete">🗑</button>
         </div>
       </td>
@@ -1357,6 +1377,7 @@ document.getElementById('new-date').value=new Date().toISOString().split('T')[0]
 if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
 
 // Show home by default
+ALL_PAGES.forEach(p=>{const e=document.getElementById('page-'+p);if(e)e.style.display='none';});
 document.getElementById('page-home').style.display='block';
 
 // ── AUDIO ALERTS ─────────────────────────────────────────────────
@@ -1385,9 +1406,14 @@ function playBeep(frequency=880, duration=120, type='sine', volume=0.4) {
 }
 
 function soundNewOrder() {
-  // Double ding — cheerful, clear
-  playBeep(880, 120, 'sine', 0.5);
-  setTimeout(() => playBeep(1100, 180, 'sine', 0.5), 160);
+  unlockAudio(); // ensure context is running
+  if (!audioCtx) return;
+  // Resume if suspended (browser autoplay policy)
+  const resume = audioCtx.state === 'suspended' ? audioCtx.resume() : Promise.resolve();
+  resume.then(() => {
+    playBeep(880, 120, 'sine', 0.5);
+    setTimeout(() => playBeep(1100, 180, 'sine', 0.5), 160);
+  });
 }
 
 function soundPayment() {
@@ -1411,11 +1437,52 @@ function soundMessage() {
 // Unlock audio on first user interaction (browser requirement)
 let audioUnlocked = false;
 function unlockAudio() {
-  if (audioUnlocked) return;
-  try { getAudioCtx(); audioUnlocked = true; } catch(e) {}
+  try {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    audioUnlocked = true;
+  } catch(e) { console.log('Audio unlock:', e.message); }
 }
 document.addEventListener('click', unlockAudio, { once: false });
 document.addEventListener('keydown', unlockAudio, { once: false });
+
+// ── PRINT TAG (browser print fallback) ───────────────────────────
+function printTag(orderId) {
+  const b = allBookings.find(x=>x.id===orderId);
+  if (!b) { toast('Order not found','error'); return; }
+  const slotShort = b.slot?.includes('Morning') ? 'Morning 10 AM - 1 PM' :
+                    b.slot?.includes('Evening') ? 'Evening  5 PM - 8 PM' : (b.slot||'-');
+  const now = new Date().toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  const win = window.open('','_blank','width=220,height=220');
+  win.document.write(`<!DOCTYPE html><html><head><title>Tag ${b.id}</title>
+  <style>
+    @page { size: 50mm 50mm; margin: 2mm; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family: monospace; font-size: 9px; width:46mm; }
+    .center { text-align:center; }
+    .bold { font-weight:bold; }
+    .large { font-size:13px; }
+    .line { border-top:1px dashed #000; margin:2px 0; }
+    .row { display:flex; justify-content:space-between; }
+  </style></head><body>
+  <div class="center bold" style="font-size:11px">WASHKART ${(b.branch||'bavdhan').toUpperCase()}</div>
+  <div class="line"></div>
+  <div class="center bold large">${b.id}</div>
+  <div class="line"></div>
+  <div><b>Name :</b> ${b.name}</div>
+  <div><b>Phone:</b> ${b.phone}</div>
+  <div><b>Addr :</b> ${b.address||'Walk-in'}</div>
+  <div class="line"></div>
+  <div class="bold center">${(b.service_type||'TO BE ASSIGNED').toUpperCase()}</div>
+  <div><b>Date :</b> ${b.date||'Walk-in'}</div>
+  <div><b>Slot :</b> ${slotShort}</div>
+  ${b.notes?`<div class="line"></div><div><b>Note:</b> ${b.notes}</div>`:''}
+  <div class="line"></div>
+  <div class="center" style="font-size:8px">${now}</div>
+  </body></html>`);
+  win.document.close();
+  win.onload = () => { win.print(); setTimeout(()=>win.close(),1000); };
+}
 
 loadData();
 setInterval(loadData, 30000);
