@@ -331,12 +331,12 @@ const AVAIL_KW = [
 
 // STATUS CONFIG
 const STATUS_MAP = {
-  pending:        { label: "Pending pickup",   eta: "We will pick up within your selected slot." },
-  picked:         { label: "Picked up",         eta: "Clothes picked up. Cleaning starts soon." },
-  inprogress:     { label: "In progress",       eta: "Your clothes are being cleaned." },
-  outfordelivery: { label: "Out for delivery",  eta: "Your clothes are on the way." },
-  delivered:      { label: "Delivered",         eta: "Thank you for choosing Washkart." },
-  cancelled:      { label: "Cancelled",         eta: "This order was cancelled." },
+  pending:        { label: "Pending Pickup",      eta: "We will pick up within your selected slot." },
+  picked:         { label: "Picked Up",           eta: "Clothes picked up. Cleaning starts soon." },
+  inprogress:     { label: "In Progress",         eta: "Your clothes are being carefully cleaned." },
+  outfordelivery: { label: "Out for Delivery",    eta: "Your clothes are on the way." },
+  delivered:      { label: "Delivered",           eta: "Thank you for choosing Washkart!" },
+  cancelled:      { label: "Cancelled",           eta: "This order was cancelled." },
 };
 
 // RATES
@@ -469,7 +469,7 @@ function calcEstimate(items) {
     const unitPrice = priceRow?.[svc];
     if (unitPrice) {
       total += unitPrice * qty;
-      const lbl = svc === "dryclean" ? "Dry Clean" : svc === "iron" ? "Iron" : svc === "laundry" ? "Laundry" : svc === "shoes" ? "Shoe Clean" : "Specialty";
+      const lbl = svc === "dryclean" ? "Dry Clean" : svc === "iron" ? "Steam Iron" : svc === "laundry" ? "Laundry" : svc === "shoes" ? "Shoe Cleaning" : "Specialty";
       breakdown.push(`${qty}x ${item.name} (${lbl}) - Rs ${unitPrice * qty}`);
     } else { unknown.push(`${item.qty}x ${item.name}`); }
   }
@@ -1746,19 +1746,31 @@ app.post("/bookings", async (req,res) => {
 app.patch("/bookings/:orderId", async (req,res) => {
   try {
     const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder} = req.body;
-    const orderId    = req.params.orderId;
-    const updateData = {status};
+    const orderId = req.params.orderId;
+
+    // Fetch current order BEFORE update to detect status change
+    const prevRows = await dbSelect("bookings",`order_id=eq.${orderId}`).catch(()=>[]);
+    const prevOrder = prevRows[0];
+    const prevStatus = prevOrder?.status;
+
+    const updateData = {};
+    if (status         !==undefined) updateData.status         = status;
     if (service_type   !==undefined) updateData.service_type   = service_type;
-    if (express        !==undefined) updateData.express         = express;
-    if (delivery_date)               updateData.delivery_date   = delivery_date;
-    if (notes          !==undefined) updateData.notes           = notes;
-    if (amount         !==undefined) updateData.amount          = amount;
-    if (payment_status !==undefined) updateData.payment_status  = payment_status;
-    if (payment_method !==undefined) updateData.payment_method  = payment_method;
-    if (payment_status==="paid")     updateData.payment_date    = new Date().toISOString();
-    if (service_type&&!delivery_date) updateData.delivery_date  = calcDeliveryDate(service_type,express||false);
-    // Auto in-progress when amount set
-    if (amount!==undefined&&amount>0&&["pending","picked"].includes(status)) updateData.status="inprogress";
+    if (express        !==undefined) updateData.express        = express;
+    if (delivery_date)               updateData.delivery_date  = delivery_date;
+    if (notes          !==undefined) updateData.notes          = notes;
+    if (payment_status !==undefined) updateData.payment_status = payment_status;
+    if (payment_method !==undefined) updateData.payment_method = payment_method;
+    if (payment_status==="paid")     updateData.payment_date   = new Date().toISOString();
+    // Only update amount if explicitly provided and > 0 (never wipe existing amount)
+    if (amount!==undefined && amount > 0) updateData.amount = amount;
+    // Auto calc delivery date when service type set
+    if (service_type&&!delivery_date) updateData.delivery_date = calcDeliveryDate(service_type,express||false);
+    // Auto move to inprogress when amount set on pending/picked order
+    if (amount!==undefined&&amount>0&&prevStatus&&["pending","picked"].includes(prevStatus)) {
+      updateData.status = "inprogress";
+    }
+
     await dbUpdate("bookings",`order_id=eq.${orderId}`,updateData);
     const rows = await dbSelect("bookings",`order_id=eq.${orderId}`);
     const b    = rows[0];
@@ -1766,14 +1778,17 @@ app.patch("/bookings/:orderId", async (req,res) => {
     const br   = getBranchBySlug(brSlug)||DEFAULT_BRANCH;
     const numId = getBranchNumId(brSlug);
     const finalStatus = updateData.status||status;
+    const statusChanged = finalStatus && finalStatus !== prevStatus;
+    console.log(`[patch] ${orderId} ${prevStatus}→${finalStatus} changed:${statusChanged}`);
+
     const amountLine  = b?.amount?`\nBill: Rs ${b.amount} - payable via UPI QR or cash.`:"";
     const msgs = {
-      picked:      `🚗 Picked up!\n\n${b?.service_type?`Service: ${b.service_type}\n`:""}${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}\nOrder: ${orderId}`,
+      picked:      `🚗 Picked up!\n\n${b?.service_type?`Service: ${b.service_type.charAt(0).toUpperCase()+b.service_type.slice(1)}\n`:""}${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}\nOrder: ${orderId}`,
       inprogress:  `🫧 Cleaning started!\n\n${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}Your clothes are being carefully cleaned.\nOrder: ${orderId}`,
       outfordelivery: `🚚 Your order is on the way!\n\nFresh clothes arriving soon.${amountLine}\nOrder: ${orderId}`,
       delivered:   `✅ Delivered!\n\nYour clothes are back — fresh and clean.${amountLine}\n\nPayment done? Reply *paid*.`,
     };
-    if (msgs[finalStatus]&&b?.phone) {
+    if (msgs[finalStatus]&&b?.phone&&statusChanged) {
       await sendMessage(b.phone,msgs[finalStatus],numId);
       // Send express button after picked up
       if (finalStatus==="picked") {
