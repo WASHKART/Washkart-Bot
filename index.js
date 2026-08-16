@@ -166,7 +166,7 @@ function genOrderId() { return `FW-${Date.now().toString().slice(-4)}${Math.floo
 // SEND HELPERS
 async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function sendMessage(to, text, phoneNumberId) {
+async function sendMessage(to, text, phoneNumberId, throwOnError=false) {
   const numId = phoneNumberId || "1136879376186203";
   try {
     const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/messages`,
@@ -174,7 +174,14 @@ async function sendMessage(to, text, phoneNumberId) {
       { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
     );
     console.log(`[msg] to:${to} status:${res.status}`);
-  } catch (e) { console.error(`[msg error] to:${to}:`, JSON.stringify(e?.response?.data || e.message)); }
+    return true;
+  } catch (e) {
+    const errData = e?.response?.data;
+    const errMsg = errData ? JSON.stringify(errData) : e.message;
+    console.error(`[msg error] to:${to} numId:${numId}:`, errMsg);
+    if (throwOnError) throw new Error(errMsg);
+    return false;
+  }
 }
 
 async function sendButtons(to, body, buttons, phoneNumberId) {
@@ -799,10 +806,12 @@ async function handleMessage(phone, rawText, phoneNumberId) {
 
   // If the message is from an admin number, only process admin commands
   // This prevents buttons in admin notifications from triggering booking flow
-  const isAdminPhone = Object.values(BRANCHES).some(br => normalizePhone(br.admin) === phone) || phone === normalizePhone(OWNER_NUMBER);
+  // Only branch admins get the button-tap guard (not the owner)
+  // Owner number can still use the bot as a normal customer
+  const isBranchAdmin = Object.values(BRANCHES).some(br => normalizePhone(br.admin) === phone);
   const branch = getBranch(phoneNumberId);
 
-  if (isAdminPhone) {
+  if (isBranchAdmin) {
     // Only process text admin commands — not button taps from notifications
     const isAdminCommand = /^(CONFIRM|REJECT|BLOCK|UNBLOCK|TAKEOVER|RESUME)\s/i.test(rawText);
     if (!isAdminCommand && isButtonId(rawText)) {
@@ -1012,7 +1021,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   // Admin commands
-  if (phone === normalizePhone(branch.admin)) {
+  if (isBranchAdmin) {
     const confirmMatch  = rawText.match(/^CONFIRM\s+(FW-\d+)/i);
     const rejectMatch   = rawText.match(/^REJECT\s+(FW-\d+)/i);
     const blockMatch    = rawText.match(/^BLOCK\s+(\d+)/i);
@@ -1832,14 +1841,17 @@ app.delete("/bookings/:orderId", async (req,res) => {
 
 app.post("/send-message", async (req,res) => {
   try {
-    const {phone,message,branch} = req.body;
+    const {phone, message, branch} = req.body;
     if (!phone||!message) return res.status(400).json({error:"Phone and message required"});
     const normalized = normalizePhone(phone);
     const numId = getBranchNumId(branch||"bavdhan");
-    console.log(`[send-message] to:${normalized}`);
-    await sendMessage(normalized,message,numId);
-    res.json({success:true});
-  } catch (e) { res.status(500).json({error:e.message}); }
+    console.log(`[send-message] to:${normalized} branch:${branch||"bavdhan"} numId:${numId}`);
+    const ok = await sendMessage(normalized, message, numId, true); // throwOnError=true
+    res.json({success:ok});
+  } catch (e) {
+    console.error("[send-message error]", e.message);
+    res.status(500).json({error: e.message, hint: "Check WHATSAPP_TOKEN in Render env vars"});
+  }
 });
 
 app.get("/customers",      async(req,res)=>{ try{ const {branch}=req.query; const f=branch&&branch!=="all"?`branch=eq.${branch}&order=created_at.desc`:"order=created_at.desc"; res.json(await dbSelect("customers",f)); }catch(e){res.status(500).json({error:e.message});} });
