@@ -1443,111 +1443,47 @@ function selectMsgCustomer(phone) {
   msgCustomerName=sel.options[sel.selectedIndex]?.dataset?.name||'';
 }
 const TEMPLATES = {
-  walkin: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! 👋
-
-Thank you for visiting Washkart. It was great meeting you!
-
-We specialise in dry cleaning, laundry, steam iron and shoe cleaning — with doorstep pickup and delivery across Pune.
-
-To book your first pickup, just reply *pickup* here and our team will guide you.
-
-🌐 www.washkart.co.in
-📸 @_washkart_
-
-Looking forward to taking care of your clothes! 🧺`,
-
-  intro: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! Welcome to Washkart 🧺
-
-We're a premium laundry and dry cleaning service in Pune with doorstep pickup and delivery.
-
-Here's what we offer:
-• Dry Cleaning — from Rs 100/piece
-• Steam Iron — from Rs 20/piece  
-• Laundry — from Rs 80/kg
-• Shoe Cleaning — from Rs 300/pair
-• Express service — ready in 120 minutes
-
-To book a pickup, just reply *pickup*.
-To check rates, reply *rates*.
-
-www.washkart.co.in | @_washkart_`,
-
-  reengage: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! 😊
-
-It's been a while — hope you're doing well!
-
-Fresh clothes waiting? We're here whenever you're ready.
-
-Just reply *pickup* to schedule a doorstep collection and we'll handle the rest.
-
-Washkart — Bavdhan & Baner 🧺`,
-
-  reminder: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! Just a reminder —
-
-Your Washkart pickup is scheduled for today. 🚗
-
-Our team will arrive within your selected time slot. Please keep the clothes ready.
-
-To cancel: reply *cancel*
-Questions? Reply anytime.`,
-
-  delay: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! 🙏
-
-Your order${orderId ? ' ' + orderId : ''} is taking slightly longer than expected. We want to make sure everything is cleaned perfectly.
-
-We'll deliver by tomorrow. Sorry for the wait — we appreciate your patience!
-
-For updates, reply *track*.`,
-
-  payment: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}!
-
-Your payment${amount ? ' of Rs ' + amount : ''} for order${orderId ? ' ' + orderId : ''} is pending.
-
-Our delivery agent carries a QR code — scan to pay instantly. Cash is also accepted.
-
-Already paid? Just reply *paid* and we'll confirm. 💳`,
-
-  ready: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! Great news 🎉
-
-Your clothes are fresh, clean and ready for delivery!
-
-We'll be at your address soon.${amount ? '
-
-Bill: Rs ' + amount + ' — payable via QR or cash on delivery.' : ''}
-
-We hope you love how they look! 🧺`,
-
-  feedback: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}!
-
-How were your clothes from your last Washkart order? 😊
-
-Your feedback means a lot to us. Just reply with:
-⭐ Excellent
-👍 Good  
-💬 Or tell us what we can do better
-
-Thank you for choosing Washkart!`,
-
-  festive: (n, orderId, amount) =>
-`Hi${n ? ' ' + n : ''}! Festival season is here 🎊
-
-Get your outfits fresh and ready for the celebrations!
-
-Book a pickup now — reply *pickup* and our team will collect your clothes and have them back looking their best.
-
-⚡ Express service available — ready in 120 minutes!
-
-Washkart — Bavdhan & Baner 🧺`,
-};
-
+  walkin: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '! \u{1F44B}\n\nThank you for visiting Washkart. It was great meeting you!\n\nWe specialise in dry cleaning, laundry, steam iron and shoe cleaning — with doorstep pickup and delivery across Pune.\n\nTo book your first pickup, just reply pickup here and our team will guide you.\n\n\u{1F310} www.washkart.co.in\n\u{1F4F8} @_washkart_\n\nLooking forward to taking care of your clothes! \u{1F9FA}';
+  },
+  intro: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '! Welcome to Washkart \u{1F9FA}\n\nWe are a premium laundry and dry cleaning service in Pune with doorstep pickup and delivery.\n\nWhat we offer:\n- Dry Cleaning from Rs 100/piece\n- Steam Iron from Rs 20/piece\n- Laundry from Rs 80/kg\n- Shoe Cleaning from Rs 300/pair\n- Express service in 120 minutes\n\nTo book a pickup, reply pickup.\nTo check rates, reply rates.\n\nwww.washkart.co.in | @_washkart_';
+  },
+  reengage: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '! \u{1F60A}\n\nIt has been a while — hope you are doing well!\n\nFresh clothes waiting? We are here whenever you are ready.\n\nJust reply pickup to schedule a doorstep collection and we will handle the rest.\n\nWashkart — Bavdhan and Baner \u{1F9FA}';
+  },
+  reminder: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '! Just a reminder —\n\nYour Washkart pickup is scheduled for today. \u{1F697}\n\nOur team will arrive within your selected time slot. Please keep the clothes ready.\n\nTo cancel: reply cancel\nQuestions? Reply anytime.';
+  },
+  delay: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    var orderStr = orderId ? ' ' + orderId : '';
+    return 'Hi' + nm + '! \u{1F64F}\n\nYour order' + orderStr + ' is taking slightly longer than expected. We want to make sure everything is cleaned perfectly.\n\nWe will deliver by tomorrow. Sorry for the wait — we appreciate your patience!\n\nFor updates, reply track.';
+  },
+  payment: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    var amtStr = amount ? ' of Rs ' + amount : '';
+    var orderStr = orderId ? ' ' + orderId : '';
+    return 'Hi' + nm + '!\n\nYour payment' + amtStr + ' for order' + orderStr + ' is pending.\n\nOur delivery agent carries a QR code — scan to pay instantly. Cash is also accepted.\n\nAlready paid? Just reply paid and we will confirm. \u{1F4B3}';
+  },
+  ready: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    var billStr = amount ? '\n\nBill: Rs ' + amount + ' — payable via QR or cash on delivery.' : '';
+    return 'Hi' + nm + '! Great news \u{1F389}\n\nYour clothes are fresh, clean and ready for delivery!' + billStr + '\n\nWe hope you love how they look! \u{1F9FA}';
+  },
+  feedback: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '!\n\nHow were your clothes from your last Washkart order? \u{1F60A}\n\nYour feedback means a lot to us. Just reply with:\n- Excellent\n- Good\n- Or tell us what we can do better\n\nThank you for choosing Washkart!';
+  },
+  festive: function(n, orderId, amount) {
+    var nm = n ? ' ' + n : '';
+    return 'Hi' + nm + '! Festival season is here \u{1F38A}\n\nGet your outfits fresh and ready for the celebrations!\n\nBook a pickup now — reply pickup and our team will collect your clothes and have them back looking their best.\n\nExpress service available — ready in 120 minutes!\n\nWashkart — Bavdhan and Baner \u{1F9FA}';
+  },
+}
 function useTemplate(key) {
   // Find order for selected customer
   const phone = document.getElementById('msg-phone').value.trim().replace(/\D/g,'');
