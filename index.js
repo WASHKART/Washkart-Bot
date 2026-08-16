@@ -337,6 +337,14 @@ const AVAIL_KW = [
 ];
 
 // STATUS CONFIG
+const SERVICE_TYPES = [
+  { id: "svc_dryclean", title: "Dry Clean" },
+  { id: "svc_iron",     title: "Steam Iron" },
+  { id: "svc_laundry",  title: "Laundry" },
+  { id: "svc_shoes",    title: "Shoe Cleaning" },
+  { id: "svc_mixed",    title: "Mixed / Not sure" },
+];
+
 const STATUS_MAP = {
   pending:        { label: "Pending Pickup",      eta: "We will pick up within your selected slot." },
   picked:         { label: "Picked Up",           eta: "Clothes picked up. Cleaning starts soon." },
@@ -950,6 +958,26 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     await showBookingConfirm(phone,session,phoneNumberId); return;
   }
 
+  if (session.step === "select_service") {
+    const svcMap = { svc_dryclean:"dryclean", svc_iron:"iron", svc_laundry:"laundry", svc_shoes:"shoes", svc_mixed:"mixed" };
+    if (svcMap[rawText]) {
+      session.booking.service_type = svcMap[rawText];
+      session.step = "idle";
+      saveSession(phone, session);
+      if (!session.booking.date) { await askDate(phone, phoneNumberId); session.step = "select_date"; }
+      else if (!session.booking.slot) { await askSlot(phone, phoneNumberId, session.booking.date); session.step = "select_slot"; }
+      else { await showBookingConfirm(phone, session, phoneNumberId); }
+      saveSession(phone, session);
+    } else {
+      await sendButtons(phone, "Please select a service:",
+        [{ id:"svc_dryclean",title:"Dry Clean" },{ id:"svc_iron",title:"Steam Iron" },{ id:"svc_laundry",title:"Laundry" }], phoneNumberId);
+      await delay(400);
+      await sendButtons(phone, "More options:",
+        [{ id:"svc_shoes",title:"Shoe Cleaning" },{ id:"svc_mixed",title:"Mixed / Not sure" }], phoneNumberId);
+    }
+    return;
+  }
+
   if (session.step === "confirm_address") {
     if (rawText === "use_saved" || has(t,...YES_KW)) {
       session.addressConfirmed = true;
@@ -1009,9 +1037,14 @@ async function handleMessage(phone, rawText, phoneNumberId) {
       }
       return;
     }
-    await saveRating(phone, lastOrder?.order_id, null, rawText, branch.slug);
-    await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "comment", rawText, branch, phoneNumberId);
-    await send("Thank you for the feedback.");
+    // Only save as comment if it looks like actual feedback (more than 3 chars)
+    if (rawText.trim().length > 3) {
+      await saveRating(phone, lastOrder?.order_id, null, rawText, branch.slug);
+      await notifyAdminRating(phone, customer?.name, lastOrder?.order_id, "comment", rawText, branch, phoneNumberId);
+      await send("Thank you for the feedback!");
+    } else {
+      await send("Thank you for choosing Washkart!");
+    }
     session.step = "idle"; saveSession(phone,session); return;
   }
 
@@ -1114,6 +1147,11 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     saveSession(phone,session); return;
   }
   if (rawText==="use_saved")       { const s=await getCustomer(phone); if(s){session.booking.name=s.name;session.booking.address=s.address;if(s.branch)session.booking.branch=s.branch;} await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
+  if (rawText.startsWith("svc_")) {
+    session.step = "select_service";
+    await handleMessage(phone, rawText, phoneNumberId);
+    return;
+  }
   if (rawText==="update_details")  { session.booking.address=null; session.step="get_address"; saveSession(phone,session); await send("Enter your new pickup address:"); return; }
   if (rawText==="no_cancel")       { await send("Your order is still active."); return; }
   if (rawText==="confirm_direct")  {
@@ -1162,6 +1200,21 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     await sendMessage(branch.admin, `Bulk order inquiry\nPhone: +${phone}\nMessage: ${rawText}`, phoneNumberId);
     return;
   }
+  // Driver ETA handler
+  if (has(t,"driver kab","pickup kab aayega","kab aayenge","pickup agent","delivery agent kab","agent kab","pickup time kya","kab pick","aap kab aayenge","kab pohonchenge")) {
+    const active = await getActiveOrder(phone);
+    if (active && active.status === "pending") {
+      await send(`Our team will arrive within your selected slot.\nSlot: ${active.slot || "as scheduled"}\nOrder: ${active.order_id}\n\nFor urgent help, contact us directly.`);
+    } else if (active && active.status === "outfordelivery") {
+      await send(`Your order ${active.order_id} is out for delivery. Our agent is on the way and will reach you shortly.`);
+    } else if (active) {
+      await send(`Your order ${active.order_id} is currently ${STATUS_MAP[active.status]?.label}. Pickup/delivery timing will be communicated soon.`);
+    } else {
+      await send("No active order found. Type pickup to schedule a new pickup.");
+    }
+    return;
+  }
+
   if (has(t,...COMPLAINT_KW)) {
     await send("We are sorry to hear this. 🙏\n\nPlease describe what happened and we will resolve it right away.\n\nFor urgent issues, call us directly: +91 92725 42419");
     await notifyAdminComplaint(phone, null, rawText, branch, phoneNumberId);
@@ -1442,21 +1495,33 @@ async function handleTrack(phone, session, rawText, phoneNumberId) {
       }
     }
   }
-  // Auto-lookup by phone number
-  const active = await getActiveOrder(phone);
-  if (active) {
-    const s = STATUS_MAP[active.status]||{label:active.status,eta:""};
-    const del = active.delivery_date?`\nEst. delivery: ${active.delivery_date}`:"";
-    await sendMessage(phone,`📦 ${active.order_id}\nStatus: ${s.label}${del}\nDate: ${active.date} | ${active.slot}\n\n${s.eta}`,phoneNumberId);
-    return;
-  }
+  // Auto-lookup by phone number — show ALL active orders
+  try {
+    const allActive = await dbSelect("bookings", `phone=eq.${phone}&status=neq.cancelled&status=neq.delivered&order=created_at.desc`);
+    if (allActive.length === 1) {
+      const o = allActive[0];
+      const s = STATUS_MAP[o.status]||{label:o.status,eta:""};
+      const del = o.delivery_date?`\nEst. delivery: ${o.delivery_date}`:"";
+      await sendMessage(phone,`📦 ${o.order_id}\nStatus: ${s.label}${del}\nDate: ${o.date||"Walk-in"} | ${o.slot||"-"}\n\n${s.eta}`,phoneNumberId);
+      return;
+    } else if (allActive.length > 1) {
+      let msg = `You have ${allActive.length} active orders:\n\n`;
+      allActive.forEach(o => {
+        const s = STATUS_MAP[o.status]||{label:o.status};
+        msg += `📦 ${o.order_id} — ${s.label}\n${o.date||"Walk-in"}\n\n`;
+      });
+      msg += "Share an order ID for more details.";
+      await sendMessage(phone, msg, phoneNumberId);
+      return;
+    }
+  } catch {}
   // Check last few orders including delivered
   try {
     const allOrders = await dbSelect("bookings",`phone=eq.${phone}&order=created_at.desc&limit=3`);
     if (allOrders.length) {
       const latest = allOrders[0];
       const s = STATUS_MAP[latest.status]||{label:latest.status,eta:""};
-      await sendMessage(phone,`📦 Latest order: ${latest.order_id}\nStatus: ${s.label}\nDate: ${latest.date}\n\n${s.eta}\n\nFor older orders, share the order ID.`,phoneNumberId);
+      await sendMessage(phone,`📦 Latest order: ${latest.order_id}\nStatus: ${s.label}\nDate: ${latest.date||"Walk-in"}\n\n${s.eta}\n\nFor other orders, share the order ID.`,phoneNumberId);
       return;
     }
   } catch {}
