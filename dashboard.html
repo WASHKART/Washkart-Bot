@@ -272,6 +272,7 @@ tr.overdue td{background:#fef2f2;}
       </div>
       <div class="topbar-right">
         <div class="clock" id="clock"></div>
+        <button class="btn-icon" onclick="soundNewOrder()" title="Test sound">🔔</button>
         <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 Message</button>
         <button class="btn btn-primary btn-sm" onclick="openModal('modal-order')">+ New Order</button>
       </div>
@@ -752,13 +753,18 @@ function updateAll() {
   const banner = document.getElementById('overdue-banner');
   if(overdue.length){ banner.classList.add('show'); banner.textContent=`⚠️ ${overdue.length} order${overdue.length>1?'s are':' is'} overdue — click to view`; }
   else { banner.classList.remove('show'); }
-  // Browser notification for new orders
+  // Sound + browser notification for new orders
   if(prevOrderCount>0&&total>prevOrderCount) {
     const n=total-prevOrderCount;
-    if(Notification.permission==='granted') new Notification('Washkart',{body:`${n} new order${n>1?'s':''} received!`});
-    toast(`${n} new order${n>1?'s':''} received!`);
+    soundNewOrder();
+    if(Notification.permission==='granted') new Notification('Washkart — New Order! 🔔',{body:`${n} new order${n>1?'s':''} received!`});
+    toast(`🔔 ${n} new order${n>1?'s':''} received!`);
   }
   prevOrderCount = total;
+  // Overdue sound — only once per session
+  const overdue=allBookings.filter(isOverdue);
+  if(overdue.length>0 && !window._overdueAlerted) { soundOverdue(); window._overdueAlerted=true; }
+  if(overdue.length===0) window._overdueAlerted=false;
   renderHome(); renderKanban(); renderOrders(); renderPayments(); renderRatings(); renderLeads(); renderCustomers(); renderRevenue();
 }
 
@@ -1340,7 +1346,7 @@ async function sendManualMessage() {
   try {
     const res=await fetch(`${BOT_URL}/send-message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
     const data=await res.json();
-    if(data.success){toast('Message sent!');closeModal('modal-message');document.getElementById('msg-phone').value='';document.getElementById('msg-text').value='';msgCustomerName='';}
+    if(data.success){soundMessage();toast('Message sent!');closeModal('modal-message');document.getElementById('msg-phone').value='';document.getElementById('msg-text').value='';msgCustomerName='';}
     else toast(data.error||'Failed','error');
   } catch { toast('Network error','error'); }
 }
@@ -1352,6 +1358,64 @@ if('Notification' in window && Notification.permission==='default') Notification
 
 // Show home by default
 document.getElementById('page-home').style.display='block';
+
+// ── AUDIO ALERTS ─────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  return audioCtx;
+}
+
+function playBeep(frequency=880, duration=120, type='sine', volume=0.4) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(frequency, ctx.currentTime);
+    gain.gain.setValueAtTime(volume, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration/1000);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration/1000);
+  } catch(e) { console.log('Audio error:', e.message); }
+}
+
+function soundNewOrder() {
+  // Double ding — cheerful, clear
+  playBeep(880, 120, 'sine', 0.5);
+  setTimeout(() => playBeep(1100, 180, 'sine', 0.5), 160);
+}
+
+function soundPayment() {
+  // Cash register style — 3 ascending tones
+  playBeep(660, 80, 'sine', 0.4);
+  setTimeout(() => playBeep(880, 80, 'sine', 0.4), 100);
+  setTimeout(() => playBeep(1100, 150, 'sine', 0.4), 200);
+}
+
+function soundOverdue() {
+  // Low warning pulse
+  playBeep(300, 200, 'sawtooth', 0.3);
+  setTimeout(() => playBeep(300, 200, 'sawtooth', 0.3), 350);
+}
+
+function soundMessage() {
+  // Soft single ding
+  playBeep(700, 150, 'sine', 0.3);
+}
+
+// Unlock audio on first user interaction (browser requirement)
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  try { getAudioCtx(); audioUnlocked = true; } catch(e) {}
+}
+document.addEventListener('click', unlockAudio, { once: false });
+document.addEventListener('keydown', unlockAudio, { once: false });
 
 loadData();
 setInterval(loadData, 30000);
