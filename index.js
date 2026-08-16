@@ -45,6 +45,7 @@ function detectBranchFromAddress(address) {
 
 // CONFIG
 const TOKEN        = process.env.WHATSAPP_TOKEN;
+const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of branch
 const VERIFY_TOKEN = "washkart_verify_123";
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
@@ -219,6 +220,12 @@ const TRACK_KW = [
   "order track karo","kapde kab aayenge",
   "ready hue","ready hai","tayar hue","order ready","ready ho gaya","tayar zale",
   "kab milega","kab aayega","kab tak aayega","kab deliver",
+];
+const RESCHEDULE_KW = [
+  "reschedule","change date","change slot","change pickup","change timing",
+  "reschedule karo","date change karo","time change karo","slot change karo",
+  "reschedule kara","date badlaycha","वेळ बदला","तारीख बदला",
+  "postpone","delay pickup","shift pickup",
 ];
 const CANCEL_KW = [
   "cancel","cancellation","cancel order","cancel booking",
@@ -531,13 +538,20 @@ async function saveRating(phone, orderId, rating, comment, branch) {
   try { await dbInsert("ratings", { phone, order_id: orderId, rating, comment, branch: branch || "bavdhan", created_at: new Date().toISOString() }); }
   catch (e) { console.error("saveRating:", e.message); }
 }
-async function logLead(phone, stage, firstMessage, branch) {
+async function logLead(phone, stage, firstMessage, branch, phoneNumberId) {
   try {
     const existing = await dbSelect("leads", `phone=eq.${phone}`).catch(() => []);
+    const isNew = !existing.length;
     if (existing.length) {
       await dbUpdate("leads", `phone=eq.${phone}`, { stage, last_message: firstMessage, updated_at: new Date().toISOString(), branch: branch || "bavdhan" });
     } else {
       await dbInsert("leads", { phone, stage, first_message: firstMessage, last_message: firstMessage, branch: branch || "bavdhan", created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    }
+    // Notify owner when brand new customer messages
+    if (isNew && stage === "enquired") {
+      const br = getBranchBySlug(branch) || DEFAULT_BRANCH;
+      const numId = phoneNumberId || getBranchNumId(branch || "bavdhan");
+      await sendMessage(OWNER_NUMBER, `New enquiry - ${br.name}\n\nPhone: +${phone}\nMessage: "${firstMessage}"\n\nFollow up from dashboard if needed.`, numId);
     }
   } catch (e) { console.log("[lead] skipped:", e.message); }
 }
@@ -546,10 +560,9 @@ async function logLead(phone, stage, firstMessage, branch) {
 async function notifyAdmin(booking, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
   const src = booking.source ? ` [${booking.source}]` : "";
-  await sendMessage(br.admin,
-    `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}`,
-    phoneNumberId
-  );
+  const msg = `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}`;
+  await sendMessage(br.admin, msg, phoneNumberId);
+  if (br.admin !== OWNER_NUMBER) await sendMessage(OWNER_NUMBER, msg, phoneNumberId);
 }
 async function notifyAdminComplaint(phone, name, message, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
@@ -631,6 +644,18 @@ async function showBookingConfirm(phone, session, phoneNumberId) {
 }
 
 async function confirmBooking(phone, booking, branch, phoneNumberId) {
+  // Reschedule existing order instead of creating new
+  if (booking.reschedule && booking.orderId) {
+    const existingId = booking.orderId;
+    await dbUpdate("bookings", `order_id=eq.${existingId}`, { date: booking.date, slot: booking.slot, reminder_sent: false });
+    await sendMessage(phone,
+      `✅ Rescheduled!\n\n🆔 ${existingId}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\nWe'll see you then! 🧺`,
+      phoneNumberId
+    );
+    const br = branch || DEFAULT_BRANCH;
+    await sendMessage(br.admin, `Rescheduled - ${br.name}\nOrder: ${existingId}\nNew date: ${booking.date}\nSlot: ${booking.slot}`, phoneNumberId);
+    return;
+  }
   const orderId = genOrderId();
   booking.orderId = orderId;
   booking.phone = phone;
@@ -646,13 +671,15 @@ async function confirmBooking(phone, booking, branch, phoneNumberId) {
     });
   } catch (e) { console.error("saveBooking:", e.message); }
   await logLead(phone, "converted", "booking confirmed", br.slug);
+  // Clear address confirmation flag for next booking
+  session.addressConfirmed = false;
   await sendMessage(phone,
-    `Booking confirmed.\n\nOrder: ${orderId}\nName: ${booking.name}\nAddress: ${booking.address || "-"}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}\n\nOur team will arrive within your slot.\nPayment via UPI QR or cash at delivery.\n\nTo cancel: type cancel`,
+    `✅ Booking confirmed!\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
     phoneNumberId
   );
   await delay(500);
   await sendMessage(phone,
-    `Standard turnaround is 3 days.\nNeed it faster? Express service is available - ready in 120 minutes at 1.5x the price.\n\nAfter pickup, reply express to upgrade.`,
+    `Your clothes are in good hands! 🧺\n\nWe'll have them fresh and ready within 3 days.\nNeed them sooner? Reply *express* after pickup for our 120-minute turnaround.`,
     phoneNumberId
   );
   await notifyAdmin(booking, br, phoneNumberId);
@@ -733,6 +760,16 @@ ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
     return parsed;
   } catch (e) {
     console.error("Gemini error:", e?.response?.data || e.message);
+    // Track Gemini failures and alert owner if too many
+    if (!geminiChat.failCount) geminiChat.failCount = 0;
+    geminiChat.failCount++;
+    if (!geminiChat.failTimer) {
+      geminiChat.failTimer = setTimeout(() => { geminiChat.failCount = 0; geminiChat.failTimer = null; }, 5 * 60 * 1000);
+    }
+    if (geminiChat.failCount >= 3) {
+      geminiChat.failCount = 0;
+      sendMessage(OWNER_NUMBER, "Bot alert: AI is failing repeatedly. Check Render logs.", "1136879376186203").catch(()=>{});
+    }
     return { reply: "Sorry, I did not catch that. Type pickup, rates, or track.", action: "none", extracted: {} };
   }
 }
@@ -863,6 +900,31 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     await showBookingConfirm(phone,session,phoneNumberId); return;
   }
 
+  if (session.step === "confirm_address") {
+    if (rawText === "use_saved" || has(t,...YES_KW)) {
+      session.addressConfirmed = true;
+      session.step = "idle";
+      saveSession(phone, session);
+      await handleBookingIntent(phone, session, rawText, t, branch, phoneNumberId);
+      return;
+    }
+    if (rawText === "update_details") {
+      session.booking.address = null;
+      session.addressConfirmed = true;
+      session.step = "get_address";
+      saveSession(phone, session);
+      await sendMessage(phone, "What is your new pickup address?", phoneNumberId);
+      return;
+    }
+    // Any other response - treat as address
+    session.booking.address = rawText.trim();
+    session.addressConfirmed = true;
+    session.step = "idle";
+    saveSession(phone, session);
+    await handleBookingIntent(phone, session, rawText, t, branch, phoneNumberId);
+    return;
+  }
+
   if (session.step === "select_branch") {
     if (rawText === "branch_bavdhan") session.booking.branch = "bavdhan";
     else if (rawText === "branch_baner") session.booking.branch = "baner";
@@ -888,7 +950,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
         await send("Thank you for the rating. We appreciate your support.");
         session.step = "idle"; saveSession(phone,session);
         await delay(500);
-        await sendBtn("Need anything else?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_track",title:"Track Order"}]);
+        await sendBtn("Need anything else?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"Check Rates"}]);
       } else if (stars === 4) {
         await send("Thanks. Is there anything we can improve?");
         session.step = "feedback_comment"; saveSession(phone,session);
@@ -966,7 +1028,11 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   // LAYER 2: Button IDs
-  const RATE_FOLLOWUP = async () => { await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"}]); };
+  const RATE_FOLLOWUP = async () => {
+    await delay(400);
+    await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"}]);
+    trackRatesNoBooking(phone, branch, phoneNumberId); // track if no booking follows
+  };
   if (rawText==="price_iron")      { await send(RATES.iron);      await RATE_FOLLOWUP(); return; }
   if (rawText==="price_dc")        { await send(RATES.dryclean);  await RATE_FOLLOWUP(); return; }
   if (rawText==="price_wash")      { await send(RATES.laundry);   await RATE_FOLLOWUP(); return; }
@@ -994,7 +1060,13 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     } else { await send("Some details are missing. Type pickup to start again."); }
     return;
   }
-  if (rawText==="btn_book") { session.booking={}; }
+  if (rawText==="express_yes") { await handleExpress(phone,branch,phoneNumberId); return; }
+  if (rawText==="express_no")  { await send("Got it! We'll have your clothes ready in 3 days. \u{1F9BA}"); return; }
+  if (rawText==="btn_book") {
+    session.booking={};
+    session.allowAnotherBooking = true; // bypass active order check for this tap
+    saveSession(phone,session);
+  }
 
   // LAYER 3: Keywords
   if (rawText==="__audio__")    { await send("I cannot listen to voice notes. Please type your message."); return; }
@@ -1025,7 +1097,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     return;
   }
   if (has(t,...COMPLAINT_KW)) {
-    await send("We are sorry. Please describe what happened and we will resolve it.");
+    await send("We are sorry to hear this. 🙏\n\nPlease describe what happened and we will resolve it right away.\n\nFor urgent issues, call us directly: +91 92725 42419");
     await notifyAdminComplaint(phone, null, rawText, branch, phoneNumberId);
     return;
   }
@@ -1041,6 +1113,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     return;
   }
   if (has(t,...HELP_KW))                              { await send(HELP_MSG); return; }
+  if (has(t,...RESCHEDULE_KW))                         { await handleReschedule(phone,session,branch,phoneNumberId); return; }
   if (has(t,...CANCEL_KW))                            { await handleCancel(phone,session,rawText,branch,phoneNumberId); return; }
   if (has(t,...TRACK_KW)||has(t,...ORDER_READY_KW))   { await handleTrack(phone,session,rawText,phoneNumberId); return; }
   if (has(t,...EXPRESS_KW)&&session.step==="idle")    { await handleExpress(phone,branch,phoneNumberId); return; }
@@ -1049,10 +1122,24 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (has(t,...AVAIL_KW)) {
     for (const s of SERVICE_AVAIL) { if (s.kw.some(k=>t.includes(k))) { await send(s.reply); return; } }
   }
+  // Single-word service queries that should go direct to rates
+  const SINGLE_SERVICE = {
+    "washing":["wash","laundry"],"laundry":["wash","laundry"],"ironing":["iron","press"],
+    "drycleaning":["dry","dryclean"],"dryclean":["dry","dryclean"],"pressing":["iron","press"],
+    "shoes":["shoe","sneaker"],"shoe":["shoe","sneaker"],"sneakers":["shoe","sneaker"],
+  };
+  if (SINGLE_SERVICE[t.trim()]) {
+    const svcWords = SINGLE_SERVICE[t.trim()];
+    if (svcWords.includes("wash"))  { await send(RATES.laundry);   await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]); return; }
+    if (svcWords.includes("iron"))  { await send(RATES.iron);      await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]); return; }
+    if (svcWords.includes("dry"))   { await send(RATES.dryclean);  await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]); return; }
+    if (svcWords.includes("shoe"))  { await send(RATES.shoes);     await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]); return; }
+  }
+
   if (has(t,...GREET_KW)) {
     const customer = await getCustomer(phone);
     const active   = await getActiveOrder(phone);
-    await logLead(phone,"enquired",rawText,branch.slug);
+    await logLead(phone,"enquired",rawText,branch.slug,phoneNumberId);
     if (customer) {
       if (active) {
         await sendBtn(`Hi ${customer.name}. Your order ${active.order_id} is ${STATUS_MAP[active.status]?.label}.`,
@@ -1064,17 +1151,61 @@ async function handleMessage(phone, rawText, phoneNumberId) {
         );
       }
     } else {
-      await sendBtn("Hi. Welcome to Washkart - laundry and dry cleaning in Pune.",
-        [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"Rates"},{id:"btn_track",title:"Track Order"}]
-      );
+      // Check if they have a previous booking from website
+      const prevBooking = await getLastOrder(phone).catch(() => null);
+      if (prevBooking?.name) {
+        await sendBtn(`Hi ${prevBooking.name}! 👋 Welcome to Washkart.\n\nHow can I help you today?`,
+          [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"Rates"},{id:"btn_track",title:"Track Order"}]
+        );
+      } else {
+        await sendBtn("Hi! 👋 Welcome to Washkart — laundry and dry cleaning in Pune.",
+          [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"Rates"},{id:"btn_track",title:"Track Order"}]
+        );
+      }
     }
     return;
   }
+  // Quantity-based estimate check — must happen BEFORE generic rates routing
+  // KG laundry calculator
+  const kgMatch = rawText.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  if (kgMatch && has(t,"wash","laundry","fold","iron","dhulai")) {
+    const kg = parseFloat(kgMatch[1]);
+    const wf  = Math.round(kg * 80);
+    const wi  = Math.round(kg * 110);
+    const exWf = Math.round(kg * 120);
+    const exWi = Math.round(kg * 160);
+    await send(`Laundry estimate for ${kg} kg:\n\nWash & Fold - Rs ${wf}\nWash & Iron - Rs ${wi}\n\nExpress (90 min):\nWash & Fold - Rs ${exWf}\nWash & Iron - Rs ${exWi}\n\nFinal amount confirmed at pickup.`);
+    await delay(400);
+    await sendBtn("Ready to book?", [{id:"btn_book",title:"Book Pickup"}]);
+    return;
+  }
+
+  const hasQuantity = /\b\d+\s*(kg|sarees?|shirts?|pants?|jeans?|kurtas?|kurtis?|suits?|dresses?|jackets?|sweaters?|lehengas?|blazers?|dupattas?|bedsheets?|blankets?|sneakers?|shoes?|tshirts?|pieces?|pcs?|kapde|items?)\b/i.test(rawText);
+  if (hasQuantity && (has(t,"dry","dryclean","wash","iron","press","laundry","clean","shoe","kg"))) {
+    const items = extractEstimateItems(rawText);
+    if (items.length > 0) {
+      const {total, breakdown, unknown} = calcEstimate(items);
+      if (total > 0) {
+        let msg = "Here's your estimate: \n\n";
+        breakdown.forEach(l => msg += l + "\n");
+        if (unknown.length) msg += "\nCould not estimate: " + unknown.join(", ") + "\n";
+        msg += "\nTotal: Rs " + total;
+        msg += "\nExpress (120 min): Rs " + Math.ceil(total * 1.5);
+        msg += "\n\nStandard turnaround is 3 days. Final amount confirmed before cleaning starts.";
+        await send(msg);
+        await delay(400);
+        await sendBtn("Ready to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]);
+        return;
+      }
+    }
+  }
+
   if (has(t,...RATES_KW)) {
     for (const entry of ITEM_PRICE_QUICK) {
       if (entry.items.some(i=>t.includes(i)) && entry.svc.some(s=>t.includes(s))) {
-        await send(entry.reply); await delay(400);
-        await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"}]);
+        await send(entry.reply + "\n\nStandard: 3 days | Express: 120 min");
+        await delay(400);
+        await sendBtn("Ready to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]);
         return;
       }
     }
@@ -1113,11 +1244,12 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   const RATE_FU = async () => { await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"}]); };
   switch (ai.action) {
     case "book_now":
-      if (active && active.status!=="cancelled" && active.status!=="delivered") {
+      if (active && active.status!=="cancelled" && active.status!=="delivered" && !session.allowAnotherBooking) {
         await sendBtn(`You have an active order ${active.order_id} (${STATUS_MAP[active.status]?.label}). Book another pickup?`,
           [{id:"btn_book",title:"Yes, book another"},{id:"btn_track",title:"Track existing"}]
         ); return;
       }
+      session.allowAnotherBooking = false;
       if (session.booking.name && session.booking.address && session.booking.date && session.booking.slot) {
         await confirmBooking(phone,session.booking,getBranchBySlug(session.booking.branch)||branch,phoneNumberId); session.booking={};
       } else { await handleBookingIntent(phone,session,rawText,t,branch,phoneNumberId); }
@@ -1214,27 +1346,60 @@ async function handleSlotSelected(phone, session, phoneNumberId) {
 }
 
 async function handleTrack(phone, session, rawText, phoneNumberId) {
+  // Check for explicit order ID first
   if (rawText) {
     const m = rawText.match(/FW-\d+/i);
     if (m) {
       const rows = await dbSelect("bookings",`order_id=eq.${m[0].toUpperCase()}`).catch(()=>[]);
       if (rows.length) {
         const s = STATUS_MAP[rows[0].status]||{label:rows[0].status,eta:""};
-        const del = rows[0].delivery_date?`\nEstimated delivery: ${rows[0].delivery_date}`:"";
-        await sendMessage(phone,`Order: ${rows[0].order_id}\nStatus: ${s.label}${del}\n\n${s.eta}`,phoneNumberId);
+        const del = rows[0].delivery_date?`\nEst. delivery: ${rows[0].delivery_date}`:"";
+        await sendMessage(phone,`📦 ${rows[0].order_id}\nStatus: ${s.label}${del}\n\n${s.eta}`,phoneNumberId);
         return;
       }
     }
   }
+  // Auto-lookup by phone number
   const active = await getActiveOrder(phone);
   if (active) {
     const s = STATUS_MAP[active.status]||{label:active.status,eta:""};
-    const del = active.delivery_date?`\nEstimated delivery: ${active.delivery_date}`:"";
-    await sendMessage(phone,`Order: ${active.order_id}\nStatus: ${s.label}${del}\n\n${s.eta}`,phoneNumberId);
+    const del = active.delivery_date?`\nEst. delivery: ${active.delivery_date}`:"";
+    await sendMessage(phone,`📦 ${active.order_id}\nStatus: ${s.label}${del}\nDate: ${active.date} | ${active.slot}\n\n${s.eta}`,phoneNumberId);
     return;
   }
+  // Check last few orders including delivered
+  try {
+    const allOrders = await dbSelect("bookings",`phone=eq.${phone}&order=created_at.desc&limit=3`);
+    if (allOrders.length) {
+      const latest = allOrders[0];
+      const s = STATUS_MAP[latest.status]||{label:latest.status,eta:""};
+      await sendMessage(phone,`📦 Latest order: ${latest.order_id}\nStatus: ${s.label}\nDate: ${latest.date}\n\n${s.eta}\n\nFor older orders, share the order ID.`,phoneNumberId);
+      return;
+    }
+  } catch {}
   session.step="tracking"; saveSession(phone,session);
   await sendMessage(phone,"Share your order ID (e.g. FW-1234):",phoneNumberId);
+}
+
+async function handleReschedule(phone, session, branch, phoneNumberId) {
+  const active = await getActiveOrder(phone);
+  if (!active) {
+    await sendMessage(phone, "No active order to reschedule. Type *pickup* to book.", phoneNumberId);
+    return;
+  }
+  if (["inprogress","outfordelivery","delivered","cancelled"].includes(active.status)) {
+    await sendMessage(phone, `Order ${active.order_id} is ${STATUS_MAP[active.status]?.label} — it cannot be rescheduled at this stage.`, phoneNumberId);
+    return;
+  }
+  session.booking.orderId    = active.order_id;
+  session.booking.name       = active.name;
+  session.booking.address    = active.address;
+  session.booking.branch     = active.branch;
+  session.booking.reschedule = true;
+  session.step = "select_date";
+  saveSession(phone, session);
+  await sendMessage(phone, `Rescheduling order ${active.order_id}. Which new date works for you?`, phoneNumberId);
+  await askDate(phone, phoneNumberId);
 }
 
 async function handleCancel(phone, session, rawText, branch, phoneNumberId) {
@@ -1302,24 +1467,45 @@ async function handlePayment(phone, session, branch, phoneNumberId) {
 async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumberId) {
   const customer = await getCustomer(phone);
   const active   = await getActiveOrder(phone);
-  if (active&&active.status!=="cancelled"&&active.status!=="delivered") {
+  if (active&&active.status!=="cancelled"&&active.status!=="delivered"&&!session.allowAnotherBooking) {
     await sendButtons(phone,
       `You have an active order ${active.order_id} (${STATUS_MAP[active.status]?.label}).\n\nBook another pickup?`,
       [{id:"btn_book",title:"Yes, book another"},{id:"btn_track",title:"Track existing"}],phoneNumberId
     );
     return;
   }
+  // Clear the bypass flag
+  session.allowAnotherBooking = false;
   if (customer) {
     if (!session.booking.name)    session.booking.name    = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
     if (!session.booking.branch&&customer.branch) session.booking.branch = customer.branch;
+    // Address confirmation for returning customers — ask before jumping to date
+    if (customer.address && !session.booking.date && !session.addressConfirmed) {
+      session.step = "confirm_address";
+      saveSession(phone, session);
+      await sendButtons(phone,
+        `Pick up from your saved address?\n\n📍 ${customer.address}`,
+        [{id:"use_saved", title:"Yes, this address"}, {id:"update_details", title:"Different address"}],
+        phoneNumberId
+      );
+      return;
+    }
   }
   const hasTomorrow = has(t,"kal ","tomorrow","kal ko","udya");
   const hasToday    = has(t,"aaj ","today","abhi","aaj ko");
   const hasParso    = has(t,"parso","day after tomorrow","parsoon");
   const hasMorning  = has(t,"subah","morning","savere","sakali","10 am","11 am");
   const hasEvening  = has(t,"shaam","evening","sham","sandhyakal","5 pm","6 pm","7 pm");
-  const DAY_NAMES = {sunday:0,ravivar:0,monday:1,somwar:1,somavar:1,tuesday:2,mangalwar:2,wednesday:3,budhwar:3,thursday:4,guruvar:4,friday:5,shukrawar:5,shukravar:5,saturday:6,shaniwar:6,shanivar:6,shanivari:6};
+  const DAY_NAMES = {
+    sunday:0, ravivar:0, aaditwar:0, adiwar:0, robiwar:0,
+    monday:1, somwar:1, somavar:1, somvaar:1,
+    tuesday:2, mangalwar:2, mangalavar:2, mangalvaar:2,
+    wednesday:3, budhwar:3, budhavar:3, budhvaar:3,
+    thursday:4, guruvar:4, bruhaspativar:4, guruvaar:4,
+    friday:5, shukrawar:5, shukravar:5, shukravaar:5,
+    saturday:6, shaniwar:6, shanivar:6, shanivari:6, shanivaar:6,
+  };
   function getNextDayDate(targetDay) { const d=new Date(); const diff=(targetDay-d.getDay()+7)%7||7; d.setDate(d.getDate()+diff); return formatDate(d); }
   let detectedDay = null;
   for (const [name,num] of Object.entries(DAY_NAMES)) { if (t.includes(name)){detectedDay=num;break;} }
@@ -1383,6 +1569,52 @@ async function sendReminders() {
   } catch (e) { console.error("Reminder error:", e.message); }
 }
 setInterval(sendReminders, 30*60*1000);
+
+// Overdue check — runs every hour, alerts at 9 AM if overdue orders exist
+async function checkOverdueOrders() {
+  const now = new Date();
+  if (now.getHours() !== 9) return;
+  try {
+    const all = await dbSelect("bookings", "status=neq.delivered&status=neq.cancelled&order=created_at.desc");
+    const overdue = all.filter(b => {
+      if (!b.delivery_date) return false;
+      const parts = b.delivery_date.match(/(\d+)\s+(\w+)/);
+      if (!parts) return false;
+      try {
+        const d = new Date(`${parts[2]} ${parts[1]} ${now.getFullYear()}`);
+        d.setHours(0,0,0,0);
+        const today = new Date(); today.setHours(0,0,0,0);
+        return d < today;
+      } catch { return false; }
+    });
+    if (overdue.length > 0) {
+      const list = overdue.map(b => `${b.order_id} - ${b.name} (${b.delivery_date})`).join("\n");
+      const msg = `Overdue orders alert - ${overdue.length} order(s) past delivery date:\n\n${list}\n\nPlease follow up with customers.`;
+      await sendMessage(OWNER_NUMBER, msg, "1136879376186203");
+    }
+  } catch (e) { console.error("Overdue check error:", e.message); }
+}
+setInterval(checkOverdueOrders, 60 * 60 * 1000);
+
+// Rates-but-no-booking tracker
+const ratesViewedAt = {};
+async function trackRatesNoBooking(phone, branch, phoneNumberId) {
+  ratesViewedAt[phone] = Date.now();
+  setTimeout(async () => {
+    // Check if they booked within 15 min
+    const active = await getActiveOrder(phone).catch(() => null);
+    const lead   = await dbSelect("leads", `phone=eq.${phone}`).catch(() => []);
+    const stage  = lead[0]?.stage;
+    if (stage !== "converted" && !active) {
+      const br = branch || DEFAULT_BRANCH;
+      await sendMessage(OWNER_NUMBER,
+        `Warm lead - ${br.name}\n\nPhone: +${phone}\nChecked rates but did not book in 15 min.\n\nConsider following up.`,
+        phoneNumberId || "1136879376186203"
+      );
+      await logLead(phone, "dropped", "viewed rates, no booking", br.slug, phoneNumberId);
+    }
+  }, 15 * 60 * 1000);
+}
 
 // Weekly summary
 async function sendWeeklySummary() {
@@ -1506,16 +1738,26 @@ app.patch("/bookings/:orderId", async (req,res) => {
     const finalStatus = updateData.status||status;
     const amountLine  = b?.amount?`\nBill: Rs ${b.amount} - payable via UPI QR or cash.`:"";
     const msgs = {
-      picked:      `Washkart - Clothes picked up.\n\n${b?.service_type?`Service: ${b.service_type}\n`:""}${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}\nNeed it faster? Reply express for 120-minute service.\nOrder: ${orderId}`,
-      inprogress:  `Washkart - Cleaning has started.\n\n${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}We are taking good care of your clothes.\nOrder: ${orderId}`,
-      outfordelivery: `Washkart - Your order is out for delivery.\n\nFresh clothes on the way.${amountLine}\nOrder: ${orderId}`,
-      delivered:   `Washkart - Your clothes have been delivered.\n\nThank you for choosing us.${amountLine}\n\nPayment done? Reply paid.`,
+      picked:      `🚗 Picked up!\n\n${b?.service_type?`Service: ${b.service_type}\n`:""}${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}\nOrder: ${orderId}`,
+      inprogress:  `🫧 Cleaning started!\n\n${updateData.delivery_date?`Expected delivery: ${updateData.delivery_date}\n`:""}Your clothes are being carefully cleaned.\nOrder: ${orderId}`,
+      outfordelivery: `🚚 Your order is on the way!\n\nFresh clothes arriving soon.${amountLine}\nOrder: ${orderId}`,
+      delivered:   `✅ Delivered!\n\nYour clothes are back — fresh and clean.${amountLine}\n\nPayment done? Reply *paid*.`,
     };
     if (msgs[finalStatus]&&b?.phone) {
       await sendMessage(b.phone,msgs[finalStatus],numId);
+      // Send express button after picked up
+      if (finalStatus==="picked") {
+        setTimeout(async()=>{
+          await sendButtons(b.phone,
+            "Need your clothes faster?",
+            [{id:"express_yes",title:"⚡ Express (120 min)"},{id:"express_no",title:"3 days is fine"}],
+            numId
+          );
+        }, 1500);
+      }
       if (finalStatus==="delivered") {
         setTimeout(async()=>{
-          await sendButtons(b.phone,"How was your experience?",
+          await sendButtons(b.phone,"How was your experience? ⭐",
             [{id:"rating_excellent",title:"Excellent"},{id:"rating_good",title:"Good"},{id:"rating_poor",title:"Needs work"}],numId
           );
           sessionCache[b.phone]=sessionCache[b.phone]||{step:"idle",booking:{},history:[]};

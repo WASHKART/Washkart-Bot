@@ -4,1475 +4,1356 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Washkart Admin</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root {
-  --green:#1a7c4a;--green-light:#e8f5ef;--green-mid:#a8d5bc;
-  --dark:#0f1f17;--text:#1a2e24;--muted:#6b8f7a;--bg:#f5f9f7;
-  --white:#fff;--border:#d4e8dc;--orange:#e07b39;--blue:#2563eb;--red:#dc2626;--purple:#7c3aed;
-}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+:root{
+  --green:#16a34a;--green-light:#f0fdf4;--green-mid:#bbf7d0;--green-dark:#14532d;
+  --blue:#2563eb;--blue-light:#eff6ff;--orange:#ea580c;--orange-light:#fff7ed;
+  --red:#dc2626;--red-light:#fef2f2;--purple:#7c3aed;--purple-light:#f5f3ff;
+  --text:#111827;--muted:#6b7280;--border:#e5e7eb;--bg:#f9fafb;--white:#fff;
+  --shadow:0 1px 3px rgba(0,0,0,.1);--shadow-md:0 4px 6px rgba(0,0,0,.07);
+}
+body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--text);font-size:14px;}
 
-/* HEADER */
-.header{background:var(--dark);padding:0 1.5rem;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100;}
-.header-left{display:flex;align-items:center;gap:12px;}
-.logo{font-family:'DM Mono',monospace;color:#fff;font-size:15px;letter-spacing:.05em;}
-.logo span{color:#4ade80;}
-.live-badge{background:#4ade80;color:var(--dark);font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;font-family:'DM Mono',monospace;}
-.header-right{font-family:'DM Mono',monospace;color:var(--muted);font-size:12px;}
-.header-actions{display:flex;gap:8px;}
-.btn{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:'DM Sans',sans-serif;transition:all .15s;}
+/* LAYOUT */
+.layout{display:flex;height:100vh;overflow:hidden;}
+.sidebar{width:220px;background:#111827;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{background:var(--white);border-bottom:1px solid var(--border);padding:0 1.5rem;height:56px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.content{flex:1;overflow-y:auto;padding:1.5rem;}
+
+/* SIDEBAR */
+.sidebar-logo{padding:1.2rem 1rem;border-bottom:1px solid #1f2937;}
+.logo-text{font-size:16px;font-weight:700;color:#fff;letter-spacing:.05em;}
+.logo-text span{color:#4ade80;}
+.logo-badge{font-size:10px;background:#4ade80;color:#111;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:600;}
+.sidebar-section{padding:.5rem 0;}
+.sidebar-label{font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .3rem;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:.6rem 1rem;color:#9ca3af;cursor:pointer;transition:all .15s;font-size:13px;font-weight:500;}
+.nav-item:hover{background:#1f2937;color:#fff;}
+.nav-item.active{background:#1f2937;color:#4ade80;}
+.nav-item .icon{font-size:16px;width:20px;text-align:center;}
+.nav-badge{margin-left:auto;background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;}
+
+/* TOPBAR */
+.topbar-left{display:flex;align-items:center;gap:12px;}
+.page-title{font-size:15px;font-weight:600;}
+.topbar-right{display:flex;align-items:center;gap:8px;}
+.clock{font-size:12px;color:var(--muted);font-family:"JetBrains Mono",monospace;}
+
+/* BUTTONS */
+.btn{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:"Inter",sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:var(--green);color:#fff;}
-.btn-primary:hover{background:#155f38;}
-.btn-outline{background:transparent;border:1px solid #4ade8044;color:#4ade80;}
-.btn-outline:hover{background:#4ade8022;}
+.btn-primary:hover{background:#15803d;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-outline:hover{background:var(--bg);}
+.btn-ghost{background:var(--green-light);color:var(--green);border:1px solid var(--green-mid);}
+.btn-ghost:hover{background:var(--green-mid);}
 .btn-danger{background:var(--red);color:#fff;}
 .btn-danger:hover{background:#b91c1c;}
 .btn-sm{padding:4px 10px;font-size:12px;}
-.btn-ghost{background:var(--green-light);border:1px solid var(--green-mid);color:var(--green);}
-.btn-ghost:hover{background:var(--green-mid);}
+.btn-icon{padding:6px;border-radius:8px;background:transparent;border:1px solid var(--border);cursor:pointer;font-size:14px;}
+.btn-icon:hover{background:var(--bg);}
 
-/* NAV TABS */
-.nav-tabs{background:var(--white);border-bottom:1px solid var(--border);padding:0 1.5rem;display:flex;gap:0;overflow-x:auto;}
-.nav-tab{padding:12px 18px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;}
-.nav-tab.active{color:var(--green);border-bottom-color:var(--green);}
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);}
+.card-header{padding:1rem 1.2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.card-title{font-size:14px;font-weight:600;}
+.card-body{padding:1.2rem;}
 
-/* LAYOUT */
-.container{max-width:1280px;margin:0 auto;padding:1.5rem;}
+/* STAT CARDS */
+.stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem;}
+.stat{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.1rem;position:relative;overflow:hidden;cursor:pointer;transition:box-shadow .15s;}
+.stat:hover{box-shadow:var(--shadow-md);}
+.stat-bar{position:absolute;top:0;left:0;right:0;height:3px;}
+.stat-label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.stat-value{font-size:28px;font-weight:700;line-height:1;margin-bottom:4px;}
+.stat-sub{font-size:11px;color:var(--muted);}
 
-/* STATS */
-.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1.5rem;}
-.stat-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.1rem 1.3rem;position:relative;overflow:hidden;}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--green);}
-.stat-card.orange::before{background:var(--orange);}
-.stat-card.blue::before{background:var(--blue);}
-.stat-card.red::before{background:var(--red);}
-.stat-card.purple::before{background:var(--purple);}
-.stat-label{font-size:11px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
-.stat-value{font-family:'DM Mono',monospace;font-size:26px;font-weight:500;}
-.stat-sub{font-size:11px;color:var(--muted);margin-top:3px;}
-
-/* MAIN GRID */
-.main-grid{display:grid;grid-template-columns:1fr 320px;gap:1rem;}
-
-/* PANELS */
-.panel{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1rem;}
-.panel-header{padding:.9rem 1.3rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
-.panel-title{font-size:14px;font-weight:600;}
-
-/* SEARCH */
-.search-bar{padding:.8rem 1.3rem;border-bottom:1px solid var(--border);display:flex;gap:8px;}
-.search-input{flex:1;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
-.search-input:focus{outline:none;border-color:var(--green);}
-
-/* STATUS FILTER TABS */
-.filter-tabs{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 1.3rem;overflow-x:auto;}
-.filter-tab{padding:9px 14px;font-size:12px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;margin-bottom:-1px;}
-.filter-tab.active{color:var(--green);border-bottom-color:var(--green);}
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;}
 
 /* TABLE */
 .table-wrap{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;font-size:13px;}
-th{text-align:left;padding:9px 14px;color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
-td{padding:11px 14px;border-bottom:1px solid #f0f7f3;vertical-align:middle;}
+th{text-align:left;padding:9px 12px;color:var(--muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--bg);white-space:nowrap;}
+td{padding:10px 12px;border-bottom:1px solid #f3f4f6;vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:var(--green-light);}
-tr.overdue td{background:#fff5f5;}
-tr.overdue:hover td{background:#fee2e2;}
+tr:hover td{background:#fafafa;}
+tr.overdue td{background:#fef2f2;}
 
 /* STATUS BADGES */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;}
-.badge-pending{background:#fef3c7;color:#92400e;}
-.badge-picked{background:#dbeafe;color:#1e40af;}
-.badge-inprogress{background:#ede9fe;color:#5b21b6;}
-.badge-outfordelivery{background:#fed7aa;color:#9a3412;}
-.badge-delivered{background:#dcfce7;color:#166534;}
-.badge-cancelled{background:#fee2e2;color:#991b1b;}
-.badge-walkin{background:#f0f9ff;color:#0369a1;font-size:10px;}
-.badge-call{background:#fdf4ff;color:#7e22ce;font-size:10px;}
-.badge-whatsapp{background:#f0fdf4;color:#15803d;font-size:10px;}
-.overdue-tag{font-size:10px;color:var(--red);font-weight:600;}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;}
+.b-pending{background:#fef3c7;color:#92400e;}
+.b-picked{background:#dbeafe;color:#1e40af;}
+.b-inprogress{background:#ede9fe;color:#5b21b6;}
+.b-outfordelivery{background:#fed7aa;color:#9a3412;}
+.b-delivered{background:#dcfce7;color:#166534;}
+.b-cancelled{background:#fee2e2;color:#991b1b;}
+.b-paid{background:#dcfce7;color:#166534;}
+.b-unpaid{background:#fee2e2;color:#991b1b;}
+.b-partial{background:#fef3c7;color:#92400e;}
+.b-walkin{background:#f0f9ff;color:#0369a1;}
+.b-whatsapp{background:#f0fdf4;color:#166534;}
+.b-enquired{background:#eff6ff;color:#1d4ed8;}
+.b-booking_started{background:#fef3c7;color:#92400e;}
+.b-dropped{background:#fee2e2;color:#991b1b;}
+.b-converted{background:#dcfce7;color:#166534;}
 
-/* STATUS SELECT */
-.status-select{border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px;background:var(--white);color:var(--text);cursor:pointer;font-family:'DM Sans',sans-serif;}
+/* KANBAN */
+.kanban{display:flex;gap:1rem;overflow-x:auto;padding-bottom:1rem;}
+.kanban-col{min-width:220px;flex-shrink:0;}
+.kanban-header{padding:.6rem .8rem;border-radius:8px 8px 0 0;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:space-between;}
+.kanban-cards{min-height:100px;background:#f3f4f6;border-radius:0 0 8px 8px;padding:.5rem;}
+.k-card{background:var(--white);border:1px solid var(--border);border-radius:8px;padding:.7rem;margin-bottom:.5rem;cursor:pointer;transition:box-shadow .15s;font-size:12px;}
+.k-card:hover{box-shadow:var(--shadow-md);}
+.k-card-name{font-weight:600;font-size:13px;margin-bottom:3px;}
+.k-card-meta{color:var(--muted);line-height:1.5;}
+.k-card-amount{font-weight:600;color:var(--green);margin-top:4px;}
 
-/* ORDER ID */
-.order-id{font-family:'DM Mono',monospace;font-size:12px;color:var(--green);font-weight:500;}
+/* CALENDAR */
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;}
+.cal-header{text-align:center;padding:6px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;}
+.cal-day{min-height:80px;border:1px solid var(--border);border-radius:6px;padding:4px;background:var(--white);font-size:11px;}
+.cal-day.today{border-color:var(--green);background:var(--green-light);}
+.cal-day.other-month{background:var(--bg);opacity:.5;}
+.cal-date{font-weight:600;margin-bottom:3px;font-size:12px;}
+.cal-event{border-radius:3px;padding:1px 4px;margin-bottom:2px;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cal-pickup{background:#dbeafe;color:#1e40af;}
+.cal-delivery{background:#fed7aa;color:#9a3412;}
 
-/* TODAY PANELS */
-.today-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;display:flex;flex-direction:column;gap:3px;}
-.today-item:last-child{border-bottom:none;}
-.today-name{font-size:13px;font-weight:600;}
-.today-address{font-size:12px;color:var(--muted);}
-.today-phone{font-size:12px;color:var(--green);font-family:'DM Mono',monospace;}
+/* CHAT */
+.chat-layout{display:grid;grid-template-columns:280px 1fr;gap:1rem;height:calc(100vh - 180px);}
+.chat-list{background:var(--white);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;}
+.chat-list-search{padding:.6rem;border-bottom:1px solid var(--border);}
+.chat-list-items{overflow-y:auto;flex:1;}
+.chat-item{padding:.7rem .9rem;border-bottom:1px solid #f3f4f6;cursor:pointer;transition:background .1s;}
+.chat-item:hover{background:var(--bg);}
+.chat-item.active{background:var(--green-light);border-left:3px solid var(--green);}
+.chat-item-name{font-weight:500;font-size:13px;margin-bottom:2px;}
+.chat-item-preview{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-item-time{font-size:10px;color:var(--muted);}
+.chat-panel{background:var(--white);border:1px solid var(--border);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;}
+.chat-panel-header{padding:.8rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.chat-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.5rem;background:#f0f0f0;}
+.msg-bubble{max-width:70%;padding:.6rem .9rem;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;}
+.msg-customer{background:var(--white);border-radius:0 12px 12px 12px;align-self:flex-start;box-shadow:var(--shadow);}
+.msg-bot{background:#dcfce7;border-radius:12px 0 12px 12px;align-self:flex-end;}
+.msg-time{font-size:10px;color:var(--muted);margin-top:2px;}
+.chat-reply{padding:.8rem;border-top:1px solid var(--border);display:flex;gap:.5rem;}
+.chat-reply-input{flex:1;border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;font-size:13px;font-family:"Inter",sans-serif;resize:none;max-height:100px;}
+.chat-reply-input:focus{outline:none;border-color:var(--green);}
+.chat-session-info{padding:.5rem 1rem;font-size:11px;color:var(--muted);border-top:1px solid var(--border);background:var(--bg);}
 
-/* CUSTOMER LIST */
-.cust-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;display:flex;align-items:center;gap:10px;}
-.cust-item:last-child{border-bottom:none;}
-.cust-avatar{width:32px;height:32px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--green);flex-shrink:0;}
-.cust-info{flex:1;min-width:0;}
-.cust-name{font-size:13px;font-weight:500;}
-.cust-phone{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+/* LEADS FUNNEL */
+.funnel{display:flex;gap:.5rem;margin-bottom:1rem;}
+.funnel-stage{flex:1;text-align:center;padding:.8rem;border-radius:10px;cursor:pointer;transition:all .15s;border:2px solid transparent;}
+.funnel-stage:hover{border-color:currentColor;}
+.funnel-count{font-size:24px;font-weight:700;}
+.funnel-label{font-size:11px;font-weight:500;margin-top:2px;}
 
-/* RATINGS */
-.rating-item{padding:11px 1.3rem;border-bottom:1px solid #f0f7f3;}
-.rating-item:last-child{border-bottom:none;}
-.stars{color:#f59e0b;font-size:14px;}
+/* ANALYTICS CHARTS */
+.chart-bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.chart-bar-label{font-size:12px;width:100px;text-align:right;color:var(--muted);}
+.chart-bar-track{flex:1;background:var(--bg);border-radius:4px;height:10px;overflow:hidden;}
+.chart-bar-fill{height:100%;border-radius:4px;transition:width .5s;}
+.chart-bar-val{font-size:12px;color:var(--muted);width:60px;}
 
-/* EMPTY */
-.empty{padding:2.5rem;text-align:center;color:var(--muted);font-size:13px;}
-.empty-icon{font-size:28px;margin-bottom:8px;}
-
-/* MODAL */
-.modal-overlay{position:fixed;inset:0;background:#00000066;z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;}
-.modal-overlay.open{display:flex;}
-.modal{background:var(--white);border-radius:16px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto;}
-.modal-header{padding:1.2rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.modal-title{font-size:15px;font-weight:600;}
-.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;}
-.modal-body{padding:1.5rem;}
-.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
-
-/* FORM */
+/* FORMS */
 .form-group{margin-bottom:1rem;}
-.form-label{display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;}
-.form-input,.form-select,.form-textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--white);color:var(--text);}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
+.form-input,.form-select,.form-textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:"Inter",sans-serif;background:var(--white);color:var(--text);}
 .form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--green);}
 .form-textarea{resize:vertical;min-height:80px;}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem;}
 
-/* Walk-in info banner */
-.walkin-banner{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:1rem;display:none;}
-.walkin-banner.show{display:block;}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:#00000070;z-index:200;display:none;align-items:center;justify-content:center;padding:1rem;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--white);border-radius:16px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal-header{padding:1.2rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-size:15px;font-weight:600;}
+.modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+.modal-body{padding:1.5rem;}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;}
 
-/* Message TEMPLATES */
-.template-btn{display:block;width:100%;text-align:left;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;font-size:12px;background:var(--bg);transition:all .15s;}
-.template-btn:hover{border-color:var(--green);background:var(--green-light);}
-.template-btn strong{display:block;font-size:13px;margin-bottom:2px;}
-
-/* PAGE SECTIONS */
-.page-section{display:none;}
-.page-section.active{display:block;}
-
-/* REVENUE CARDS */
-.revenue-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem;}
-.rev-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1.2rem;text-align:center;}
-.rev-label{font-size:12px;color:var(--muted);margin-bottom:6px;}
-.rev-value{font-family:'DM Mono',monospace;font-size:22px;color:var(--green);font-weight:500;}
-
-/* BRANCH SWITCHER */
-.branch-switcher{display:flex;gap:6px;align-items:center;}
-.branch-btn{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid #4ade8044;color:#9ca3af;background:transparent;transition:all .15s;}
-.branch-btn.active{background:#4ade80;color:var(--dark);border-color:#4ade80;}
-.badge-payment-unpaid{background:#fee2e2;color:#991b1b;}
-.badge-payment-paid{background:#dcfce7;color:#166534;}
-.badge-payment-partial{background:#fef3c7;color:#92400e;}
-
-/* TOAST */
-.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--dark);color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:500;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none;}
+/* MISC */
+.empty{padding:2.5rem;text-align:center;color:var(--muted);}
+.empty-icon{font-size:32px;margin-bottom:8px;}
+.search-input{width:100%;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font-size:13px;font-family:"Inter",sans-serif;background:var(--bg);}
+.search-input:focus{outline:none;border-color:var(--green);background:var(--white);}
+.status-select{border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px;background:var(--white);cursor:pointer;font-family:"Inter",sans-serif;}
+.tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:500;}
+.overdue-tag{background:#fee2e2;color:#991b1b;}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:#111827;color:#fff;padding:12px 18px;border-radius:10px;font-size:13px;z-index:500;opacity:0;transform:translateY(8px);transition:all .3s;pointer-events:none;}
 .toast.show{opacity:1;transform:translateY(0);}
 .toast.success{background:var(--green);}
 .toast.error{background:var(--red);}
+.divider{border:none;border-top:1px solid var(--border);margin:1rem 0;}
+.info-row{display:flex;gap:.5rem;align-items:flex-start;font-size:13px;margin-bottom:.5rem;}
+.info-label{color:var(--muted);min-width:80px;font-size:12px;}
+.walkin-banner{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:1rem;display:none;}
+.walkin-banner.show{display:block;}
 
-@media(max-width:900px){
-  .stats{grid-template-columns:repeat(2,1fr);}
-  .main-grid{grid-template-columns:1fr;}
-  .form-row{grid-template-columns:1fr;}
-  .revenue-grid{grid-template-columns:1fr;}
+/* ALERT BANNER */
+.alert-banner{padding:10px 1.5rem;font-size:13px;font-weight:500;display:none;border-bottom:1px solid transparent;cursor:pointer;}
+.alert-banner.show{display:block;}
+.alert-banner.red{background:#fee2e2;color:#991b1b;border-color:#fecaca;}
+.alert-banner.orange{background:#fff7ed;color:#9a3412;border-color:#fed7aa;}
+
+/* CUSTOMER PROFILE PANEL */
+.profile-grid{display:grid;grid-template-columns:280px 1fr;gap:1rem;}
+
+/* PAGINATION */
+.pagination{display:flex;align-items:center;justify-content:space-between;padding:.8rem 1.2rem;border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+
+@media(max-width:1100px){
+  .stats-grid{grid-template-columns:repeat(3,1fr);}
+  .sidebar{width:60px;}
+  .nav-item span{display:none;}
+  .sidebar-label{display:none;}
+  .sidebar-logo .logo-text{display:none;}
 }
-@media(max-width:500px){
-  .stats{grid-template-columns:1fr 1fr;}
-  .header-actions .btn span{display:none;}
+@media(max-width:768px){
+  .stats-grid{grid-template-columns:1fr 1fr;}
+  .grid-2,.grid-3,.form-row{grid-template-columns:1fr;}
+  .chat-layout{grid-template-columns:1fr;}
+  .profile-grid{grid-template-columns:1fr;}
+  .kanban{flex-direction:column;}
 }
 </style>
 </head>
 <body>
 
-<div class="header">
-  <div class="header-left">
-    <div class="logo">WASH<span>KART</span> admin</div>
-    <div class="live-badge">LIVE</div>
-    <div class="branch-switcher">
-      <button class="branch-btn active" onclick="switchBranch('all',this)">All</button>
-      <button class="branch-btn" onclick="switchBranch('bavdhan',this)">Bavdhan</button>
-      <button class="branch-btn" onclick="switchBranch('baner',this)">Baner</button>
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">WASH<span>KART</span><span class="logo-badge">LIVE</span></div>
     </div>
-  </div>
-  <div class="header-actions">
-    <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 <span>Send Message</span></button>
-    <button class="btn btn-primary btn-sm" onclick="openModal('modal-order')">+ <span>New Order</span></button>
-  </div>
-  <div class="header-right" id="clock"></div>
-</div>
-
-<!-- NAV TABS -->
-<div class="nav-tabs">
-  <div class="nav-tab active" onclick="showPage('orders',this)">📋 Orders</div>
-  <div class="nav-tab" onclick="showPage('today',this)">📦 Today</div>
-  <div class="nav-tab" onclick="showPage('customers',this)">👥 Customers</div>
-  <div class="nav-tab" onclick="showPage('ratings',this)">⭐ Ratings</div>
-  <div class="nav-tab" onclick="showPage('revenue',this)">💰 Revenue</div>
-  <div class="nav-tab" onclick="showPage('payments',this)">💳 Payments</div>
-  <div class="nav-tab" onclick="showPage('leads',this)">🎯 Leads</div>
-  <div class="nav-tab" onclick="showPage('conversations',this)">💬 Chats</div>
-</div>
-
-<div class="container">
-
-  <!-- STATS -->
-  <div class="stats">
-    <div class="stat-card">
-      <div class="stat-label">Total Orders</div>
-      <div class="stat-value" id="stat-total">0</div>
-      <div class="stat-sub">All time</div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <div class="nav-item active" onclick="showPage('home',this)" data-page="home"><span class="icon">🏠</span><span>Home</span></div>
+      <div class="nav-item" onclick="showPage('calendar',this)" data-page="calendar"><span class="icon">📅</span><span>Calendar</span></div>
     </div>
-    <div class="stat-card orange">
-      <div class="stat-label">Today Pickups</div>
-      <div class="stat-value" id="stat-today">0</div>
-      <div class="stat-sub">Scheduled</div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Operations</div>
+      <div class="nav-item" onclick="showPage('kanban',this)" data-page="kanban"><span class="icon">📋</span><span>Orders</span></div>
+      <div class="nav-item" onclick="showPage('orders',this)" data-page="orders"><span class="icon">📊</span><span>All Orders</span></div>
+      <div class="nav-item" onclick="showPage('payments',this)" data-page="payments"><span class="icon">💳</span><span>Payments</span></div>
     </div>
-    <div class="stat-card blue">
-      <div class="stat-label">Today Deliveries</div>
-      <div class="stat-value" id="stat-deliveries">0</div>
-      <div class="stat-sub">Due today</div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Customers</div>
+      <div class="nav-item" onclick="showPage('leads',this)" data-page="leads"><span class="icon">🎯</span><span>Leads</span><span class="nav-badge" id="leads-badge" style="display:none">0</span></div>
+      <div class="nav-item" onclick="showPage('customers',this)" data-page="customers"><span class="icon">👥</span><span>Customers</span></div>
+      <div class="nav-item" onclick="showPage('chats',this)" data-page="chats"><span class="icon">💬</span><span>Chats</span></div>
     </div>
-    <div class="stat-card red">
-      <div class="stat-label">Overdue</div>
-      <div class="stat-value" id="stat-overdue">0</div>
-      <div class="stat-sub">Past delivery date</div>
-    </div>
-    <div class="stat-card purple">
-      <div class="stat-label">Customers</div>
-      <div class="stat-value" id="stat-customers">0</div>
-      <div class="stat-sub">Unique</div>
-    </div>
-    <div class="stat-card red">
-      <div class="stat-label">Unpaid</div>
-      <div class="stat-value" id="stat-unpaid">0</div>
-      <div class="stat-sub" id="stat-unpaid-amt">₹0 pending</div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Reports</div>
+      <div class="nav-item" onclick="showPage('revenue',this)" data-page="revenue"><span class="icon">💰</span><span>Revenue</span></div>
+      <div class="nav-item" onclick="showPage('analytics',this)" data-page="analytics"><span class="icon">📈</span><span>Analytics</span></div>
+      <div class="nav-item" onclick="showPage('ratings',this)" data-page="ratings"><span class="icon">⭐</span><span>Ratings</span></div>
     </div>
   </div>
 
-  <!-- ═══ ORDERS PAGE ═══ -->
-  <div id="page-orders" class="page-section active">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">All Bookings</div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
-          <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
+  <!-- MAIN -->
+  <div class="main">
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <div class="page-title" id="page-title">Home</div>
+        <div id="branch-switcher" style="display:flex;gap:4px;margin-left:8px">
+          <button class="btn btn-sm btn-primary" onclick="switchBranch('all',this)">All</button>
+          <button class="btn btn-sm btn-outline" onclick="switchBranch('bavdhan',this)">Bavdhan</button>
+          <button class="btn btn-sm btn-outline" onclick="switchBranch('baner',this)">Baner</button>
         </div>
       </div>
-      <div class="search-bar">
-        <input class="search-input" id="search-input" placeholder="🔍 Search by name, phone, order ID..." oninput="currentPage=1;renderBookings()">
-        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('search-input').value='';renderBookings()">✕</button>
-      </div>
-      <div class="filter-tabs">
-        <div class="filter-tab active" onclick="filterTab('all',this)">All</div>
-        <div class="filter-tab" onclick="filterTab('pending',this)">⏳ Pending</div>
-        <div class="filter-tab" onclick="filterTab('picked',this)">🚗 Picked</div>
-        <div class="filter-tab" onclick="filterTab('inprogress',this)">🫧 In Progress</div>
-        <div class="filter-tab" onclick="filterTab('outfordelivery',this)">🚚 Out for Delivery</div>
-        <div class="filter-tab" onclick="filterTab('delivered',this)">✅ Delivered</div>
-        <div class="filter-tab" onclick="filterTab('cancelled',this)">❌ Cancelled</div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Address</th>
-              <th>Date & Slot</th>
-              <th>Service</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="bookings-table">
-            <tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- PAGINATION -->
-      <div id="pagination-bar" style="display:flex;align-items:center;justify-content:space-between;padding:10px 1.3rem;border-top:1px solid var(--border);font-size:13px;color:var(--muted);">
-        <span id="pagination-info"></span>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-ghost btn-sm" id="btn-prev" onclick="changePage(-1)">← Prev</button>
-          <button class="btn btn-ghost btn-sm" id="btn-next" onclick="changePage(1)">Next →</button>
-        </div>
+      <div class="topbar-right">
+        <div class="clock" id="clock"></div>
+        <button class="btn btn-outline btn-sm" onclick="openModal('modal-message')">💬 Message</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('modal-order')">+ New Order</button>
       </div>
     </div>
-  </div>
 
-  <!-- ═══ TODAY PAGE ═══ -->
-  <div id="page-today" class="page-section">
-    <div class="main-grid">
-      <div>
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">📦 Today's Pickups</div></div>
-          <div id="today-pickups"><div class="empty"><div class="empty-icon">🎉</div>No pickups today</div></div>
-        </div>
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">🚚 Today's Deliveries</div></div>
-          <div id="today-deliveries"><div class="empty"><div class="empty-icon">✅</div>No deliveries today</div></div>
-        </div>
-      </div>
-      <div>
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">⚠️ Overdue Orders</div></div>
-          <div id="overdue-list"><div class="empty"><div class="empty-icon">✅</div>None overdue</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
+    <!-- ALERT BANNER -->
+    <div class="alert-banner red" id="overdue-banner" onclick="showPage('kanban',document.querySelector('[data-page=kanban]'))"></div>
 
-  <!-- ═══ CUSTOMERS PAGE ═══ -->
-  <div id="page-customers" class="page-section">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">👥 All Customers</div>
-        <span id="cust-count" style="font-size:12px;color:var(--muted)"></span>
-      </div>
-      <div class="search-bar">
-        <input class="search-input" id="cust-search" placeholder="🔍 Search customers..." oninput="renderCustomers()">
-      </div>
-      <div id="customers-list"><div class="empty"><div class="empty-icon">👤</div>No customers yet</div></div>
-    </div>
-  </div>
+    <!-- CONTENT -->
+    <div class="content">
 
-  <!-- ═══ RATINGS PAGE ═══ -->
-  <div id="page-ratings" class="page-section">
-    <div class="main-grid">
-      <div class="panel">
-        <div class="panel-header"><div class="panel-title">⭐ Customer Ratings</div></div>
-        <div id="ratings-list"><div class="empty"><div class="empty-icon">⭐</div>No ratings yet</div></div>
-      </div>
-      <div>
-        <div class="panel">
-          <div class="panel-header"><div class="panel-title">📊 Rating Summary</div></div>
-          <div style="padding:1.3rem;" id="ratings-summary">
-            <div class="empty">No data yet</div>
+      <!-- ═══ HOME ═══ -->
+      <div id="page-home" class="page-section">
+        <div class="stats-grid">
+          <div class="stat" onclick="showPage('orders',document.querySelector('[data-page=orders]'))">
+            <div class="stat-bar" style="background:var(--green)"></div>
+            <div class="stat-label">Total Orders</div>
+            <div class="stat-value" id="s-total">0</div>
+            <div class="stat-sub">All time</div>
+          </div>
+          <div class="stat" onclick="showPage('kanban',document.querySelector('[data-page=kanban]'))">
+            <div class="stat-bar" style="background:var(--orange)"></div>
+            <div class="stat-label">Today Pickups</div>
+            <div class="stat-value" id="s-today">0</div>
+            <div class="stat-sub">Scheduled</div>
+          </div>
+          <div class="stat" onclick="showPage('kanban',document.querySelector('[data-page=kanban]'))">
+            <div class="stat-bar" style="background:var(--blue)"></div>
+            <div class="stat-label">Today Deliveries</div>
+            <div class="stat-value" id="s-deliveries">0</div>
+            <div class="stat-sub">Due today</div>
+          </div>
+          <div class="stat" onclick="showPage('payments',document.querySelector('[data-page=payments]'))">
+            <div class="stat-bar" style="background:var(--red)"></div>
+            <div class="stat-label">Unpaid</div>
+            <div class="stat-value" id="s-unpaid">0</div>
+            <div class="stat-sub" id="s-unpaid-amt">Rs 0 pending</div>
+          </div>
+          <div class="stat" onclick="showPage('leads',document.querySelector('[data-page=leads]'))">
+            <div class="stat-bar" style="background:var(--purple)"></div>
+            <div class="stat-label">New Leads</div>
+            <div class="stat-value" id="s-leads">0</div>
+            <div class="stat-sub">Today</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Today pickups -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">📦 Today's Pickups</div></div>
+            <div id="home-pickups"><div class="empty"><div class="empty-icon">🎉</div>No pickups today</div></div>
+          </div>
+          <!-- Pending payments -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">💳 Pending Payments</div><span id="home-pending-total" style="font-size:12px;font-weight:600;color:var(--red)"></span></div>
+            <div id="home-payments"><div class="empty"><div class="empty-icon">✅</div>All payments collected</div></div>
+          </div>
+        </div>
+        <div style="height:1rem"></div>
+        <div class="grid-2">
+          <!-- Active orders pipeline -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">🔄 Active Orders</div></div>
+            <div class="card-body" id="home-pipeline"></div>
+          </div>
+          <!-- Recent leads -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">🎯 Recent Leads</div><button class="btn btn-ghost btn-sm" onclick="showPage('leads',document.querySelector('[data-page=leads]'))">View all</button></div>
+            <div id="home-leads"><div class="empty"><div class="empty-icon">🎯</div>No recent leads</div></div>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- ═══ REVENUE PAGE ═══ -->
-  <div id="page-revenue" class="page-section">
-    <div class="revenue-grid">
-      <div class="rev-card">
-        <div class="rev-label">Collected This Week</div>
-        <div class="rev-value" id="rev-week">₹0</div>
-      </div>
-      <div class="rev-card">
-        <div class="rev-label">Collected This Month</div>
-        <div class="rev-value" id="rev-month">₹0</div>
-      </div>
-      <div class="rev-card">
-        <div class="rev-label">Total Collected</div>
-        <div class="rev-value" id="rev-total">₹0</div>
-      </div>
-    </div>
-    <div class="revenue-grid">
-      <div class="rev-card">
-        <div class="rev-label">Bavdhan Collected</div>
-        <div class="rev-value" id="rev-bavdhan">₹0</div>
-      </div>
-      <div class="rev-card">
-        <div class="rev-label">Baner Collected</div>
-        <div class="rev-value" id="rev-baner">₹0</div>
-      </div>
-      <div class="rev-card">
-        <div class="rev-label">Total Pending</div>
-        <div class="rev-value" style="color:var(--red)" id="rev-pending">₹0</div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header"><div class="panel-title">📊 Orders by Service</div></div>
-      <div style="padding:1.3rem;" id="service-breakdown"></div>
-    </div>
-    <div class="panel" style="margin-top:1rem;">
-      <div class="panel-header"><div class="panel-title">📊 Orders by Source</div></div>
-      <div style="padding:1.3rem;" id="source-breakdown"></div>
-    </div>
-  </div>
-
-  <!-- ═══ PAYMENTS PAGE ═══ -->
-  <div id="page-payments" class="page-section">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">💳 Pending Payments</div>
-        <span id="pending-total-badge" style="font-size:13px;font-weight:600;color:var(--red)"></span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Customer</th>
-              <th>Branch</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="payments-table">
-            <tr><td colspan="6" class="empty"><div class="empty-icon">💳</div>Loading...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="panel" style="margin-top:1rem;">
-      <div class="panel-header"><div class="panel-title">✅ Recently Paid</div></div>
-      <div id="paid-list"><div class="empty"><div class="empty-icon">✅</div>No paid orders yet</div></div>
-    </div>
-  </div>
-
-
-  <!-- ═══ LEADS PAGE ═══ -->
-  <div id="page-leads" class="page-section">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">Leads</div>
-        <span id="leads-count" style="font-size:12px;color:var(--muted)"></span>
-      </div>
-      <div class="filter-tabs" style="padding:0 1.3rem">
-        <div class="filter-tab active" onclick="filterLeads('all',this)">All</div>
-        <div class="filter-tab" onclick="filterLeads('enquired',this)">Enquired</div>
-        <div class="filter-tab" onclick="filterLeads('booking_started',this)">Started</div>
-        <div class="filter-tab" onclick="filterLeads('dropped',this)">Dropped</div>
-        <div class="filter-tab" onclick="filterLeads('converted',this)">Converted</div>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Phone</th><th>Stage</th><th>Branch</th><th>First Message</th><th>Last Message</th><th>Updated</th><th>Action</th></tr></thead>
-          <tbody id="leads-table"><tr><td colspan="7" class="empty"><div class="empty-icon">🎯</div>Loading...</td></tr></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ CONVERSATIONS PAGE ═══ -->
-  <div id="page-conversations" class="page-section">
-    <div class="main-grid" style="grid-template-columns:320px 1fr">
-      <div class="panel" style="height:calc(100vh - 200px);overflow-y:auto">
-        <div class="panel-header"><div class="panel-title">Recent Chats</div></div>
-        <div class="search-bar">
-          <input class="search-input" id="conv-search" placeholder="Search phone..." oninput="filterConversations()">
-        </div>
-        <div id="conversations-list"><div class="empty">Loading...</div></div>
-      </div>
-      <div class="panel" style="height:calc(100vh - 200px);display:flex;flex-direction:column">
-        <div class="panel-header">
-          <div class="panel-title" id="conv-title">Select a conversation</div>
-          <div style="display:flex;gap:8px" id="conv-actions" style="display:none">
-            <button class="btn btn-ghost btn-sm" id="btn-takeover" onclick="toggleTakeover()">Take Over</button>
-            <button class="btn btn-ghost btn-sm" onclick="openSendMsgFromConv()">Send Message</button>
+      <!-- ═══ KANBAN ═══ -->
+      <div id="page-kanban" class="page-section" style="display:none">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header">
+            <div class="card-title">Order Pipeline</div>
+            <div style="display:flex;gap:8px">
+              <input class="search-input" id="kanban-search" placeholder="Search orders..." style="width:200px" oninput="renderKanban()">
+              <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
+            </div>
           </div>
         </div>
-        <div id="conv-messages" style="flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:8px">
-          <div class="empty"><div class="empty-icon">💬</div>Select a chat to view messages</div>
-        </div>
-        <div style="padding:.8rem;border-top:1px solid var(--border);font-size:12px;color:var(--muted)" id="conv-session-info"></div>
+        <div class="kanban" id="kanban-board"></div>
       </div>
-    </div>
-  </div>
 
-</div>
+      <!-- ═══ ALL ORDERS ═══ -->
+      <div id="page-orders" class="page-section" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">All Bookings</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+              <button class="btn btn-ghost btn-sm" onclick="loadData()">↻ Refresh</button>
+            </div>
+          </div>
+          <div style="padding:.6rem 1.2rem;border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap">
+            <input class="search-input" id="orders-search" placeholder="Search name, phone, order ID..." style="flex:1;min-width:200px" oninput="currentPage=1;renderOrders()">
+            <select class="status-select" id="orders-filter" onchange="currentPage=1;renderOrders()">
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="picked">Picked</option>
+              <option value="inprogress">In Progress</option>
+              <option value="outfordelivery">Out for Delivery</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Order</th><th>Customer</th><th>Address</th><th>Date & Slot</th><th>Service</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="orders-table"><tr><td colspan="8" class="empty"><div class="empty-icon">📋</div>Loading...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="pagination">
+            <span id="orders-page-info"></span>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm" id="orders-prev" onclick="changePage(-1)">← Prev</button>
+              <button class="btn btn-outline btn-sm" id="orders-next" onclick="changePage(1)">Next →</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-<!-- ═══ MODAL: NEW ORDER ═══ -->
+      <!-- ═══ PAYMENTS ═══ -->
+      <div id="page-payments" class="page-section" style="display:none">
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header">
+            <div class="card-title">💳 Pending Payments</div>
+            <span id="payments-total" style="font-size:13px;font-weight:600;color:var(--red)"></span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Order</th><th>Customer</th><th>Branch</th><th>Amount</th><th>Days Since Delivery</th><th>Actions</th></tr></thead>
+              <tbody id="payments-table"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">✅ Recently Paid</div></div>
+          <div id="paid-list"><div class="empty">No paid orders yet</div></div>
+        </div>
+      </div>
+
+      <!-- ═══ CALENDAR ═══ -->
+      <div id="page-calendar" class="page-section" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <button class="btn btn-outline btn-sm" onclick="calMonth(-1)">← Prev</button>
+            <div class="card-title" id="cal-title"></div>
+            <button class="btn btn-outline btn-sm" onclick="calMonth(1)">Next →</button>
+          </div>
+          <div class="card-body">
+            <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px">
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">SUN</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">MON</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">TUE</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">WED</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">THU</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">FRI</div>
+              <div style="text-align:center;font-size:11px;font-weight:600;color:var(--muted);padding:4px">SAT</div>
+            </div>
+            <div class="calendar" id="calendar-grid"></div>
+            <div style="display:flex;gap:1rem;margin-top:1rem;font-size:12px">
+              <span><span style="display:inline-block;width:12px;height:12px;background:#dbeafe;border-radius:2px;margin-right:4px"></span>Pickup</span>
+              <span><span style="display:inline-block;width:12px;height:12px;background:#fed7aa;border-radius:2px;margin-right:4px"></span>Delivery</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ LEADS ═══ -->
+      <div id="page-leads" class="page-section" style="display:none">
+        <div class="funnel" id="leads-funnel"></div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">🎯 All Leads</div><span id="leads-count" style="font-size:12px;color:var(--muted)"></span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Phone</th><th>Stage</th><th>Branch</th><th>First Message</th><th>Updated</th><th>Action</th></tr></thead>
+              <tbody id="leads-table"><tr><td colspan="6" class="empty"><div class="empty-icon">🎯</div>No leads yet</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CUSTOMERS ═══ -->
+      <div id="page-customers" class="page-section" style="display:none">
+        <div class="card">
+          <div class="card-header"><div class="card-title">👥 Customers</div><span id="cust-count" style="font-size:12px;color:var(--muted)"></span></div>
+          <div style="padding:.6rem 1.2rem;border-bottom:1px solid var(--border)">
+            <input class="search-input" id="cust-search" placeholder="Search name or phone..." oninput="renderCustomers()">
+          </div>
+          <div id="cust-list"></div>
+        </div>
+      </div>
+
+      <!-- ═══ CHATS ═══ -->
+      <div id="page-chats" class="page-section" style="display:none">
+        <div class="chat-layout">
+          <div class="chat-list">
+            <div class="card-header" style="border-bottom:1px solid var(--border)"><div class="card-title">💬 Conversations</div></div>
+            <div class="chat-list-search"><input class="search-input" id="chat-search" placeholder="Search..." oninput="filterChats()"></div>
+            <div class="chat-list-items" id="chat-list-items"><div class="empty">Loading...</div></div>
+          </div>
+          <div class="chat-panel">
+            <div class="chat-panel-header">
+              <div>
+                <div style="font-weight:600" id="chat-title">Select a conversation</div>
+                <div style="font-size:11px;color:var(--muted)" id="chat-subtitle"></div>
+              </div>
+              <div style="display:flex;gap:6px" id="chat-actions" style="display:none">
+                <button class="btn btn-outline btn-sm" id="btn-takeover" onclick="toggleTakeover()">Take Over</button>
+                <button class="btn btn-ghost btn-sm" onclick="chatSendQuick()">Quick Message</button>
+              </div>
+            </div>
+            <div class="chat-messages" id="chat-messages"><div class="empty" style="margin:auto"><div class="empty-icon">💬</div>Select a chat</div></div>
+            <div class="chat-session-info" id="chat-session-info"></div>
+            <div class="chat-reply">
+              <textarea class="chat-reply-input" id="chat-reply-text" placeholder="Type a message... (Shift+Enter for new line)" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatReply();}"></textarea>
+              <button class="btn btn-primary" onclick="sendChatReply()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ REVENUE ═══ -->
+      <div id="page-revenue" class="page-section" style="display:none">
+        <div class="grid-3" style="margin-bottom:1rem">
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Week</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-week">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Month</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-month">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Total Collected</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-total">Rs 0</div></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="card-header"><div class="card-title">By Branch</div></div><div class="card-body" id="rev-branch"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">By Service</div></div><div class="card-body" id="rev-service"></div></div>
+        </div>
+        <div style="height:1rem"></div>
+        <div class="card"><div class="card-header"><div class="card-title">By Source</div></div><div class="card-body" id="rev-source"></div></div>
+      </div>
+
+      <!-- ═══ ANALYTICS ═══ -->
+      <div id="page-analytics" class="page-section" style="display:none">
+        <div class="grid-3" style="margin-bottom:1rem">
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Conversion Rate</div><div style="font-size:26px;font-weight:700;color:var(--blue)" id="a-conv">0%</div><div style="font-size:11px;color:var(--muted)">Enquiries to bookings</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Repeat Customers</div><div style="font-size:26px;font-weight:700;color:var(--purple)" id="a-repeat">0%</div><div style="font-size:11px;color:var(--muted)">Booked more than once</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Avg Order Value</div><div style="font-size:26px;font-weight:700;color:var(--orange)" id="a-aov">Rs 0</div><div style="font-size:11px;color:var(--muted)">Per delivered order</div></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="card"><div class="card-header"><div class="card-title">Orders This Week vs Last</div></div><div class="card-body" id="a-weekly"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Top Services</div></div><div class="card-body" id="a-services"></div></div>
+        </div>
+        <div style="height:1rem"></div>
+        <div class="card"><div class="card-header"><div class="card-title">Orders by Day of Week</div></div><div class="card-body" id="a-dayofweek"></div></div>
+      </div>
+
+      <!-- ═══ RATINGS ═══ -->
+      <div id="page-ratings" class="page-section" style="display:none">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">⭐ Ratings</div></div>
+            <div id="ratings-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">Summary</div></div>
+            <div class="card-body" id="ratings-summary"></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- MODAL: NEW ORDER -->
 <div class="modal-overlay" id="modal-order">
   <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">➕ New Order Entry</div>
-      <button class="modal-close" onclick="closeModal('modal-order')">✕</button>
-    </div>
+    <div class="modal-header"><div class="modal-title">+ New Order</div><button class="modal-close" onclick="closeModal('modal-order')">✕</button></div>
     <div class="modal-body">
-
-      <!-- Source + Branch row -->
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Source *</label>
           <select class="form-select" id="new-source" onchange="onSourceChange(this.value)">
-            <option value="walkin">🚶 Walk-in</option>
-            <option value="call">📞 Phone Call</option>
-            <option value="whatsapp">💬 WhatsApp</option>
-            <option value="other">📌 Other</option>
+            <option value="walkin">Walk-in</option>
+            <option value="call">Phone Call</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="website">Website</option>
+            <option value="other">Other</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">Branch *</label>
           <select class="form-select" id="new-branch">
-            <option value="bavdhan">📍 Bavdhan</option>
-            <option value="baner">📍 Baner</option>
+            <option value="bavdhan">Bavdhan</option>
+            <option value="baner">Baner</option>
           </select>
         </div>
       </div>
-
-      <!-- Walk-in info banner -->
-      <div class="walkin-banner show" id="walkin-banner">
-        🚶 <strong>Walk-in order</strong> — Clothes already received. Address, date & slot are optional. Status will be set to <strong>Picked Up</strong> automatically.
-      </div>
-
+      <div class="walkin-banner show" id="walkin-banner">Walk-in order — clothes already received. Status auto-set to Picked Up.</div>
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Customer Name *</label>
-          <input class="form-input" id="new-name" placeholder="Full name">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Phone *</label>
-          <input class="form-input" id="new-phone" placeholder="10-digit number" type="tel">
-        </div>
+        <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="new-name" placeholder="Customer name"></div>
+        <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="new-phone" placeholder="10-digit" type="tel"></div>
       </div>
-
-      <!-- Address — hidden for walk-in -->
-      <div class="form-group" id="field-address">
-        <label class="form-label" id="label-address">Pickup Address</label>
-        <input class="form-input" id="new-address" placeholder="Full address">
-      </div>
-
-      <!-- Date + Slot row — hidden for walk-in -->
+      <div class="form-group" id="field-address"><label class="form-label" id="label-address">Address</label><input class="form-input" id="new-address" placeholder="Pickup address"></div>
       <div class="form-row" id="field-datetime">
-        <div class="form-group">
-          <label class="form-label" id="label-date">Pickup Date</label>
-          <input class="form-input" id="new-date" type="date">
-        </div>
-        <div class="form-group">
-          <label class="form-label" id="label-slot">Slot</label>
-          <select class="form-select" id="new-slot">
-            <option value="Morning (10 AM – 1 PM)">🌅 Morning (10 AM – 1 PM)</option>
-            <option value="Evening (5 PM – 8 PM)">🌆 Evening (5 PM – 8 PM)</option>
-          </select>
-        </div>
+        <div class="form-group"><label class="form-label" id="label-date">Date</label><input class="form-input" id="new-date" type="date"></div>
+        <div class="form-group"><label class="form-label" id="label-slot">Slot</label><select class="form-select" id="new-slot"><option value="Morning (10 AM - 1 PM)">Morning 10–1</option><option value="Evening (5 PM - 8 PM)">Evening 5–8</option></select></div>
       </div>
-
       <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Service (optional)</label>
-          <select class="form-select" id="new-service">
-            <option value="">— Not known yet —</option>
-            <option value="iron">🔥 Iron</option>
-            <option value="dryclean">🧥 Dry Clean</option>
-            <option value="laundry">🫧 Laundry</option>
-            <option value="shoes">👟 Shoes</option>
-            <option value="mixed">📦 Mixed</option>
-          </select>
-        </div>
-        <!-- Status indicator (read-only visual) -->
-        <div class="form-group">
-          <label class="form-label">Initial Status</label>
-          <div id="status-indicator" style="padding:9px 12px;border-radius:8px;font-size:13px;font-weight:500;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;">
-            🚗 Picked Up (Walk-in)
-          </div>
-        </div>
+        <div class="form-group"><label class="form-label">Service</label><select class="form-select" id="new-service"><option value="">Not known yet</option><option value="iron">Steam Iron</option><option value="dryclean">Dry Clean</option><option value="laundry">Laundry</option><option value="shoes">Shoes</option><option value="specialty">Specialty</option><option value="mixed">Mixed</option></select></div>
+        <div class="form-group"><label class="form-label">Initial Status</label><div id="status-indicator" style="padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe">Picked Up (Walk-in)</div></div>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Notes (optional)</label>
-        <textarea class="form-textarea" id="new-notes" placeholder="Handle saree carefully, light starch on shirts..."></textarea>
-      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-textarea" id="new-notes" placeholder="Special instructions..."></textarea></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-order')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitNewOrder()">✅ Create Order</button>
-    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-order')">Cancel</button><button class="btn btn-primary" onclick="submitNewOrder()">Create Order</button></div>
   </div>
 </div>
 
-<!-- ═══ MODAL: SEND MESSAGE ═══ -->
+<!-- MODAL: SEND MESSAGE -->
 <div class="modal-overlay" id="modal-message">
   <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">💬 Send WhatsApp Message</div>
-      <button class="modal-close" onclick="closeModal('modal-message')">✕</button>
-    </div>
+    <div class="modal-header"><div class="modal-title">💬 Send WhatsApp Message</div><button class="modal-close" onclick="closeModal('modal-message')">✕</button></div>
     <div class="modal-body">
+      <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="msg-phone" placeholder="10-digit" type="tel"></div>
+      <div class="form-group"><label class="form-label">Quick Select</label><select class="form-select" id="msg-customer-select" onchange="selectMsgCustomer(this.value)"><option value="">— Select customer —</option></select></div>
+      <div class="form-group"><label class="form-label">Message *</label><textarea class="form-textarea" id="msg-text" placeholder="Type message..." style="min-height:100px"></textarea></div>
       <div class="form-group">
-        <label class="form-label">Phone Number *</label>
-        <input class="form-input" id="msg-phone" placeholder="10-digit number or select customer below" type="tel">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Quick select customer</label>
-        <select class="form-select" id="msg-customer-select" onchange="selectMsgCustomer(this.value)">
-          <option value="">— Type phone above or select —</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Message *</label>
-        <textarea class="form-textarea" id="msg-text" placeholder="Type your message..." style="min-height:100px;"></textarea>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Or use a template</label>
-        <button class="template-btn" onclick="useTemplate('pickup')">
-          <strong>📦 Re-engagement — Book Pickup</strong>
-          Remind customer to book their next pickup.
-        </button>
-        <button class="template-btn" onclick="useTemplate('ready')">
-          <strong>✅ Clothes Ready for Pickup</strong>
-          Your clothes are ready! Please visit or we can schedule delivery.
-        </button>
-        <button class="template-btn" onclick="useTemplate('delay')">
-          <strong>⏳ Slight Delay</strong>
-          Hi! Your order is taking a little longer than expected. We'll deliver by tomorrow. Sorry for the wait!
-        </button>
-        <button class="template-btn" onclick="useTemplate('reminder')">
-          <strong>⏰ Pickup Reminder</strong>
-          Hi! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive in your slot.
-        </button>
-        <button class="template-btn" onclick="useTemplate('promo')">
-          <strong>🎉 Special Offer</strong>
-          Hi! Washkart special: Get 10% off on dry cleaning this week. Book now by replying PICKUP!
-        </button>
-        <button class="template-btn" onclick="useTemplate('status')">
-          <strong>📦 Order Status Update</strong>
-          Hi! Your clothes are currently being cleaned and will be delivered soon. Thank you for choosing Washkart!
-        </button>
+        <label class="form-label">Templates</label>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button onclick="useTemplate('pickup')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">📦 Re-engagement — Book next pickup</button>
+          <button onclick="useTemplate('reminder')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">⏰ Pickup reminder — Today</button>
+          <button onclick="useTemplate('delay')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">⏳ Slight delay notice</button>
+          <button onclick="useTemplate('payment')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">💰 Payment reminder</button>
+        </div>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('modal-message')">Cancel</button>
-      <button class="btn btn-primary" onclick="sendManualMessage()">📤 Send Message</button>
-    </div>
+    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-message')">Cancel</button><button class="btn btn-primary" onclick="sendManualMessage()">Send</button></div>
   </div>
 </div>
 
-<!-- TOAST -->
+<!-- CUSTOMER PROFILE MODAL -->
+<div class="modal-overlay" id="modal-profile">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header"><div class="modal-title" id="profile-title">Customer Profile</div><button class="modal-close" onclick="closeModal('modal-profile')">✕</button></div>
+    <div class="modal-body" id="profile-body"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 const BOT_URL = 'https://washkart-bot.onrender.com';
-const DASHBOARD_PASSWORD = 'washkart2025'; // Change this password
-let allBookings = [], allCustomers = [], allRatings = [], currentFilter = 'all';
-let currentPage = 1;
-const PAGE_SIZE = 50;
-let activeBranch = 'all'; // 'all' | 'bavdhan' | 'baner'
+const DASHBOARD_PASSWORD = 'washkart2025';
 
-// ── AUTH ───────────────────────────────────────────────────────────
+// AUTH
 function checkAuth() {
-  const stored = sessionStorage.getItem('wk_auth');
-  if (stored === DASHBOARD_PASSWORD) return true;
-  const pwd = prompt('Enter dashboard password:');
-  if (pwd === DASHBOARD_PASSWORD) {
-    sessionStorage.setItem('wk_auth', pwd);
-    return true;
-  }
+  if (sessionStorage.getItem('wk_auth') === DASHBOARD_PASSWORD) return true;
+  const pwd = prompt('Washkart Admin Password:');
+  if (pwd === DASHBOARD_PASSWORD) { sessionStorage.setItem('wk_auth', pwd); return true; }
   document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#666">Wrong password. Refresh to try again.</div>';
   return false;
 }
 if (!checkAuth()) throw new Error('Unauthorized');
-// Track the currently selected customer name for template personalisation
-let msgCustomerName = '';
 
-// ── CLOCK ──────────────────────────────────────────────────────────
-function updateClock() {
-  document.getElementById('clock').textContent = new Date().toLocaleString('en-IN', { weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-}
-setInterval(updateClock, 1000); updateClock();
+// STATE
+let allBookings=[], allCustomers=[], allRatings=[], allLeads=[], allConversations=[];
+let activeBranch='all', currentPage=1, PAGE_SIZE=50;
+let selectedChat=null, takeoverActive=false, msgCustomerName='';
+let calCurrentDate = new Date();
+let prevOrderCount = 0;
 
-// ── TOAST ──────────────────────────────────────────────────────────
-function toast(msg, type='success') {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = `toast ${type} show`;
-  setTimeout(() => el.classList.remove('show'), 3000);
-}
+// CLOCK
+function updateClock() { document.getElementById('clock').textContent = new Date().toLocaleString('en-IN',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+setInterval(updateClock,1000); updateClock();
 
-// ── PAGE NAV ───────────────────────────────────────────────────────
-function showPage(name, el) {
-  document.querySelectorAll('.page-section').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  el.classList.add('active');
-  if (name === 'conversations') loadConversations();
-  if (name === 'leads') renderLeads();
+// TOAST
+function toast(msg,type='success') {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className=`toast ${type} show`;
+  setTimeout(()=>el.classList.remove('show'),3000);
 }
 
-// ── MODAL ──────────────────────────────────────────────────────────
+// MODAL
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-overlay').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
 
-// ── DATE HELPERS ───────────────────────────────────────────────────
-function getToday() { return new Date().toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' }); }
+// PAGE NAV
+const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',chats:'Chats',revenue:'Revenue',analytics:'Analytics',ratings:'Ratings'};
+function showPage(name, el) {
+  document.querySelectorAll('.page-section').forEach(p=>p.style.display='none');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+name).style.display='block';
+  if(el) el.classList.add('active');
+  document.getElementById('page-title').textContent = PAGE_TITLES[name]||name;
+  if(name==='chats') loadConversations();
+  if(name==='calendar') renderCalendar();
+  if(name==='analytics') renderAnalytics();
+}
+
+// BRANCH SWITCHER
+function switchBranch(branch, el) {
+  activeBranch = branch;
+  document.querySelectorAll('#branch-switcher button').forEach(b=>{b.className='btn btn-sm btn-outline';});
+  el.className='btn btn-sm btn-primary';
+  loadData();
+}
+
+// DATE HELPERS
+function getToday() { return new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}); }
 function isOverdue(b) {
-  if (!b.delivery_date || ['delivered','cancelled'].includes(b.status)) return false;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const parts = b.delivery_date.match(/(\d+)\s+(\w+)/);
-  if (!parts) return false;
-  try {
-    const d = new Date(`${parts[2]} ${parts[1]} ${new Date().getFullYear()}`);
-    d.setHours(0,0,0,0);
-    return d < today;
-  } catch { return false; }
+  if (!b.delivery_date||['delivered','cancelled'].includes(b.status)) return false;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const parts=b.delivery_date.match(/(\d+)\s+(\w+)/);
+  if(!parts) return false;
+  try { const d=new Date(`${parts[2]} ${parts[1]} ${new Date().getFullYear()}`); d.setHours(0,0,0,0); return d<today; } catch { return false; }
 }
 
-// ── SOURCE BADGE ───────────────────────────────────────────────────
-function sourceBadge(src) {
-  if (!src || src === 'whatsapp') return '<span class="badge badge-whatsapp">💬 WhatsApp</span>';
-  if (src === 'walkin') return '<span class="badge badge-walkin">🚶 Walk-in</span>';
-  if (src === 'call') return '<span class="badge badge-call">📞 Call</span>';
-  return `<span class="badge badge-walkin">${src}</span>`;
-}
-
-// ── STATUS BADGE ───────────────────────────────────────────────────
+// STATUS BADGE
 function statusBadge(s) {
-  const map = {
-    pending:'<span class="badge badge-pending">⏳ Pending</span>',
-    picked:'<span class="badge badge-picked">🚗 Picked Up</span>',
-    inprogress:'<span class="badge badge-inprogress">🫧 In Progress</span>',
-    outfordelivery:'<span class="badge badge-outfordelivery">🚚 Out for Delivery</span>',
-    delivered:'<span class="badge badge-delivered">✅ Delivered</span>',
-    cancelled:'<span class="badge badge-cancelled">❌ Cancelled</span>',
-  };
-  return map[s] || s;
+  const map={pending:'b-pending',picked:'b-picked',inprogress:'b-inprogress',outfordelivery:'b-outfordelivery',delivered:'b-delivered',cancelled:'b-cancelled'};
+  const labels={pending:'Pending',picked:'Picked Up',inprogress:'In Progress',outfordelivery:'Out for Delivery',delivered:'Delivered',cancelled:'Cancelled'};
+  return `<span class="badge ${map[s]||''}">${labels[s]||s}</span>`;
+}
+function payBadge(s) {
+  return `<span class="badge b-${s||'unpaid'}">${s==='paid'?'Paid':s==='partial'?'Partial':'Unpaid'}</span>`;
+}
+function sourceBadge(s) {
+  return `<span class="badge b-${s==='whatsapp'?'whatsapp':'walkin'}">${s||'whatsapp'}</span>`;
 }
 
-// ── SMART FORM: SOURCE-BASED FIELD VISIBILITY ─────────────────────
-function onSourceChange(source) {
-  const isWalkIn = source === 'walkin';
-  const fieldAddress = document.getElementById('field-address');
-  const fieldDatetime = document.getElementById('field-datetime');
-  const walkinBanner = document.getElementById('walkin-banner');
-  const statusIndicator = document.getElementById('status-indicator');
-  const labelAddress = document.getElementById('label-address');
-  const labelDate = document.getElementById('label-date');
-  const labelSlot = document.getElementById('label-slot');
+// LOAD DATA
+async function loadData() {
+  try {
+    const bp = activeBranch!=='all'?`?branch=${activeBranch}`:'';
+    const [bRes,cRes,rRes,lRes] = await Promise.all([
+      fetch(`${BOT_URL}/bookings${bp}`),
+      fetch(`${BOT_URL}/customers${bp}`),
+      fetch(`${BOT_URL}/ratings${bp}`).catch(()=>({json:()=>[]})),
+      fetch(`${BOT_URL}/leads${bp}`).catch(()=>({json:()=>[]})),
+    ]);
+    allBookings = (await bRes.json()).map(b=>({
+      id:b.order_id,name:b.name||'',phone:b.phone||'',address:b.address||'',
+      date:b.date||'',slot:b.slot||'',status:b.status||'pending',
+      service_type:b.service_type||'',express:b.express||false,
+      delivery_date:b.delivery_date||'',source:b.source||'whatsapp',
+      branch:b.branch||'bavdhan',notes:b.notes||'',created_at:b.created_at||'',
+      amount:b.amount||0,payment_status:b.payment_status||'unpaid',
+      payment_method:b.payment_method||'',payment_date:b.payment_date||'',
+    }));
+    allCustomers = await cRes.json();
+    allRatings   = await rRes.json().catch(()=>[]);
+    allLeads     = await lRes.json().catch(()=>[]);
+    populateMsgDropdown();
+    updateAll();
+  } catch(e) { console.error(e); toast('Failed to load data','error'); }
+}
 
-  if (isWalkIn) {
-    // Walk-in: hide date/slot, make address optional, show banner
-    fieldDatetime.style.display = 'none';
-    walkinBanner.classList.add('show');
-    labelAddress.textContent = 'Address (optional)';
-    labelDate.textContent = 'Pickup Date (optional)';
-    labelSlot.textContent = 'Slot (optional)';
-    document.getElementById('new-address').placeholder = 'Leave blank for Walk-in (In-store)';
-    statusIndicator.style.background = '#dbeafe';
-    statusIndicator.style.color = '#1e40af';
-    statusIndicator.style.borderColor = '#bfdbfe';
-    statusIndicator.textContent = '🚗 Picked Up (Walk-in)';
-  } else {
-    // Non-walk-in: show all fields, mark as required
-    fieldDatetime.style.display = '';
-    walkinBanner.classList.remove('show');
-    labelAddress.textContent = 'Pickup Address *';
-    labelDate.textContent = 'Pickup Date *';
-    labelSlot.textContent = 'Slot *';
-    document.getElementById('new-address').placeholder = 'Full address';
-    statusIndicator.style.background = '#fef3c7';
-    statusIndicator.style.color = '#92400e';
-    statusIndicator.style.borderColor = '#fde68a';
-    statusIndicator.textContent = '⏳ Pending (Awaiting Pickup)';
+// UPDATE ALL
+function updateAll() {
+  const today = getToday();
+  const total = allBookings.length;
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-today').textContent = allBookings.filter(b=>b.date===today&&!['cancelled'].includes(b.status)).length;
+  document.getElementById('s-deliveries').textContent = allBookings.filter(b=>b.delivery_date===today&&!['delivered','cancelled'].includes(b.status)).length;
+  const unpaid = allBookings.filter(b=>b.status==='delivered'&&b.payment_status!=='paid'&&b.amount>0);
+  const unpaidAmt = unpaid.reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('s-unpaid').textContent = unpaid.length;
+  document.getElementById('s-unpaid-amt').textContent = `Rs ${unpaidAmt.toLocaleString('en-IN')} pending`;
+  const todayLeads = allLeads.filter(l=>l.created_at&&new Date(l.created_at).toDateString()===new Date().toDateString());
+  document.getElementById('s-leads').textContent = todayLeads.length;
+  // Leads badge
+  const newLeads = allLeads.filter(l=>l.stage==='enquired'||l.stage==='dropped');
+  const badge = document.getElementById('leads-badge');
+  if(newLeads.length){ badge.style.display=''; badge.textContent=newLeads.length; } else { badge.style.display='none'; }
+  // Overdue banner
+  const overdue = allBookings.filter(isOverdue);
+  const banner = document.getElementById('overdue-banner');
+  if(overdue.length){ banner.classList.add('show'); banner.textContent=`⚠️ ${overdue.length} order${overdue.length>1?'s are':' is'} overdue — click to view`; }
+  else { banner.classList.remove('show'); }
+  // Browser notification for new orders
+  if(prevOrderCount>0&&total>prevOrderCount) {
+    const n=total-prevOrderCount;
+    if(Notification.permission==='granted') new Notification('Washkart',{body:`${n} new order${n>1?'s':''} received!`});
+    toast(`${n} new order${n>1?'s':''} received!`);
+  }
+  prevOrderCount = total;
+  renderHome(); renderKanban(); renderOrders(); renderPayments(); renderRatings(); renderLeads(); renderCustomers(); renderRevenue();
+}
+
+// ── HOME ──────────────────────────────────────────────────────────
+function renderHome() {
+  const today = getToday();
+  // Pickups
+  const pickups = allBookings.filter(b=>b.date===today&&!['cancelled','delivered'].includes(b.status));
+  const ph = document.getElementById('home-pickups');
+  if(!pickups.length) { ph.innerHTML='<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; }
+  else {
+    ph.innerHTML = pickups.map(b=>`<div style="padding:.7rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:500;font-size:13px">${b.name} <span style="font-size:11px;color:var(--muted);font-family:monospace">${b.id}</span></div>
+        <div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning')?'🌅':'🌆'} ${b.slot||'-'} | ${b.address||'Walk-in'}</div>
+      </div>
+      ${statusBadge(b.status)}
+    </div>`).join('');
+  }
+  // Pending payments
+  const pends = allBookings.filter(b=>b.status==='delivered'&&b.payment_status!=='paid'&&b.amount>0).slice(0,5);
+  const pendTotal = pends.reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('home-pending-total').textContent = pends.length?`Rs ${pendTotal.toLocaleString('en-IN')} due`:'';
+  const pp = document.getElementById('home-payments');
+  if(!pends.length) { pp.innerHTML='<div class="empty"><div class="empty-icon">✅</div>All collected</div>'; }
+  else {
+    pp.innerHTML = pends.map(b=>`<div style="padding:.7rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:500;font-size:13px">${b.name}</div>
+        <div style="font-size:11px;color:var(--muted)">${b.id} | Rs ${b.amount}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')">Remind</button>
+    </div>`).join('');
+  }
+  // Pipeline
+  const statuses = ['pending','picked','inprogress','outfordelivery'];
+  const pl = document.getElementById('home-pipeline');
+  pl.innerHTML = statuses.map(s=>{
+    const count = allBookings.filter(b=>b.status===s).length;
+    const labels={pending:'Pending',picked:'Picked',inprogress:'Cleaning',outfordelivery:'Out for Delivery'};
+    const colors={pending:'#92400e',picked:'#1e40af',inprogress:'#5b21b6',outfordelivery:'#9a3412'};
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:12px;color:${colors[s]};width:100px;font-weight:500">${labels[s]}</span>
+      <div style="flex:1;background:var(--bg);border-radius:20px;height:8px;overflow:hidden">
+        <div style="width:${allBookings.length?Math.round(count/allBookings.length*100):0}%;background:${colors[s]};height:100%"></div>
+      </div>
+      <span style="font-size:12px;font-weight:600;width:24px">${count}</span>
+    </div>`;
+  }).join('');
+  // Recent leads
+  const recentLeads = allLeads.slice(0,5);
+  const rl = document.getElementById('home-leads');
+  if(!recentLeads.length) { rl.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>No leads yet</div>'; }
+  else {
+    rl.innerHTML = recentLeads.map(l=>`<div style="padding:.7rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:12px;font-family:monospace">+${l.phone}</div>
+        <div style="font-size:11px;color:var(--muted)">${l.last_message||'-'}</div>
+      </div>
+      <span class="badge b-${l.stage}">${l.stage}</span>
+    </div>`).join('');
   }
 }
 
-// ── RENDER BOOKINGS ─────────────────────────────────────────────────
-function filterTab(f, el) {
-  currentFilter = f;
-  currentPage = 1;
-  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderBookings();
+// ── KANBAN ────────────────────────────────────────────────────────
+const KANBAN_COLS = [
+  {key:'pending',label:'Pending',color:'#fef3c7',hdr:'#92400e'},
+  {key:'picked',label:'Picked Up',color:'#dbeafe',hdr:'#1e40af'},
+  {key:'inprogress',label:'Cleaning',color:'#ede9fe',hdr:'#5b21b6'},
+  {key:'outfordelivery',label:'Out for Delivery',color:'#fed7aa',hdr:'#9a3412'},
+  {key:'delivered',label:'Delivered',color:'#dcfce7',hdr:'#166534'},
+];
+function renderKanban() {
+  const q = (document.getElementById('kanban-search')?.value||'').toLowerCase();
+  const board = document.getElementById('kanban-board');
+  board.innerHTML = KANBAN_COLS.map(col=>{
+    let cards = allBookings.filter(b=>b.status===col.key);
+    if(q) cards=cards.filter(b=>b.name.toLowerCase().includes(q)||b.phone.includes(q)||b.id.toLowerCase().includes(q));
+    return `<div class="kanban-col">
+      <div class="kanban-header" style="background:${col.color};color:${col.hdr}">
+        <span>${col.label}</span><span>${cards.length}</span>
+      </div>
+      <div class="kanban-cards">
+        ${cards.length?cards.map(b=>`<div class="k-card" onclick="openOrderDetail('${b.id}')">
+          <div class="k-card-name">${b.name}</div>
+          <div class="k-card-meta">
+            ${b.id}<br>
+            ${b.date||'Walk-in'} ${b.slot?.includes('Morning')?'🌅':b.slot==='Walk-in'?'🚶':'🌆'}<br>
+            ${b.address||'Walk-in'}
+            ${b.express?'<br><span style="color:#d97706;font-weight:600">⚡ Express</span>':''}
+            ${isOverdue(b)?'<br><span class="tag overdue-tag">OVERDUE</span>':''}
+          </div>
+          ${b.amount?`<div class="k-card-amount">Rs ${b.amount} — ${payBadge(b.payment_status)}</div>`:''}
+          <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
+            ${col.key!=='delivered'&&col.key!=='cancelled'?`<select class="status-select" onclick="event.stopPropagation()" onchange="updateStatus('${b.id}',this.value)">
+              ${KANBAN_COLS.map(c=>`<option value="${c.key}" ${b.status===c.key?'selected':''}>${c.label}</option>`).join('')}
+              <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
+            </select>`:''}
+          </div>
+        </div>`).join(''):'<div style="color:#9ca3af;font-size:12px;padding:.5rem;text-align:center">Empty</div>'}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function changePage(dir) {
-  currentPage += dir;
-  renderBookings();
-  window.scrollTo(0, 0);
+function openOrderDetail(id) {
+  const b = allBookings.find(x=>x.id===id);
+  if(!b) return;
+  // Show a quick edit modal or just open send message
+  const cust = allCustomers.find(c=>c.phone===b.phone);
+  openCustomerProfile(b.phone);
 }
 
-function getFilteredBookings() {
-  const q = (document.getElementById('search-input')?.value || '').toLowerCase();
-  let filtered = currentFilter === 'all' ? allBookings : allBookings.filter(b => b.status === currentFilter);
-  if (q) filtered = filtered.filter(b =>
-    b.name.toLowerCase().includes(q) || b.phone.includes(q) || b.id.toLowerCase().includes(q) || (b.address||'').toLowerCase().includes(q)
-  );
+// ── ORDERS TABLE ──────────────────────────────────────────────────
+function getFilteredOrders() {
+  const q=(document.getElementById('orders-search')?.value||'').toLowerCase();
+  const f=document.getElementById('orders-filter')?.value||'all';
+  let filtered = f==='all'?allBookings:allBookings.filter(b=>b.status===f);
+  if(q) filtered=filtered.filter(b=>b.name.toLowerCase().includes(q)||b.phone.includes(q)||b.id.toLowerCase().includes(q)||(b.address||'').toLowerCase().includes(q));
   return filtered;
 }
-
-function renderBookings() {
-  const filtered = getFilteredBookings();
-  const tbody = document.getElementById('bookings-table');
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  currentPage = Math.min(currentPage, totalPages);
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const page  = filtered.slice(start, start + PAGE_SIZE);
-
-  // Pagination bar
-  const info = document.getElementById('pagination-info');
-  const btnPrev = document.getElementById('btn-prev');
-  const btnNext = document.getElementById('btn-next');
-  info.textContent = filtered.length
-    ? `Showing ${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length} orders`
-    : '';
-  btnPrev.disabled = currentPage <= 1;
-  btnNext.disabled = currentPage >= totalPages;
-  btnPrev.style.opacity = currentPage <= 1 ? '0.4' : '1';
-  btnNext.style.opacity = currentPage >= totalPages ? '0.4' : '1';
-
-  if (!page.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty"><div class="empty-icon">📋</div>No bookings found</td></tr>`; return; }
-
-  const displayAddress = (b) => {
-    if (b.source === 'walkin' && (!b.address || b.address === 'Walk-in (In-store)')) {
-      return '<span style="color:var(--muted);font-style:italic">Walk-in (In-store)</span>';
-    }
-    return b.address || '<span style="color:var(--muted)">—</span>';
-  };
-
-  const paymentBadge = (ps) => {
-    if (ps === 'paid')    return '<span class="badge badge-payment-paid">✅ Paid</span>';
-    if (ps === 'partial') return '<span class="badge badge-payment-partial">⚠️ Partial</span>';
-    return '<span class="badge badge-payment-unpaid">🔴 Unpaid</span>';
-  };
-  tbody.innerHTML = page.map(b => {
-    const over = isOverdue(b);
-    return `<tr class="${over ? 'overdue' : ''}">
+function renderOrders() {
+  const filtered=getFilteredOrders();
+  const totalPages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE));
+  currentPage=Math.min(currentPage,totalPages);
+  const start=(currentPage-1)*PAGE_SIZE;
+  const page=filtered.slice(start,start+PAGE_SIZE);
+  document.getElementById('orders-page-info').textContent=`${start+1}–${Math.min(start+PAGE_SIZE,filtered.length)} of ${filtered.length}`;
+  document.getElementById('orders-prev').disabled=currentPage<=1;
+  document.getElementById('orders-next').disabled=currentPage>=totalPages;
+  const tbody=document.getElementById('orders-table');
+  if(!page.length){tbody.innerHTML='<tr><td colspan="8" class="empty"><div class="empty-icon">📋</div>No orders</td></tr>';return;}
+  tbody.innerHTML=page.map(b=>{
+    const over=isOverdue(b);
+    const addr=b.source==='walkin'&&(!b.address||b.address==='Walk-in (In-store)')?'<span style="color:var(--muted);font-style:italic">Walk-in</span>':b.address||'—';
+    return `<tr class="${over?'overdue':''}">
+      <td><div style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</div>${sourceBadge(b.source)}${over?'<div class="tag overdue-tag" style="margin-top:2px">OVERDUE</div>':''}</td>
+      <td><div style="font-weight:500">${b.name}</div><div style="font-size:11px;color:var(--muted);font-family:monospace">${b.phone}</div></td>
+      <td style="font-size:12px;color:var(--muted);max-width:130px">${addr}</td>
+      <td><div style="font-size:12px">${b.date||'—'}</div><div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning')?'🌅':'🌆'} ${b.slot||'—'}</div>${b.delivery_date?`<div style="font-size:11px;color:${over?'var(--red)':'var(--green)'}">📦 ${b.delivery_date}</div>`:''}</td>
       <td>
-        <div class="order-id">${b.id}</div>
-        ${sourceBadge(b.source)}
-        <span style="font-size:10px;color:var(--muted);display:block;margin-top:2px">${b.branch||'bavdhan'}</span>
-        ${over ? '<div class="overdue-tag">⚠️ OVERDUE</div>' : ''}
-        ${b.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">📝 ${b.notes}</div>` : ''}
-      </td>
-      <td>
-        <div style="font-weight:500">${b.name}</div>
-        <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace">${b.phone}</div>
-      </td>
-      <td style="font-size:12px;color:var(--muted);max-width:150px">${displayAddress(b)}</td>
-      <td>
-        <div style="font-size:12px;font-weight:500">${b.date || '—'}</div>
-        <div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning') ? '🌅' : b.slot === 'Walk-in' ? '🚶' : '🌆'} ${b.slot || '—'}</div>
-        ${b.delivery_date ? `<div style="font-size:11px;color:${over?'var(--red)':'var(--green)'}">📦 ${b.delivery_date}</div>` : ''}
-      </td>
-      <td>
-        ${b.status === 'picked' || b.service_type ? `
-        <select class="status-select" onchange="updateService('${b.id}',this.value)" style="width:100%;margin-bottom:4px">
-          <option value="">🧺 Service...</option>
-          <option value="iron" ${b.service_type==='iron'?'selected':''}>🔥 Iron</option>
-          <option value="dryclean" ${b.service_type==='dryclean'?'selected':''}>🧥 Dry Clean</option>
-          <option value="laundry" ${b.service_type==='laundry'?'selected':''}>🫧 Laundry</option>
-          <option value="shoes" ${b.service_type==='shoes'?'selected':''}>👟 Shoes</option>
-          <option value="mixed" ${b.service_type==='mixed'?'selected':''}>📦 Mixed</option>
-          <option value="specialty" ${b.service_type==='specialty'?'selected':''}>✨ Specialty</option>
+        <select class="status-select" style="width:100%;margin-bottom:3px" onchange="updateService('${b.id}',this.value)">
+          <option value="">Service...</option>
+          ${['iron','dryclean','laundry','shoes','specialty','mixed'].map(s=>`<option value="${s}" ${b.service_type===s?'selected':''}>${s}</option>`).join('')}
         </select>
-        <label style="font-size:11px;display:flex;align-items:center;gap:4px;cursor:pointer">
-          <input type="checkbox" ${b.express?'checked':''} onchange="toggleExpress('${b.id}',this.checked)"> ⚡ Express
-        </label>` : '<span style="font-size:12px;color:var(--muted)">—</span>'}
+        ${b.express?'<span style="font-size:10px;color:#d97706;font-weight:600">⚡ Express</span>':''}
       </td>
       <td>
-        <input type="number" placeholder="₹ Amount" value="${b.amount||''}" min="0"
-          style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px;margin-bottom:4px"
-          onchange="updateAmount('${b.id}',this.value)">
-        <div>${paymentBadge(b.payment_status)}</div>
-        <select class="status-select" style="margin-top:4px;width:100%" onchange="updatePaymentStatus('${b.id}',this.value)">
-          <option value="unpaid"  ${b.payment_status==='unpaid' ?'selected':''}>🔴 Unpaid</option>
-          <option value="paid"    ${b.payment_status==='paid'   ?'selected':''}>✅ Paid</option>
-          <option value="partial" ${b.payment_status==='partial'?'selected':''}>⚠️ Partial</option>
+        <input type="number" value="${b.amount||''}" placeholder="Rs" min="0" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;margin-bottom:3px" onchange="updateAmount('${b.id}',this.value)">
+        <div>${payBadge(b.payment_status)}</div>
+        <select class="status-select" style="margin-top:3px;width:80px" onchange="updatePaymentStatus('${b.id}',this.value)">
+          <option value="unpaid" ${b.payment_status==='unpaid'?'selected':''}>Unpaid</option>
+          <option value="paid" ${b.payment_status==='paid'?'selected':''}>Paid</option>
+          <option value="partial" ${b.payment_status==='partial'?'selected':''}>Partial</option>
         </select>
       </td>
       <td>
         <select class="status-select" onchange="updateStatus('${b.id}',this.value)">
-          <option value="pending" ${b.status==='pending'?'selected':''}>⏳ Pending</option>
-          <option value="picked" ${b.status==='picked'?'selected':''}>🚗 Picked Up</option>
-          <option value="inprogress" ${b.status==='inprogress'?'selected':''}>🫧 In Progress</option>
-          <option value="outfordelivery" ${b.status==='outfordelivery'?'selected':''}>🚚 Out for Delivery</option>
-          <option value="delivered" ${b.status==='delivered'?'selected':''}>✅ Delivered</option>
-          <option value="cancelled" ${b.status==='cancelled'?'selected':''}>❌ Cancelled</option>
+          ${['pending','picked','inprogress','outfordelivery','delivered','cancelled'].map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${s}</option>`).join('')}
         </select>
       </td>
       <td>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')" title="WhatsApp">💬</button>
-          ${b.status==='delivered' && b.payment_status!=='paid' ? `<button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')" title="Payment Reminder" style="color:var(--orange)">💰</button>` : ''}
-          <button class="btn btn-danger btn-sm" onclick="deleteOrder('${b.id}')" title="Delete">🗑</button>
+          <button class="btn-icon" onclick="openSendMsg('${b.phone}','${b.name}')" title="Message">💬</button>
+          ${b.status==='delivered'&&b.payment_status!=='paid'?`<button class="btn-icon" onclick="sendPaymentReminder('${b.id}')" title="Payment reminder">💰</button>`:''}
+          <button class="btn-icon" onclick="openCustomerProfile('${b.phone}')" title="Profile">👤</button>
+          <button class="btn-icon" style="color:var(--red)" onclick="deleteOrder('${b.id}')" title="Delete">🗑</button>
         </div>
       </td>
     </tr>`;
   }).join('');
 }
-
-// ── CSV EXPORT ─────────────────────────────────────────────────────
-function exportCSV() {
-  const filtered = getFilteredBookings();
-  const headers = ['Order ID','Name','Phone','Address','Date','Slot','Status','Service','Express','Delivery Date','Source','Notes','Created At'];
-  const rows = filtered.map(b => [
-    b.id, b.name, b.phone, b.address, b.date, b.slot, b.status,
-    b.service_type, b.express ? 'Yes' : 'No',
-    b.delivery_date, b.source, b.notes,
-    b.created_at ? new Date(b.created_at).toLocaleString('en-IN') : ''
-  ].map(v => `"${(v||'').toString().replace(/"/g,'""')}"`));
-  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = `washkart-orders-${new Date().toISOString().slice(0,10)}.csv`;
+function changePage(dir){currentPage+=dir;renderOrders();}
+function exportCSV(){
+  const f=getFilteredOrders();
+  const h=['Order ID','Name','Phone','Address','Date','Slot','Status','Service','Express','Amount','Payment','Branch','Source','Notes','Created'];
+  const rows=f.map(b=>[b.id,b.name,b.phone,b.address,b.date,b.slot,b.status,b.service_type,b.express?'Yes':'No',b.amount,b.payment_status,b.branch,b.source,b.notes,b.created_at].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`));
+  const csv=[h.join(','),...rows.map(r=>r.join(','))].join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`washkart-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
-  toast(`✅ Exported ${filtered.length} orders`);
+  toast(`Exported ${f.length} orders`);
 }
 
-// ── STATUS / SERVICE / EXPRESS UPDATES ────────────────────────────
-function updateStatus(id, status) {
-  const b = allBookings.find(x => x.id === id);
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status, service_type: b?.service_type || '', express: b?.express || false, amount: b?.amount || 0 })
-  }).then(r => r.json()).then(data => {
-    if (b) { b.status = status; if (data.delivery_date) b.delivery_date = data.delivery_date; }
-    toast(`Order ${id} → ${status}`); updateAll();
-  }).catch(() => toast('Update failed', 'error'));
+// ── STATUS UPDATES ────────────────────────────────────────────────
+function updateStatus(id,status) {
+  const b=allBookings.find(x=>x.id===id);
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,service_type:b?.service_type||'',express:b?.express||false,amount:b?.amount||0})})
+  .then(r=>r.json()).then(d=>{if(b){b.status=status;if(d.delivery_date)b.delivery_date=d.delivery_date;} toast(`${id} → ${status}`);updateAll();}).catch(()=>toast('Failed','error'));
 }
-function updateAmount(id, amount) {
-  const b = allBookings.find(x => x.id === id);
-  if (!b) return;
-  b.amount = parseInt(amount) || 0;
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status: b.status, amount: b.amount })
-  }).then(() => { updateAll(); }).catch(() => toast('Amount update failed','error'));
+function updateService(id,svc) {
+  if(!svc) return;
+  const b=allBookings.find(x=>x.id===id); if(!b) return;
+  b.service_type=svc;
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,service_type:svc,express:b.express||false})})
+  .then(r=>r.json()).then(d=>{if(d.delivery_date)b.delivery_date=d.delivery_date;updateAll();});
 }
-function updatePaymentStatus(id, payment_status) {
-  const b = allBookings.find(x => x.id === id);
-  if (!b) return;
-  b.payment_status = payment_status;
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status: b.status, payment_status, payment_method: payment_status === 'paid' ? (b.payment_method || 'manual') : b.payment_method })
-  }).then(() => { toast(`Payment marked ${payment_status}`); updateAll(); }).catch(() => toast('Failed','error'));
+function updateAmount(id,amount) {
+  const b=allBookings.find(x=>x.id===id); if(!b) return;
+  b.amount=parseInt(amount)||0;
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,amount:b.amount})})
+  .then(()=>updateAll()).catch(()=>toast('Failed','error'));
+}
+function updatePaymentStatus(id,ps) {
+  const b=allBookings.find(x=>x.id===id); if(!b) return;
+  b.payment_status=ps;
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,payment_status:ps,payment_method:ps==='paid'?(b.payment_method||'manual'):b.payment_method})})
+  .then(()=>{toast(`Payment ${ps}`);updateAll();}).catch(()=>toast('Failed','error'));
 }
 function sendPaymentReminder(id) {
-  const b = allBookings.find(x => x.id === id);
-  if (!b?.amount) { toast('Set amount first', 'error'); return; }
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status: b.status, send_payment_reminder: true, amount: b.amount })
-  }).then(() => toast('💰 Reminder sent!')).catch(() => toast('Failed','error'));
+  const b=allBookings.find(x=>x.id===id);
+  if(!b?.amount){toast('Set amount first','error');return;}
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,send_payment_reminder:true,amount:b.amount})})
+  .then(()=>toast('Payment reminder sent!')).catch(()=>toast('Failed','error'));
 }
-function updateService(id, serviceType) {
-  if (!serviceType) return;
-  const b = allBookings.find(x => x.id === id);
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status: b?.status || 'picked', service_type: serviceType, express: b?.express || false })
-  }).then(r => r.json()).then(data => {
-    if (b) { b.service_type = serviceType; if (data.delivery_date) b.delivery_date = data.delivery_date; }
-    updateAll();
-  });
-}
-function toggleExpress(id, val) {
-  const b = allBookings.find(x => x.id === id);
-  fetch(`${BOT_URL}/bookings/${id}`, {
-    method:'PATCH', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ status: b?.status || 'picked', service_type: b?.service_type || 'mixed', express: val })
-  }).then(r => r.json()).then(data => {
-    if (b) { b.express = val; if (data.delivery_date) b.delivery_date = data.delivery_date; }
-    updateAll();
-  });
-}
-
-// ── DELETE ORDER ───────────────────────────────────────────────────
 function deleteOrder(id) {
-  if (!confirm(`Delete order ${id}? This cannot be undone.`)) return;
-  fetch(`${BOT_URL}/bookings/${id}`, { method:'DELETE' })
-    .then(r => { if (r.ok) { allBookings = allBookings.filter(b => b.id !== id); toast(`Order ${id} deleted`); updateAll(); } else toast('Delete failed','error'); })
-    .catch(() => toast('Delete failed','error'));
+  if(!confirm(`Delete ${id}?`)) return;
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'DELETE'}).then(r=>{if(r.ok){allBookings=allBookings.filter(b=>b.id!==id);toast(`${id} deleted`);updateAll();}else toast('Delete failed','error');});
 }
 
-// ── TODAY ──────────────────────────────────────────────────────────
-function renderToday() {
-  const today = getToday();
-  const pickups = allBookings.filter(b => b.date === today && !['cancelled'].includes(b.status));
-  const deliveries = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status));
-  const overdue = allBookings.filter(isOverdue);
-
-  // Pickups
-  const pEl = document.getElementById('today-pickups');
-  if (!pickups.length) { pEl.innerHTML = '<div class="empty"><div class="empty-icon">🎉</div>No pickups today</div>'; }
-  else {
-    const morning = pickups.filter(b => b.slot?.includes('Morning'));
-    const evening = pickups.filter(b => b.slot?.includes('Evening'));
-    const walkin  = pickups.filter(b => b.slot === 'Walk-in' || b.source === 'walkin');
-    let html = '';
-    if (morning.length) {
-      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#d97706;text-transform:uppercase;letter-spacing:.05em">🌅 Morning (10 AM – 1 PM)</div>`;
-      morning.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
-    }
-    if (evening.length) {
-      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#2563eb;text-transform:uppercase;letter-spacing:.05em">🌆 Evening (5 PM – 8 PM)</div>`;
-      evening.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address}</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
-    }
-    if (walkin.length) {
-      html += `<div style="padding:8px 1.3rem 4px;font-size:11px;font-weight:600;color:#0369a1;text-transform:uppercase;letter-spacing:.05em">🚶 Walk-in (In-store)</div>`;
-      walkin.forEach(b => html += `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">Walk-in (In-store)</div><div class="today-phone">${b.phone}</div>${sourceBadge(b.source)}</div>`);
-    }
-    pEl.innerHTML = html;
-  }
-
-  // Deliveries
-  const dEl = document.getElementById('today-deliveries');
-  if (!deliveries.length) { dEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No deliveries today</div>'; }
-  else { dEl.innerHTML = deliveries.map(b => `<div class="today-item"><div class="today-name">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">${b.address || 'Walk-in (In-store)'}</div><div class="today-phone">${b.phone}</div>${b.service_type ? `<div style="font-size:11px;color:var(--green)">${b.express?'⚡ Express — ':''}${b.service_type}</div>` : ''}</div>`).join(''); }
-
-  // Overdue
-  const oEl = document.getElementById('overdue-list');
-  if (!overdue.length) { oEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No overdue orders</div>'; }
-  else { oEl.innerHTML = overdue.map(b => `<div class="today-item" style="border-left:3px solid var(--red);padding-left:calc(1.3rem - 3px)"><div class="today-name" style="color:var(--red)">${b.name} <span class="order-id">${b.id}</span></div><div class="today-address">Due: ${b.delivery_date} — ${statusBadge(b.status)}</div><div class="today-phone">${b.phone}</div></div>`).join(''); }
-
-  document.getElementById('stat-overdue').textContent = overdue.length;
-}
-
-// ── CUSTOMERS ──────────────────────────────────────────────────────
-function renderCustomers() {
-  const q = (document.getElementById('cust-search')?.value || '').toLowerCase();
-  let custs = allCustomers;
-  if (q) custs = custs.filter(c => c.name?.toLowerCase().includes(q) || c.phone?.includes(q) || c.address?.toLowerCase().includes(q));
-  const el = document.getElementById('customers-list');
-  document.getElementById('cust-count').textContent = `${custs.length} customers`;
-  if (!custs.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div>No customers found</div>'; return; }
-  el.innerHTML = custs.map(c => {
-    const orderCount = allBookings.filter(b => b.phone === c.phone).length;
-    return `<div class="cust-item">
-      <div class="cust-avatar">${(c.name||'?')[0].toUpperCase()}</div>
-      <div class="cust-info">
-        <div class="cust-name">${c.name}</div>
-        <div class="cust-phone">${c.phone}</div>
-        <div style="font-size:11px;color:var(--muted)">${c.address||''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        <div style="font-size:12px;color:var(--muted)">${orderCount} order${orderCount!==1?'s':''}</div>
-        <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="openSendMsg('${c.phone}','${c.name}')">💬</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ── RATINGS ────────────────────────────────────────────────────────
-function renderRatings() {
-  const el = document.getElementById('ratings-list');
-  const sumEl = document.getElementById('ratings-summary');
-  if (!allRatings.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">⭐</div>No ratings yet</div>'; sumEl.innerHTML = '<div class="empty">No data</div>'; return; }
-  const rated = allRatings.filter(r => r.rating);
-  const avg = rated.length ? (rated.reduce((s,r) => s + r.rating, 0) / rated.length).toFixed(1) : '—';
-  const dist = [5,4,3,2,1].map(n => ({ n, count: rated.filter(r => r.rating === n).length }));
-  sumEl.innerHTML = `
-    <div style="text-align:center;margin-bottom:1rem">
-      <div style="font-size:40px;font-weight:600;color:var(--green)">${avg}</div>
-      <div style="color:#f59e0b;font-size:20px">${'⭐'.repeat(Math.round(avg))}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">${rated.length} ratings</div>
-    </div>
-    ${dist.map(d => `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <span style="font-size:12px;width:20px">${d.n}⭐</span>
-      <div style="flex:1;background:var(--bg);border-radius:4px;height:8px;overflow:hidden">
-        <div style="width:${rated.length?Math.round(d.count/rated.length*100):0}%;background:var(--green);height:100%"></div>
-      </div>
-      <span style="font-size:12px;color:var(--muted);width:20px">${d.count}</span>
-    </div>`).join('')}`;
-  el.innerHTML = allRatings.map(r => {
-    const cust = allCustomers.find(c => c.phone === r.phone);
-    return `<div class="rating-item">
-      <div style="display:flex;justify-content:space-between;align-items:start">
-        <div>
-          <span style="font-weight:500">${cust?.name || r.phone}</span>
-          <span class="order-id" style="margin-left:8px">${r.order_id||''}</span>
-        </div>
-        <div class="stars">${r.rating ? '⭐'.repeat(r.rating) : '💬'}</div>
-      </div>
-      ${r.comment ? `<div style="font-size:12px;color:var(--muted);margin-top:4px">"${r.comment}"</div>` : ''}
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">${r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN') : ''}</div>
-    </div>`;
-  }).join('');
-}
-
-// ── REVENUE ────────────────────────────────────────────────────────
-function calcCollected(bookings) {
-  return bookings.filter(b => b.payment_status === 'paid').reduce((s,b) => s + (b.amount||0), 0);
-}
-function calcPending(bookings) {
-  return bookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid' && b.amount > 0).reduce((s,b) => s + (b.amount||0), 0);
-}
-function renderRevenue() {
-  const now = new Date();
-  const weekAgo  = new Date(now); weekAgo.setDate(now.getDate() - 7);
-  const monthAgo = new Date(now); monthAgo.setMonth(now.getMonth() - 1);
-  const weekOrders  = allBookings.filter(b => b.payment_date && new Date(b.payment_date) >= weekAgo);
-  const monthOrders = allBookings.filter(b => b.payment_date && new Date(b.payment_date) >= monthAgo);
-  document.getElementById('rev-week').textContent  = `₹${calcCollected(weekOrders).toLocaleString('en-IN')}`;
-  document.getElementById('rev-month').textContent = `₹${calcCollected(monthOrders).toLocaleString('en-IN')}`;
-  document.getElementById('rev-total').textContent = `₹${calcCollected(allBookings).toLocaleString('en-IN')}`;
-  document.getElementById('rev-bavdhan').textContent = `₹${calcCollected(allBookings.filter(b=>b.branch==='bavdhan')).toLocaleString('en-IN')}`;
-  document.getElementById('rev-baner').textContent   = `₹${calcCollected(allBookings.filter(b=>b.branch==='baner')).toLocaleString('en-IN')}`;
-  document.getElementById('rev-pending').textContent = `₹${calcPending(allBookings).toLocaleString('en-IN')}`;
-
-  // Service breakdown
-  const svc = {};
-  allBookings.forEach(b => { if (b.service_type) { svc[b.service_type] = (svc[b.service_type]||0) + 1; } });
-  const total = Object.values(svc).reduce((a,b)=>a+b,0)||1;
-  const svcEl = document.getElementById('service-breakdown');
-  if (!Object.keys(svc).length) { svcEl.innerHTML = '<div class="empty">No service data yet. Assign services when picking up orders.</div>'; }
-  else { svcEl.innerHTML = Object.entries(svc).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <span style="font-size:13px;width:100px;text-transform:capitalize">${k}</span>
-      <div style="flex:1;background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
-        <div style="width:${Math.round(v/total*100)}%;background:var(--green);height:100%;border-radius:6px"></div>
-      </div>
-      <span style="font-size:12px;color:var(--muted);width:40px;text-align:right">${v} orders</span>
-    </div>`).join(''); }
-
-  // Source breakdown
-  const src = {};
-  allBookings.forEach(b => { const s = b.source||'whatsapp'; src[s] = (src[s]||0) + 1; });
-  const srcEl = document.getElementById('source-breakdown');
-  const srcTotal = Object.values(src).reduce((a,b)=>a+b,0)||1;
-  srcEl.innerHTML = Object.entries(src).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <span style="font-size:13px;width:100px;text-transform:capitalize">${k}</span>
-      <div style="flex:1;background:var(--bg);border-radius:6px;height:10px;overflow:hidden">
-        <div style="width:${Math.round(v/srcTotal*100)}%;background:var(--blue);height:100%;border-radius:6px"></div>
-      </div>
-      <span style="font-size:12px;color:var(--muted);width:40px;text-align:right">${v}</span>
-    </div>`).join('');
-}
-
-// ── STATS UPDATE ───────────────────────────────────────────────────
-function updateAll() {
-  const today = getToday();
-  document.getElementById('stat-total').textContent = allBookings.length;
-  document.getElementById('stat-today').textContent = allBookings.filter(b => b.date === today && !['cancelled'].includes(b.status)).length;
-  document.getElementById('stat-deliveries').textContent = allBookings.filter(b => b.delivery_date === today && !['delivered','cancelled'].includes(b.status)).length;
-  document.getElementById('stat-customers').textContent = allCustomers.length;
-  // Payment stats
-  const unpaidDelivered = allBookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid' && b.amount > 0);
-  const unpaidTotal = unpaidDelivered.reduce((s,b) => s + (b.amount||0), 0);
-  document.getElementById('stat-unpaid').textContent = unpaidDelivered.length;
-  document.getElementById('stat-unpaid-amt').textContent = `₹${unpaidTotal.toLocaleString('en-IN')} pending`;
-  renderBookings(); renderToday(); renderCustomers(); renderRatings(); renderRevenue(); renderPayments();
-}
-
-// ── LOAD DATA ──────────────────────────────────────────────────────
-async function loadData() {
-  try {
-    const bParam = activeBranch !== 'all' ? `?branch=${activeBranch}` : '';
-    const [bRes, cRes, rRes] = await Promise.all([
-      fetch(`${BOT_URL}/bookings${bParam}`),
-      fetch(`${BOT_URL}/customers${bParam}`),
-      fetch(`${BOT_URL}/ratings${bParam}`).catch(() => ({ json: () => [] }))
-    ]);
-    allBookings = (await bRes.json()).map(b => ({
-      id: b.order_id, name: b.name||'', phone: b.phone||'', address: b.address||'',
-      date: b.date||'', slot: b.slot||'', status: b.status||'pending',
-      service_type: b.service_type||'', express: b.express||false,
-      delivery_date: b.delivery_date||'', source: b.source||'whatsapp',
-      branch: b.branch||'bavdhan', notes: b.notes||'', created_at: b.created_at||'',
-      amount: b.amount||0, payment_status: b.payment_status||'unpaid',
-      payment_method: b.payment_method||'', payment_date: b.payment_date||''
-    }));
-    allCustomers = await cRes.json();
-    allRatings = await rRes.json().catch(() => []);
-    // Load leads
-    const lRes = await fetch(`${BOT_URL}/leads${bParam}`).catch(() => ({ json: () => [] }));
-    allLeads = await lRes.json().catch(() => []);
-    populateCustomerDropdown();
-    updateAll();
-    renderLeads();
-  } catch (e) { console.error('Load error:', e); toast('Failed to load data', 'error'); }
-}
-
-function switchBranch(branch, el) {
-  activeBranch = branch;
-  document.querySelectorAll('.branch-btn').forEach(b => b.classList.remove('active'));
-  el.classList.add('active');
-  loadData();
-}
-
-function populateCustomerDropdown() {
-  const sel = document.getElementById('msg-customer-select');
-  sel.innerHTML = '<option value="">— Type phone above or select —</option>';
-  allCustomers.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.phone;
-    opt.textContent = `${c.name} (${c.phone})`;
-    opt.dataset.name = c.name;
-    sel.appendChild(opt);
-  });
-}
-
-// ── NEW ORDER ──────────────────────────────────────────────────────
-async function submitNewOrder() {
-  const name    = document.getElementById('new-name').value.trim();
-  const phone   = document.getElementById('new-phone').value.trim();
-  const address = document.getElementById('new-address').value.trim();
-  const dateInput = document.getElementById('new-date').value;
-  const slot    = document.getElementById('new-slot').value;
-  const source  = document.getElementById('new-source').value;
-  const service = document.getElementById('new-service').value;
-  const notes   = document.getElementById('new-notes').value.trim();
-
-  const isWalkIn = source === 'walkin';
-
-  if (!name || !phone) { toast('Name and phone are required', 'error'); return; }
-  if (!isWalkIn && (!address || !dateInput || !slot)) {
-    toast('Please fill address, date and slot', 'error'); return;
-  }
-
-  // Format date string only if provided
-  let dateStr = '';
-  if (dateInput) {
-    const d = new Date(dateInput);
-    dateStr = d.toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' });
-  }
-
-  const branch = document.getElementById('new-branch').value;
-  const body = {
-    name, phone, source, notes, branch,
-    ...(address ? { address } : {}),
-    ...(dateStr  ? { date: dateStr } : {}),
-    ...((!isWalkIn && slot) ? { slot } : {}),
-    ...(service  ? { service_type: service } : {}),
-  };
-
-  try {
-    const res = await fetch(`${BOT_URL}/bookings`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
-    });
-    const data = await res.json();
-    if (data.success) {
-      toast(`✅ Order ${data.order_id} created!`);
-      closeModal('modal-order');
-      // Reset form
-      ['new-name','new-phone','new-address','new-date','new-notes'].forEach(id => document.getElementById(id).value='');
-      document.getElementById('new-source').value = 'walkin';
-      document.getElementById('new-service').value = '';
-      onSourceChange('walkin'); // reset field visibility
-      loadData();
-    } else { toast(data.error||'Failed to create order', 'error'); }
-  } catch { toast('Network error', 'error'); }
-}
-
-// ── MANUAL MESSAGE ─────────────────────────────────────────────────
-// Opens the send message modal, pre-fills phone and a personalised greeting.
-// Stores the customer name so templates can use it.
-function openSendMsg(phone, name) {
-  msgCustomerName = name || '';
-  document.getElementById('msg-phone').value = phone;
-  // Pre-fill with name-personalised greeting
-  document.getElementById('msg-text').value = `Hi ${name}! `;
-  openModal('modal-message');
-}
-
-function selectMsgCustomer(phone) {
-  if (!phone) return;
-  document.getElementById('msg-phone').value = phone;
-  // Also update the stored name from the selected option's data attribute
-  const sel = document.getElementById('msg-customer-select');
-  const opt = sel.options[sel.selectedIndex];
-  msgCustomerName = opt?.dataset?.name || '';
-}
-
-// Templates — all personalised with customer name when available
-const TEMPLATES = {
-  pickup:   (n) => `Hi${n?' '+n:''}! 😊 Washkart mein wapas swagat hai! 🧺\n\nKya agle baar pickup book karna chahoge? Reply karo *pickup* aur hum arrange kar denge. ✨`,
-  ready:    (n) => `Hi${n?' '+n:''}! ✅ Aapke kapde tayaar hain! 👕\n\nKab delivery karein? Ya aap store se collect kar sakte ho. Batao! 😊`,
-  delay:    (n) => `Hi${n?' '+n:''}! 🙏 Aapka Washkart order thoda extra time le raha hai. Kal tak deliver ho jayega — really sorry for the wait!`,
-  reminder: (n) => `⏰ Hi${n?' '+n:''}! Aaj Washkart pickup scheduled hai. 🚗\n\nHamari team aapke slot mein pahunchegi. Ready rakhein kapde! 💚`,
-  promo:    (n) => `🎉 Hi${n?' '+n:''}! Washkart special offer — is hafte dry cleaning pe 10% off! 🧥\n\nAbhi book karo — reply karo *PICKUP*. Sunday tak valid! 🙌`,
-  status:   (n) => `📦 Hi${n?' '+n:''}! Aapke kapde clean ho rahe hain aur jald deliver honge. 🫧✨\n\nThank you for choosing Washkart! 🙏`,
-};
-
-function useTemplate(key) {
-  const fn = TEMPLATES[key];
-  if (fn) document.getElementById('msg-text').value = fn(msgCustomerName);
-}
-
-async function sendManualMessage() {
-  const phone   = document.getElementById('msg-phone').value.trim();
-  const message = document.getElementById('msg-text').value.trim();
-  if (!phone || !message) { toast('Phone and message required', 'error'); return; }
-  try {
-    const res = await fetch(`${BOT_URL}/send-message`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, message })
-    });
-    const data = await res.json();
-    if (data.success) {
-      toast('✅ Message sent!');
-      closeModal('modal-message');
-      document.getElementById('msg-phone').value = '';
-      document.getElementById('msg-text').value = '';
-      document.getElementById('msg-customer-select').value = '';
-      msgCustomerName = '';
-    } else { toast(data.error||'Failed to send', 'error'); }
-  } catch { toast('Network error', 'error'); }
-}
-
-// ── INIT ───────────────────────────────────────────────────────────
-// Default to walk-in form state on load
-onSourceChange('walkin');
-document.getElementById('new-date').value = new Date().toISOString().split('T')[0];
-
-loadData();
-// ── PAYMENTS PAGE ─────────────────────────────────────────────────
+// ── PAYMENTS ──────────────────────────────────────────────────────
 function renderPayments() {
-  const unpaid = allBookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid');
-  const paid   = allBookings.filter(b => b.payment_status === 'paid').slice(0, 20);
-  const tbody  = document.getElementById('payments-table');
-  const pendingTotal = unpaid.reduce((s,b) => s + (b.amount||0), 0);
-  document.getElementById('pending-total-badge').textContent = unpaid.length ? `${unpaid.length} orders — ₹${pendingTotal.toLocaleString('en-IN')} due` : '';
-
-  if (!unpaid.length) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">✅</div>No pending payments!</td></tr>';
-  } else {
-    tbody.innerHTML = unpaid.map(b => `<tr>
-      <td><div class="order-id">${b.id}</div><div style="font-size:11px;color:var(--muted)">${b.date||'—'}</div></td>
+  const unpaid=allBookings.filter(b=>b.status==='delivered'&&b.payment_status!=='paid');
+  const paid=allBookings.filter(b=>b.payment_status==='paid').slice(0,15);
+  const total=unpaid.reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('payments-total').textContent=unpaid.length?`${unpaid.length} orders — Rs ${total.toLocaleString('en-IN')} due`:'';
+  const tbody=document.getElementById('payments-table');
+  if(!unpaid.length){tbody.innerHTML='<tr><td colspan="6" class="empty">No pending payments</td></tr>';return;}
+  tbody.innerHTML=unpaid.map(b=>{
+    const days=b.payment_date?'':`${Math.floor((Date.now()-new Date(b.created_at).getTime())/86400000)}d ago`;
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</td>
       <td><div style="font-weight:500">${b.name}</div><div style="font-size:11px;color:var(--muted)">${b.phone}</div></td>
-      <td><span style="font-size:12px;text-transform:capitalize">${b.branch||'bavdhan'}</span></td>
-      <td>
-        <input type="number" value="${b.amount||''}" placeholder="₹ Amount" min="0"
-          style="width:90px;border:1px solid var(--border);border-radius:6px;padding:4px 7px;font-size:12px"
-          onchange="updateAmount('${b.id}',this.value)">
-      </td>
-      <td><span class="badge badge-payment-unpaid">🔴 Unpaid</span></td>
-      <td>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="updatePaymentStatus('${b.id}','paid')">✅ Mark Paid</button>
-          <button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')" title="Send reminder">💰 Remind</button>
-          <button class="btn btn-ghost btn-sm" onclick="openSendMsg('${b.phone}','${b.name}')">💬</button>
-        </div>
-      </td>
-    </tr>`).join('');
-  }
+      <td style="text-transform:capitalize">${b.branch||'bavdhan'}</td>
+      <td><input type="number" value="${b.amount||''}" min="0" placeholder="Rs" style="width:80px;border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px" onchange="updateAmount('${b.id}',this.value)"></td>
+      <td style="font-size:12px;color:var(--muted)">${days}</td>
+      <td><div style="display:flex;gap:4px">
+        <button class="btn btn-primary btn-sm" onclick="updatePaymentStatus('${b.id}','paid')">Mark Paid</button>
+        <button class="btn btn-ghost btn-sm" onclick="sendPaymentReminder('${b.id}')">Remind</button>
+        <button class="btn-icon" onclick="openSendMsg('${b.phone}','${b.name}')">💬</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  const pl=document.getElementById('paid-list');
+  pl.innerHTML=paid.length?paid.map(b=>`<div style="padding:.7rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-weight:500;font-size:13px">${b.name} <span style="font-family:monospace;font-size:11px;color:var(--muted)">${b.id}</span></div>
+    <div style="font-size:11px;color:var(--muted)">Rs ${b.amount||0} via ${b.payment_method||'-'}</div></div>
+    ${payBadge('paid')}</div>`).join(''):'<div class="empty">No paid orders yet</div>';
+}
 
-  const paidEl = document.getElementById('paid-list');
-  if (!paid.length) {
-    paidEl.innerHTML = '<div class="empty"><div class="empty-icon">✅</div>No paid orders yet</div>';
-  } else {
-    paidEl.innerHTML = paid.map(b => `<div class="today-item">
-      <div class="today-name">${b.name} <span class="order-id">${b.id}</span> <span class="badge badge-payment-paid">✅ Paid</span></div>
-      <div class="today-address">₹${b.amount||0} via ${b.payment_method||'—'} | ${b.payment_date ? new Date(b.payment_date).toLocaleDateString('en-IN') : '—'}</div>
-      <div class="today-phone">${b.phone}</div>
-    </div>`).join('');
+// ── CALENDAR ──────────────────────────────────────────────────────
+function calMonth(dir) { calCurrentDate.setMonth(calCurrentDate.getMonth()+dir); renderCalendar(); }
+function renderCalendar() {
+  const year=calCurrentDate.getFullYear(), month=calCurrentDate.getMonth();
+  document.getElementById('cal-title').textContent=calCurrentDate.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const today=new Date(); today.setHours(0,0,0,0);
+  let html='';
+  for(let i=0;i<firstDay;i++) html+=`<div class="cal-day other-month"></div>`;
+  for(let d=1;d<=daysInMonth;d++) {
+    const date=new Date(year,month,d);
+    const dateStr=date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+    const isToday=date.toDateString()===today.toDateString();
+    const pickups=allBookings.filter(b=>b.date===dateStr&&!['cancelled'].includes(b.status));
+    const deliveries=allBookings.filter(b=>b.delivery_date===dateStr&&!['delivered','cancelled'].includes(b.status));
+    html+=`<div class="cal-day ${isToday?'today':''}">
+      <div class="cal-date" style="color:${date.getDay()===4?'var(--red)':'inherit'}">${d}${date.getDay()===4?' 🚫':''}</div>
+      ${pickups.slice(0,2).map(b=>`<div class="cal-event cal-pickup" title="${b.name}">${b.name}</div>`).join('')}
+      ${pickups.length>2?`<div style="font-size:9px;color:#1e40af">+${pickups.length-2} more</div>`:''}
+      ${deliveries.slice(0,2).map(b=>`<div class="cal-event cal-delivery" title="${b.name}">📦 ${b.name}</div>`).join('')}
+      ${deliveries.length>2?`<div style="font-size:9px;color:#9a3412">+${deliveries.length-2} more</div>`:''}
+    </div>`;
   }
+  document.getElementById('calendar-grid').innerHTML=html;
 }
 
 // ── LEADS ─────────────────────────────────────────────────────────
-let allLeads = [], currentLeadFilter = 'all';
-function filterLeads(f, el) {
-  currentLeadFilter = f;
-  document.querySelectorAll('#page-leads .filter-tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  renderLeads();
-}
+let leadFilter='all';
 function renderLeads() {
-  const filtered = currentLeadFilter === 'all' ? allLeads : allLeads.filter(l => l.stage === currentLeadFilter);
-  document.getElementById('leads-count').textContent = `${filtered.length} leads`;
-  const tbody = document.getElementById('leads-table');
-  if (!filtered.length) { tbody.innerHTML = '<tr><td colspan="7" class="empty"><div class="empty-icon">🎯</div>No leads yet</td></tr>'; return; }
-  const stageColor = { enquired:'#2563eb', booking_started:'#d97706', dropped:'#dc2626', converted:'#16a34a' };
-  tbody.innerHTML = filtered.map(l => `<tr>
+  const stages=['enquired','booking_started','dropped','converted'];
+  const colors={enquired:'#1d4ed8',booking_started:'#92400e',dropped:'#991b1b',converted:'#166534'};
+  const bgs={enquired:'#eff6ff',booking_started:'#fef3c7',dropped:'#fef2f2',converted:'#f0fdf4'};
+  document.getElementById('leads-funnel').innerHTML=
+    [{key:'all',label:'All',count:allLeads.length,bg:'#f3f4f6',color:'#374151'},...stages.map(s=>({key:s,label:s.replace('_',' '),count:allLeads.filter(l=>l.stage===s).length,bg:bgs[s],color:colors[s]}))].map(s=>`
+    <div class="funnel-stage" style="background:${s.bg};color:${s.color}" onclick="leadFilter='${s.key}';renderLeads()">
+      <div class="funnel-count">${s.count}</div>
+      <div class="funnel-label" style="text-transform:capitalize">${s.label}</div>
+    </div>`).join('');
+  const filtered=leadFilter==='all'?allLeads:allLeads.filter(l=>l.stage===leadFilter);
+  document.getElementById('leads-count').textContent=`${filtered.length} leads`;
+  const tbody=document.getElementById('leads-table');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6" class="empty"><div class="empty-icon">🎯</div>No leads</td></tr>';return;}
+  tbody.innerHTML=filtered.map(l=>`<tr>
     <td style="font-family:monospace;font-size:12px">+${l.phone}</td>
-    <td><span style="background:${stageColor[l.stage]||'#666'}22;color:${stageColor[l.stage]||'#666'};padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600">${l.stage}</span></td>
+    <td><span class="badge b-${l.stage}">${l.stage?.replace('_',' ')}</span></td>
     <td style="font-size:12px;text-transform:capitalize">${l.branch||'bavdhan'}</td>
-    <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.first_message||'-'}</td>
     <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.last_message||'-'}</td>
     <td style="font-size:11px;color:var(--muted)">${l.updated_at?new Date(l.updated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-'}</td>
     <td><button class="btn btn-ghost btn-sm" onclick="openSendMsg('${l.phone}','')">Message</button></td>
   </tr>`).join('');
 }
 
-// ── CONVERSATIONS ─────────────────────────────────────────────────
-let allConversations = [], selectedConvPhone = null, takeoverActive = false;
-
-async function loadConversations() {
-  try {
-    const res = await fetch(`${BOT_URL}/conversations`);
-    allConversations = await res.json();
-    renderConversationList();
-  } catch (e) { console.error('Conversations load error:', e); }
-}
-
-function filterConversations() {
-  renderConversationList();
-}
-
-function renderConversationList() {
-  const q = (document.getElementById('conv-search')?.value || '').toLowerCase();
-  let convs = allConversations;
-  if (q) convs = convs.filter(c => c.phone?.includes(q));
-  const el = document.getElementById('conversations-list');
-  if (!convs.length) { el.innerHTML = '<div class="empty">No conversations yet</div>'; return; }
-  el.innerHTML = convs.map(c => {
-    const lastMsg = (c.history || []).slice(-1)[0];
-    const cust = allCustomers.find(x => x.phone === c.phone);
-    const isSelected = c.phone === selectedConvPhone;
-    return `<div onclick="selectConversation('${c.phone}')" style="padding:12px 1.3rem;border-bottom:1px solid var(--border);cursor:pointer;background:${isSelected?'var(--green-light)':'transparent'};transition:background .1s">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
-        <span style="font-weight:500;font-size:13px">${cust?.name || '+'+c.phone}</span>
-        <span style="font-size:10px;color:var(--muted)">${c.updated_at?new Date(c.updated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>
+// ── CUSTOMERS ─────────────────────────────────────────────────────
+function renderCustomers() {
+  const q=(document.getElementById('cust-search')?.value||'').toLowerCase();
+  let custs=allCustomers;
+  if(q) custs=custs.filter(c=>c.name?.toLowerCase().includes(q)||c.phone?.includes(q));
+  document.getElementById('cust-count').textContent=`${custs.length} customers`;
+  const el=document.getElementById('cust-list');
+  el.innerHTML=custs.map(c=>{
+    const orders=allBookings.filter(b=>b.phone===c.phone);
+    const spent=orders.filter(b=>b.payment_status==='paid').reduce((s,b)=>s+(b.amount||0),0);
+    return `<div style="padding:.8rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:12px">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--green-light);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--green);flex-shrink:0">${(c.name||'?')[0].toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500">${c.name}</div>
+        <div style="font-size:11px;color:var(--muted);font-family:monospace">${c.phone}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.address||''}</div>
       </div>
-      <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lastMsg?`${lastMsg.role==='customer'?'👤':'🤖'} ${lastMsg.text}`:'No messages'}</div>
-      <div style="font-size:10px;color:var(--green);margin-top:2px">${c.step&&c.step!=='idle'?`Step: ${c.step}`:''}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:500">${orders.length} orders</div>
+        <div style="font-size:11px;color:var(--green)">Rs ${spent.toLocaleString('en-IN')} spent</div>
+        <div style="display:flex;gap:4px;margin-top:4px;justify-content:flex-end">
+          <button class="btn-icon" onclick="openSendMsg('${c.phone}','${c.name}')">💬</button>
+          <button class="btn-icon" onclick="openCustomerProfile('${c.phone}')">👤</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
 
-async function selectConversation(phone) {
-  selectedConvPhone = phone;
-  renderConversationList();
-  const cust = allCustomers.find(c => c.phone === phone);
-  document.getElementById('conv-title').textContent = cust?.name || '+' + phone;
-  document.getElementById('conv-actions').style.display = 'flex';
-
-  // Load conversation from sessions
-  const conv = allConversations.find(c => c.phone === phone);
-  if (!conv) return;
-
-  // Check takeover status
-  takeoverActive = conv.takeoverActive || false;
-  document.getElementById('btn-takeover').textContent = takeoverActive ? 'Resume Bot' : 'Take Over';
-  document.getElementById('btn-takeover').style.background = takeoverActive ? 'var(--red)' : '';
-  document.getElementById('btn-takeover').style.color = takeoverActive ? '#fff' : '';
-
-  // Render messages
-  const messages = conv.history || [];
-  const msgEl = document.getElementById('conv-messages');
-  if (!messages.length) { msgEl.innerHTML = '<div class="empty">No message history</div>'; }
-  else {
-    msgEl.innerHTML = messages.map(m => `
-      <div style="display:flex;justify-content:${m.role==='customer'?'flex-start':'flex-end'}">
-        <div style="max-width:75%;padding:8px 12px;border-radius:${m.role==='customer'?'0 12px 12px 12px':'12px 0 12px 12px'};background:${m.role==='customer'?'var(--bg)':'var(--green)'};color:${m.role==='customer'?'var(--text)':'white'};font-size:13px;line-height:1.4">
-          ${m.text}
-        </div>
-      </div>`).join('');
-    msgEl.scrollTop = msgEl.scrollHeight;
-  }
-
-  // Session info
-  const bk = conv.booking || {};
-  document.getElementById('conv-session-info').textContent =
-    `Step: ${conv.step||'idle'} | ` +
-    `Name: ${bk.name||'-'} | Address: ${bk.address||'-'} | Date: ${bk.date||'-'} | Slot: ${bk.slot||'-'}`;
+function openCustomerProfile(phone) {
+  const c=allCustomers.find(x=>x.phone===phone);
+  const orders=allBookings.filter(b=>b.phone===phone).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const totalSpent=orders.filter(b=>b.payment_status==='paid').reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('profile-title').textContent=c?.name||phone;
+  document.getElementById('profile-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
+      <div style="text-align:center;padding:.8rem;background:var(--green-light);border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--green)">${orders.length}</div><div style="font-size:11px;color:var(--muted)">Orders</div></div>
+      <div style="text-align:center;padding:.8rem;background:#eff6ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--blue)">Rs ${totalSpent.toLocaleString('en-IN')}</div><div style="font-size:11px;color:var(--muted)">Total Spent</div></div>
+      <div style="text-align:center;padding:.8rem;background:#f5f3ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--purple)">${c?.branch||'bavdhan'}</div><div style="font-size:11px;color:var(--muted)">Branch</div></div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:.5rem">Contact</div>
+      <div style="font-size:13px;margin-bottom:4px">📱 +${phone}</div>
+      <div style="font-size:13px">📍 ${c?.address||'—'}</div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:.5rem">Order History</div>
+      ${orders.slice(0,10).map(b=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
+        <div><span style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</span> <span style="font-size:11px;color:var(--muted)">${b.date||'Walk-in'}</span></div>
+        <div style="display:flex;gap:4px;align-items:center">${statusBadge(b.status)}${b.amount?`<span style="font-size:12px;font-weight:500">Rs ${b.amount}</span>`:''}</div>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:1rem;display:flex;gap:8px">
+      <button class="btn btn-ghost" onclick="openSendMsg('${phone}','${c?.name||''}');closeModal('modal-profile')">💬 Send Message</button>
+    </div>`;
+  openModal('modal-profile');
 }
 
+// ── CHATS ─────────────────────────────────────────────────────────
+async function loadConversations() {
+  try {
+    const res=await fetch(`${BOT_URL}/conversations`);
+    allConversations=await res.json();
+    renderChatList();
+  } catch(e) { console.error(e); }
+}
+function filterChats() { renderChatList(); }
+function renderChatList() {
+  const q=(document.getElementById('chat-search')?.value||'').toLowerCase();
+  let convs=allConversations;
+  if(q) convs=convs.filter(c=>c.phone?.includes(q));
+  const el=document.getElementById('chat-list-items');
+  if(!convs.length){el.innerHTML='<div class="empty">No conversations</div>';return;}
+  el.innerHTML=convs.map(c=>{
+    const cust=allCustomers.find(x=>x.phone===c.phone);
+    const lastMsg=(c.history||[]).slice(-1)[0];
+    return `<div class="chat-item ${c.phone===selectedChat?'active':''}" onclick="selectChat('${c.phone}')">
+      <div style="display:flex;justify-content:space-between">
+        <div class="chat-item-name">${cust?.name||'+'+c.phone}</div>
+        <div class="chat-item-time">${c.updated_at?new Date(c.updated_at).toLocaleString('en-IN',{hour:'2-digit',minute:'2-digit'}):''}</div>
+      </div>
+      <div class="chat-item-preview">${lastMsg?`${lastMsg.role==='customer'?'👤':'🤖'} ${lastMsg.text}`:''}</div>
+      ${c.step&&c.step!=='idle'?`<div style="font-size:10px;color:var(--green);margin-top:2px">Step: ${c.step}</div>`:''}
+    </div>`;
+  }).join('');
+}
+function selectChat(phone) {
+  selectedChat=phone;
+  renderChatList();
+  const c=allConversations.find(x=>x.phone===phone);
+  const cust=allCustomers.find(x=>x.phone===phone);
+  document.getElementById('chat-title').textContent=cust?.name||'+'+phone;
+  document.getElementById('chat-subtitle').textContent=`+${phone} | ${c?.step||'idle'}`;
+  document.getElementById('chat-actions').style.display='flex';
+  takeoverActive=c?.takeoverActive||false;
+  const btn=document.getElementById('btn-takeover');
+  btn.textContent=takeoverActive?'Resume Bot':'Take Over';
+  btn.style.background=takeoverActive?'var(--red)':'';
+  btn.style.color=takeoverActive?'#fff':'';
+  const msgs=c?.history||[];
+  const msgEl=document.getElementById('chat-messages');
+  if(!msgs.length){msgEl.innerHTML='<div class="empty" style="margin:auto">No message history</div>';return;}
+  msgEl.innerHTML=msgs.map(m=>`<div style="display:flex;justify-content:${m.role==='customer'?'flex-start':'flex-end'}">
+    <div class="msg-bubble ${m.role==='customer'?'msg-customer':'msg-bot'}">${m.text.replace(/\n/g,'<br>')}</div>
+  </div>`).join('');
+  msgEl.scrollTop=msgEl.scrollHeight;
+  const bk=c?.booking||{};
+  document.getElementById('chat-session-info').textContent=`Step: ${c?.step||'idle'} | Name: ${bk.name||'-'} | Date: ${bk.date||'-'} | Slot: ${bk.slot||'-'}`;
+}
 async function toggleTakeover() {
-  if (!selectedConvPhone) return;
-  takeoverActive = !takeoverActive;
-  await fetch(`${BOT_URL}/takeover`, {
-    method: 'POST', headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ phone: selectedConvPhone, active: takeoverActive })
-  });
-  document.getElementById('btn-takeover').textContent = takeoverActive ? 'Resume Bot' : 'Take Over';
-  document.getElementById('btn-takeover').style.background = takeoverActive ? 'var(--red)' : '';
-  document.getElementById('btn-takeover').style.color = takeoverActive ? '#fff' : '';
-  toast(takeoverActive ? 'Bot paused. You can now reply via WhatsApp.' : 'Bot resumed.');
+  if(!selectedChat) return;
+  takeoverActive=!takeoverActive;
+  await fetch(`${BOT_URL}/takeover`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedChat,active:takeoverActive})});
+  const btn=document.getElementById('btn-takeover');
+  btn.textContent=takeoverActive?'Resume Bot':'Take Over';
+  btn.style.background=takeoverActive?'var(--red)':'';
+  btn.style.color=takeoverActive?'#fff':'';
+  toast(takeoverActive?'Bot paused. Reply via Send Message below.':'Bot resumed.');
+}
+async function sendChatReply() {
+  if(!selectedChat) return;
+  const text=document.getElementById('chat-reply-text').value.trim();
+  if(!text) return;
+  const cust=allCustomers.find(c=>c.phone===selectedChat);
+  const branch=cust?.branch||'bavdhan';
+  try {
+    await fetch(`${BOT_URL}/send-message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedChat,message:text,branch})});
+    document.getElementById('chat-reply-text').value='';
+    toast('Sent!');
+    await loadConversations();
+    selectChat(selectedChat);
+  } catch(e) { toast('Failed','error'); }
+}
+function chatSendQuick() { openSendMsg(selectedChat,allCustomers.find(c=>c.phone===selectedChat)?.name||''); }
+
+// ── REVENUE ───────────────────────────────────────────────────────
+function renderRevenue() {
+  const now=new Date();
+  const weekAgo=new Date(now); weekAgo.setDate(now.getDate()-7);
+  const monthAgo=new Date(now); monthAgo.setMonth(now.getMonth()-1);
+  const paid=b=>b.payment_status==='paid';
+  const collect=arr=>arr.filter(paid).reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('rev-week').textContent=`Rs ${collect(allBookings.filter(b=>b.payment_date&&new Date(b.payment_date)>=weekAgo)).toLocaleString('en-IN')}`;
+  document.getElementById('rev-month').textContent=`Rs ${collect(allBookings.filter(b=>b.payment_date&&new Date(b.payment_date)>=monthAgo)).toLocaleString('en-IN')}`;
+  document.getElementById('rev-total').textContent=`Rs ${collect(allBookings).toLocaleString('en-IN')}`;
+  const pending=allBookings.filter(b=>b.status==='delivered'&&!paid(b)).reduce((s,b)=>s+(b.amount||0),0);
+  // Branch
+  const bAvd=collect(allBookings.filter(b=>b.branch==='bavdhan'));
+  const bBan=collect(allBookings.filter(b=>b.branch==='baner'));
+  document.getElementById('rev-branch').innerHTML=barChart([{label:'Bavdhan',val:bAvd,color:'var(--green)'},{label:'Baner',val:bBan,color:'var(--blue)'},{label:'Pending',val:pending,color:'var(--red)'}]);
+  // Service
+  const svcs={};
+  allBookings.filter(b=>b.service_type).forEach(b=>{svcs[b.service_type]=(svcs[b.service_type]||0)+1;});
+  document.getElementById('rev-service').innerHTML=barChart(Object.entries(svcs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,val:v,color:'var(--purple)'})),true);
+  // Source
+  const srcs={};
+  allBookings.forEach(b=>{const s=b.source||'whatsapp';srcs[s]=(srcs[s]||0)+1;});
+  document.getElementById('rev-source').innerHTML=barChart(Object.entries(srcs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({label:k,val:v,color:'var(--orange)'})),true);
+}
+function barChart(items,count=false) {
+  const max=Math.max(...items.map(i=>i.val),1);
+  return items.map(i=>`<div class="chart-bar-row">
+    <span class="chart-bar-label" style="text-transform:capitalize">${i.label}</span>
+    <div class="chart-bar-track"><div class="chart-bar-fill" style="width:${Math.round(i.val/max*100)}%;background:${i.color}"></div></div>
+    <span class="chart-bar-val">${count?i.val:`Rs ${i.val.toLocaleString('en-IN')}`}</span>
+  </div>`).join('');
 }
 
-function openSendMsgFromConv() {
-  if (!selectedConvPhone) return;
-  const cust = allCustomers.find(c => c.phone === selectedConvPhone);
-  openSendMsg(selectedConvPhone, cust?.name || '');
+// ── ANALYTICS ─────────────────────────────────────────────────────
+function renderAnalytics() {
+  const enquired=allLeads.length;
+  const converted=allLeads.filter(l=>l.stage==='converted').length;
+  const convRate=enquired?Math.round(converted/enquired*100):0;
+  document.getElementById('a-conv').textContent=`${convRate}%`;
+  const custPhones=allCustomers.map(c=>c.phone);
+  const repeatCusts=custPhones.filter(p=>allBookings.filter(b=>b.phone===p).length>1).length;
+  document.getElementById('a-repeat').textContent=`${custPhones.length?Math.round(repeatCusts/custPhones.length*100):0}%`;
+  const delivered=allBookings.filter(b=>b.status==='delivered'&&b.amount>0);
+  const aov=delivered.length?Math.round(delivered.reduce((s,b)=>s+(b.amount||0),0)/delivered.length):0;
+  document.getElementById('a-aov').textContent=`Rs ${aov.toLocaleString('en-IN')}`;
+  // Weekly comparison
+  const now=new Date();
+  const weekAgo=new Date(now); weekAgo.setDate(now.getDate()-7);
+  const twoWeeksAgo=new Date(now); twoWeeksAgo.setDate(now.getDate()-14);
+  const thisWeek=allBookings.filter(b=>b.created_at&&new Date(b.created_at)>=weekAgo).length;
+  const lastWeek=allBookings.filter(b=>b.created_at&&new Date(b.created_at)>=twoWeeksAgo&&new Date(b.created_at)<weekAgo).length;
+  document.getElementById('a-weekly').innerHTML=barChart([{label:'This week',val:thisWeek,color:'var(--green)'},{label:'Last week',val:lastWeek,color:'#9ca3af'}],true);
+  // Top services
+  const svcs={};
+  allBookings.forEach(b=>{if(b.service_type)svcs[b.service_type]=(svcs[b.service_type]||0)+1;});
+  document.getElementById('a-services').innerHTML=Object.entries(svcs).length?barChart(Object.entries(svcs).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([k,v])=>({label:k,val:v,color:'var(--blue)'})),true):'<div class="empty">No service data yet</div>';
+  // Day of week
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dayCounts=Array(7).fill(0);
+  allBookings.forEach(b=>{if(b.created_at)dayCounts[new Date(b.created_at).getDay()]++;});
+  document.getElementById('a-dayofweek').innerHTML=barChart(days.map((d,i)=>({label:d,val:dayCounts[i],color:i===4?'var(--red)':'var(--green)'})),true);
 }
 
+// ── RATINGS ───────────────────────────────────────────────────────
+function renderRatings() {
+  const el=document.getElementById('ratings-list');
+  const su=document.getElementById('ratings-summary');
+  if(!allRatings.length){el.innerHTML='<div class="empty"><div class="empty-icon">⭐</div>No ratings yet</div>';su.innerHTML='<div class="empty">No data</div>';return;}
+  const rated=allRatings.filter(r=>r.rating);
+  const avg=rated.length?(rated.reduce((s,r)=>s+(r.rating||0),0)/rated.length).toFixed(1):'—';
+  su.innerHTML=`<div style="text-align:center;margin-bottom:1rem"><div style="font-size:40px;font-weight:700;color:var(--green)">${avg}</div><div style="font-size:20px;margin-top:4px">${'⭐'.repeat(Math.round(avg||0))}</div><div style="font-size:12px;color:var(--muted);margin-top:4px">${rated.length} ratings</div></div>`+
+  [5,4,3,2,1].map(n=>{const c=rated.filter(r=>r.rating===n).length;return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="font-size:12px;width:24px">${n}⭐</span><div style="flex:1;background:var(--bg);border-radius:4px;height:8px;overflow:hidden"><div style="width:${rated.length?Math.round(c/rated.length*100):0}%;background:var(--green);height:100%"></div></div><span style="font-size:12px;color:var(--muted);width:20px">${c}</span></div>`;}).join('');
+  el.innerHTML=allRatings.slice(0,30).map(r=>{const c=allCustomers.find(x=>x.phone===r.phone);return `<div style="padding:.8rem 1.2rem;border-bottom:1px solid #f3f4f6"><div style="display:flex;justify-content:space-between"><span style="font-weight:500">${c?.name||r.phone}</span><span>${r.rating?'⭐'.repeat(r.rating):'💬'}</span></div>${r.comment?`<div style="font-size:12px;color:var(--muted);margin-top:3px">"${r.comment}"</div>`:''}<div style="font-size:10px;color:var(--muted);margin-top:3px">${r.created_at?new Date(r.created_at).toLocaleDateString('en-IN'):''}</div></div>`;}).join('');
+}
+
+// ── NEW ORDER ─────────────────────────────────────────────────────
+function onSourceChange(src) {
+  const isWi=src==='walkin';
+  document.getElementById('field-datetime').style.display=isWi?'none':'';
+  document.getElementById('walkin-banner').classList[isWi?'add':'remove']('show');
+  document.getElementById('label-address').textContent=isWi?'Address (optional)':'Address *';
+  document.getElementById('new-address').placeholder=isWi?'Leave blank for walk-in':'Pickup address';
+  document.getElementById('status-indicator').textContent=isWi?'Picked Up (Walk-in)':'Pending (Awaiting Pickup)';
+  document.getElementById('status-indicator').style.background=isWi?'#dbeafe':'#fef3c7';
+  document.getElementById('status-indicator').style.color=isWi?'#1e40af':'#92400e';
+}
+async function submitNewOrder() {
+  const name=document.getElementById('new-name').value.trim();
+  const phone=document.getElementById('new-phone').value.trim();
+  const address=document.getElementById('new-address').value.trim();
+  const dateInp=document.getElementById('new-date').value;
+  const slot=document.getElementById('new-slot').value;
+  const source=document.getElementById('new-source').value;
+  const service=document.getElementById('new-service').value;
+  const notes=document.getElementById('new-notes').value.trim();
+  const branch=document.getElementById('new-branch').value;
+  const isWi=source==='walkin';
+  if(!name||!phone){toast('Name and phone required','error');return;}
+  if(!isWi&&(!address||!dateInp||!slot)){toast('Fill address, date and slot','error');return;}
+  let dateStr='';
+  if(dateInp){const d=new Date(dateInp);dateStr=d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});}
+  const body={name,phone,source,notes,branch,...(address?{address}:{}),...(dateStr?{date:dateStr}:{}),...(!isWi&&slot?{slot}:{}),...(service?{service_type:service}:{})};
+  try {
+    const res=await fetch(`${BOT_URL}/bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await res.json();
+    if(data.success){toast(`Order ${data.order_id} created!`);closeModal('modal-order');['new-name','new-phone','new-address','new-date','new-notes'].forEach(i=>document.getElementById(i).value='');document.getElementById('new-source').value='walkin';document.getElementById('new-service').value='';onSourceChange('walkin');loadData();}
+    else toast(data.error||'Failed','error');
+  } catch { toast('Network error','error'); }
+}
+
+// ── SEND MESSAGE ──────────────────────────────────────────────────
+function populateMsgDropdown() {
+  const sel=document.getElementById('msg-customer-select');
+  sel.innerHTML='<option value="">— Select customer —</option>';
+  allCustomers.forEach(c=>{const o=document.createElement('option');o.value=c.phone;o.textContent=`${c.name} (${c.phone})`;o.dataset.name=c.name;sel.appendChild(o);});
+}
+function openSendMsg(phone,name) {
+  msgCustomerName=name||'';
+  document.getElementById('msg-phone').value=phone;
+  document.getElementById('msg-text').value=name?`Hi ${name}! `:'';
+  openModal('modal-message');
+}
+function selectMsgCustomer(phone) {
+  if(!phone) return;
+  document.getElementById('msg-phone').value=phone;
+  const sel=document.getElementById('msg-customer-select');
+  msgCustomerName=sel.options[sel.selectedIndex]?.dataset?.name||'';
+}
+const TEMPLATES={
+  pickup: n=>`Hi${n?' '+n:''}! Hope your clothes came back fresh. Ready for your next pickup? Type *pickup* or let me know when to come. 🧺`,
+  reminder: n=>`Hi${n?' '+n:''}! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive in your slot. 🚗`,
+  delay: n=>`Hi${n?' '+n:''}! Your order is taking a little longer than usual. We'll deliver by tomorrow. Sorry for the wait! 🙏`,
+  payment: n=>`Hi${n?' '+n:''}! Your Washkart payment is pending. Our delivery agent carries a QR code — scan to pay anytime. Already paid? Reply *paid*. 💳`,
+};
+function useTemplate(key) { document.getElementById('msg-text').value=TEMPLATES[key]?.(msgCustomerName)||''; }
+async function sendManualMessage() {
+  const phone=document.getElementById('msg-phone').value.trim();
+  const message=document.getElementById('msg-text').value.trim();
+  if(!phone||!message){toast('Phone and message required','error');return;}
+  try {
+    const res=await fetch(`${BOT_URL}/send-message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
+    const data=await res.json();
+    if(data.success){toast('Message sent!');closeModal('modal-message');document.getElementById('msg-phone').value='';document.getElementById('msg-text').value='';msgCustomerName='';}
+    else toast(data.error||'Failed','error');
+  } catch { toast('Network error','error'); }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+onSourceChange('walkin');
+document.getElementById('new-date').value=new Date().toISOString().split('T')[0];
+if('Notification' in window && Notification.permission==='default') Notification.requestPermission();
+
+// Show home by default
+document.getElementById('page-home').style.display='block';
+
+loadData();
 setInterval(loadData, 30000);
 </script>
 </body>
