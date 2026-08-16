@@ -224,6 +224,9 @@ tr.overdue td{background:#fef2f2;}
   .kanban{flex-direction:column;}
 }
 @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+.tpl-btn{text-align:left;padding:8px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg);width:100%;transition:background .1s;font-family:"Inter",sans-serif;}
+.tpl-btn:hover{background:var(--green-light);border-color:var(--green-mid);}
+.tpl-btn.active{background:var(--green-light);border-color:var(--green);}
 </style>
 </head>
 <body>
@@ -599,15 +602,21 @@ tr.overdue td{background:#fef2f2;}
     <div class="modal-body">
       <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="msg-phone" placeholder="10-digit" type="tel"></div>
       <div class="form-group"><label class="form-label">Quick Select</label><select class="form-select" id="msg-customer-select" onchange="selectMsgCustomer(this.value)"><option value="">— Select customer —</option></select></div>
-      <div class="form-group"><label class="form-label">Message *</label><textarea class="form-textarea" id="msg-text" placeholder="Type message..." style="min-height:100px"></textarea></div>
+      <div class="form-group"><label class="form-label">Message *</label><textarea class="form-textarea" id="msg-text" placeholder="Type message..." style="min-height:100px" oninput="document.getElementById('tpl-preview').style.display='none';document.querySelectorAll('.tpl-btn').forEach(b=>b.classList.remove('active'))"></textarea></div>
       <div class="form-group">
-        <label class="form-label">Templates</label>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <button onclick="useTemplate('pickup')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">📦 Re-engagement — Book next pickup</button>
-          <button onclick="useTemplate('reminder')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">⏰ Pickup reminder — Today</button>
-          <button onclick="useTemplate('delay')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">⏳ Slight delay notice</button>
-          <button onclick="useTemplate('payment')" style="text-align:left;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:var(--bg)">💰 Payment reminder</button>
+        <label class="form-label">Quick Templates</label>
+        <div style="display:flex;flex-direction:column;gap:6px" id="template-list">
+          <button class="tpl-btn" onclick="useTemplate('walkin')">👋 Walk-in / New customer intro</button>
+          <button class="tpl-btn" onclick="useTemplate('reengage')">💤 Re-engagement — hasn't booked in a while</button>
+          <button class="tpl-btn" onclick="useTemplate('reminder')">⏰ Pickup reminder — today</button>
+          <button class="tpl-btn" onclick="useTemplate('delay')">⏳ Delivery delay notice</button>
+          <button class="tpl-btn" onclick="useTemplate('payment')">💰 Payment reminder</button>
+          <button class="tpl-btn" onclick="useTemplate('ready')">✅ Order ready for delivery</button>
+          <button class="tpl-btn" onclick="useTemplate('feedback')">⭐ Feedback / Rating request</button>
+          <button class="tpl-btn" onclick="useTemplate('festive')">🎊 Festive / Seasonal offer</button>
+          <button class="tpl-btn" onclick="useTemplate('intro')">🧺 Brand intro — first time</button>
         </div>
+        <div id="tpl-preview" style="display:none;margin-top:8px;padding:10px;background:#f0fdf4;border:1px solid var(--green-mid);border-radius:8px;font-size:12px;line-height:1.6;white-space:pre-wrap"></div>
       </div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-message')">Cancel</button><button class="btn btn-primary" onclick="sendManualMessage()">Send</button></div>
@@ -645,6 +654,13 @@ function showPage(name, el) {
 }
 
 const BOT_URL = 'https://washkart-bot.onrender.com';
+
+// Service type display helper
+function svcLabel(s) {
+  if(!s) return '';
+  const map = {dryclean:'Dry Clean',iron:'Steam Iron',laundry:'Laundry',shoes:'Shoe Cleaning',specialty:'Specialty',mixed:'Mixed'};
+  return map[s] || (s.charAt(0).toUpperCase()+s.slice(1));
+}
 const DASHBOARD_PASSWORD = 'washkart2025';
 
 // AUTH
@@ -962,7 +978,7 @@ function renderOrders() {
       <td>
         <select class="status-select" style="width:100%;margin-bottom:3px" onchange="updateService('${b.id}',this.value)">
           <option value="">Service...</option>
-          ${['iron','dryclean','laundry','shoes','specialty','mixed'].map(s=>`<option value="${s}" ${b.service_type===s?'selected':''}>${s}</option>`).join('')}
+          ${['iron','dryclean','laundry','shoes','specialty','mixed'].map(s=>`<option value="${s}" ${b.service_type===s?'selected':''}>${svcLabel(s)}</option>`).join('')}
         </select>
         ${b.express?'<span style="font-size:10px;color:#d97706;font-weight:600">⚡ Express</span>':''}
       </td>
@@ -1008,8 +1024,17 @@ function exportCSV(){
 // ── STATUS UPDATES ────────────────────────────────────────────────
 function updateStatus(id,status) {
   const b=allBookings.find(x=>x.id===id);
-  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,service_type:b?.service_type||'',express:b?.express||false,amount:b?.amount||0})})
-  .then(r=>r.json()).then(d=>{if(b){b.status=status;if(d.delivery_date)b.delivery_date=d.delivery_date;} toast(`${id} → ${status}`);updateAll();}).catch(()=>toast('Failed','error'));
+  if(!b){toast('Order not found','error');return;}
+  const payload = {status};
+  if(b.service_type) payload.service_type = b.service_type;
+  if(b.express) payload.express = b.express;
+  // Don't send amount=0 — would wipe existing bill in DB
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+  .then(r=>r.json()).then(d=>{
+    if(b){b.status=d.status||status;if(d.delivery_date)b.delivery_date=d.delivery_date;}
+    toast(`${id} → ${status} ✓`);
+    updateAll();
+  }).catch(()=>toast('Update failed','error'));
 }
 function updateService(id,svc) {
   if(!svc) return;
@@ -1245,17 +1270,41 @@ async function toggleTakeover() {
 }
 async function sendChatReply() {
   if(!selectedChat) return;
-  const text=document.getElementById('chat-reply-text').value.trim();
+  const text = document.getElementById('chat-reply-text').value.trim();
   if(!text) return;
-  const cust=allCustomers.find(c=>c.phone===selectedChat);
-  const branch=cust?.branch||'bavdhan';
+  const cust = allCustomers.find(c=>c.phone===selectedChat);
+  const branch = cust?.branch||(activeBranch!=='all'?activeBranch:'bavdhan');
+  const replyBtn = document.querySelector('.chat-reply .btn-primary');
+  if(replyBtn){ replyBtn.textContent='...'; replyBtn.disabled=true; }
   try {
-    await fetch(`${BOT_URL}/send-message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:selectedChat,message:text,branch})});
-    document.getElementById('chat-reply-text').value='';
-    toast('Sent!');
-    await loadConversations();
-    selectChat(selectedChat);
-  } catch(e) { toast('Failed','error'); }
+    const res = await fetch(`${BOT_URL}/send-message`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone:selectedChat, message:text, branch})
+    });
+    const data = await res.json();
+    if(data.success){
+      soundMessage();
+      document.getElementById('chat-reply-text').value='';
+      toast('Sent ✓');
+      // Add message to chat view immediately without waiting for reload
+      const msgEl = document.getElementById('chat-messages');
+      const bubble = document.createElement('div');
+      bubble.style.cssText='display:flex;justify-content:flex-end';
+      bubble.innerHTML=`<div class="msg-bubble msg-bot" style="background:#dcfce7">${text.replace(/\n/g,'<br>')}</div>`;
+      msgEl.appendChild(bubble);
+      msgEl.scrollTop = msgEl.scrollHeight;
+      // Reload conversations in background
+      setTimeout(loadConversations, 2000);
+    } else {
+      toast(data.error||'Send failed','error');
+    }
+  } catch(e) {
+    toast('Network error','error');
+    console.error('sendChatReply:', e);
+  } finally {
+    if(replyBtn){ replyBtn.textContent='Send'; replyBtn.disabled=false; }
+  }
 }
 function chatSendQuick() { openSendMsg(selectedChat,allCustomers.find(c=>c.phone===selectedChat)?.name||''); }
 
@@ -1376,10 +1425,16 @@ function populateMsgDropdown() {
   allCustomers.forEach(c=>{const o=document.createElement('option');o.value=c.phone;o.textContent=`${c.name} (${c.phone})`;o.dataset.name=c.name;sel.appendChild(o);});
 }
 function openSendMsg(phone,name) {
-  msgCustomerName=name||'';
-  document.getElementById('msg-phone').value=phone;
-  document.getElementById('msg-text').value=name?`Hi ${name}! `:'';
+  msgCustomerName = name || '';
+  document.getElementById('msg-phone').value = phone || '';
+  document.getElementById('msg-text').value = '';
+  // Reset template state
+  const preview = document.getElementById('tpl-preview');
+  if(preview) preview.style.display = 'none';
+  document.querySelectorAll('.tpl-btn').forEach(b=>b.classList.remove('active'));
   openModal('modal-message');
+  // If name provided, pre-fill a greeting hint
+  if(name) document.getElementById('msg-text').placeholder = `Message to ${name}...`;
 }
 function selectMsgCustomer(phone) {
   if(!phone) return;
@@ -1387,23 +1442,170 @@ function selectMsgCustomer(phone) {
   const sel=document.getElementById('msg-customer-select');
   msgCustomerName=sel.options[sel.selectedIndex]?.dataset?.name||'';
 }
-const TEMPLATES={
-  pickup: n=>`Hi${n?' '+n:''}! Hope your clothes came back fresh. Ready for your next pickup? Type *pickup* or let me know when to come. 🧺`,
-  reminder: n=>`Hi${n?' '+n:''}! Just a reminder — your Washkart pickup is scheduled today. Our team will arrive in your slot. 🚗`,
-  delay: n=>`Hi${n?' '+n:''}! Your order is taking a little longer than usual. We'll deliver by tomorrow. Sorry for the wait! 🙏`,
-  payment: n=>`Hi${n?' '+n:''}! Your Washkart payment is pending. Our delivery agent carries a QR code — scan to pay anytime. Already paid? Reply *paid*. 💳`,
+const TEMPLATES = {
+  walkin: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! 👋
+
+Thank you for visiting Washkart. It was great meeting you!
+
+We specialise in dry cleaning, laundry, steam iron and shoe cleaning — with doorstep pickup and delivery across Pune.
+
+To book your first pickup, just reply *pickup* here and our team will guide you.
+
+🌐 www.washkart.co.in
+📸 @_washkart_
+
+Looking forward to taking care of your clothes! 🧺`,
+
+  intro: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! Welcome to Washkart 🧺
+
+We're a premium laundry and dry cleaning service in Pune with doorstep pickup and delivery.
+
+Here's what we offer:
+• Dry Cleaning — from Rs 100/piece
+• Steam Iron — from Rs 20/piece  
+• Laundry — from Rs 80/kg
+• Shoe Cleaning — from Rs 300/pair
+• Express service — ready in 120 minutes
+
+To book a pickup, just reply *pickup*.
+To check rates, reply *rates*.
+
+www.washkart.co.in | @_washkart_`,
+
+  reengage: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! 😊
+
+It's been a while — hope you're doing well!
+
+Fresh clothes waiting? We're here whenever you're ready.
+
+Just reply *pickup* to schedule a doorstep collection and we'll handle the rest.
+
+Washkart — Bavdhan & Baner 🧺`,
+
+  reminder: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! Just a reminder —
+
+Your Washkart pickup is scheduled for today. 🚗
+
+Our team will arrive within your selected time slot. Please keep the clothes ready.
+
+To cancel: reply *cancel*
+Questions? Reply anytime.`,
+
+  delay: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! 🙏
+
+Your order${orderId ? ' ' + orderId : ''} is taking slightly longer than expected. We want to make sure everything is cleaned perfectly.
+
+We'll deliver by tomorrow. Sorry for the wait — we appreciate your patience!
+
+For updates, reply *track*.`,
+
+  payment: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}!
+
+Your payment${amount ? ' of Rs ' + amount : ''} for order${orderId ? ' ' + orderId : ''} is pending.
+
+Our delivery agent carries a QR code — scan to pay instantly. Cash is also accepted.
+
+Already paid? Just reply *paid* and we'll confirm. 💳`,
+
+  ready: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! Great news 🎉
+
+Your clothes are fresh, clean and ready for delivery!
+
+We'll be at your address soon.${amount ? '
+
+Bill: Rs ' + amount + ' — payable via QR or cash on delivery.' : ''}
+
+We hope you love how they look! 🧺`,
+
+  feedback: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}!
+
+How were your clothes from your last Washkart order? 😊
+
+Your feedback means a lot to us. Just reply with:
+⭐ Excellent
+👍 Good  
+💬 Or tell us what we can do better
+
+Thank you for choosing Washkart!`,
+
+  festive: (n, orderId, amount) =>
+`Hi${n ? ' ' + n : ''}! Festival season is here 🎊
+
+Get your outfits fresh and ready for the celebrations!
+
+Book a pickup now — reply *pickup* and our team will collect your clothes and have them back looking their best.
+
+⚡ Express service available — ready in 120 minutes!
+
+Washkart — Bavdhan & Baner 🧺`,
 };
-function useTemplate(key) { document.getElementById('msg-text').value=TEMPLATES[key]?.(msgCustomerName)||''; }
+
+function useTemplate(key) {
+  // Find order for selected customer
+  const phone = document.getElementById('msg-phone').value.trim().replace(/\D/g,'');
+  const normPhone = phone.length===10 ? '91'+phone : phone;
+  const cust = allCustomers.find(c=>c.phone===normPhone);
+  const orders = allBookings.filter(b=>b.phone===normPhone);
+  const lastOrder = orders.find(o=>o.status!=='cancelled');
+  const orderId = lastOrder?.id || '';
+  const amount = lastOrder?.amount || 0;
+  const name = msgCustomerName || cust?.name || '';
+
+  const msg = TEMPLATES[key]?.(name, orderId, amount) || '';
+  document.getElementById('msg-text').value = msg;
+
+  // Show preview
+  const preview = document.getElementById('tpl-preview');
+  preview.style.display = 'block';
+  preview.textContent = msg;
+
+  // Highlight active button
+  document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+}
 async function sendManualMessage() {
-  const phone=document.getElementById('msg-phone').value.trim();
-  const message=document.getElementById('msg-text').value.trim();
+  let phone = document.getElementById('msg-phone').value.trim().replace(/\D/g,'');
+  const message = document.getElementById('msg-text').value.trim();
   if(!phone||!message){toast('Phone and message required','error');return;}
+  // Normalize phone — add 91 if 10 digits
+  if(phone.length===10) phone='91'+phone;
+  // Detect branch from selected customer or active branch
+  const cust = allCustomers.find(c=>c.phone===phone);
+  const branch = cust?.branch || (activeBranch!=='all'?activeBranch:'bavdhan');
+  const sendBtn = document.querySelector('#modal-message .btn-primary');
+  if(sendBtn){ sendBtn.textContent='Sending...'; sendBtn.disabled=true; }
   try {
-    const res=await fetch(`${BOT_URL}/send-message`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,message})});
-    const data=await res.json();
-    if(data.success){soundMessage();toast('Message sent!');closeModal('modal-message');document.getElementById('msg-phone').value='';document.getElementById('msg-text').value='';msgCustomerName='';}
-    else toast(data.error||'Failed','error');
-  } catch { toast('Network error','error'); }
+    const res = await fetch(`${BOT_URL}/send-message`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phone, message, branch})
+    });
+    const data = await res.json();
+    if(data.success){
+      soundMessage();
+      toast('Message sent! ✓');
+      closeModal('modal-message');
+      document.getElementById('msg-phone').value='';
+      document.getElementById('msg-text').value='';
+      msgCustomerName='';
+    } else {
+      toast(data.error||'Send failed — check WhatsApp token','error');
+      console.error('send-message error:', data);
+    }
+  } catch(e) {
+    toast('Network error — is server awake?','error');
+    console.error('sendManualMessage error:', e);
+  } finally {
+    if(sendBtn){ sendBtn.textContent='Send'; sendBtn.disabled=false; }
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
