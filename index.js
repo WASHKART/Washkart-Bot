@@ -806,8 +806,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     // Only process text admin commands — not button taps from notifications
     const isAdminCommand = /^(CONFIRM|REJECT|BLOCK|UNBLOCK|TAKEOVER|RESUME)\s/i.test(rawText);
     if (!isAdminCommand && isButtonId(rawText)) {
-      console.log(`[admin] Ignoring button tap from admin ${phone}: ${rawText}`);
-      return; // Admin tapped a button in a notification — ignore it
+      return; // Admin tapped a button in a notification — silently ignore
     }
   }
 
@@ -930,7 +929,10 @@ async function handleMessage(phone, rawText, phoneNumberId) {
       session.addressConfirmed = true;
       session.step = "idle";
       saveSession(phone, session);
-      await handleBookingIntent(phone, session, rawText, t, branch, phoneNumberId);
+      // Go directly to date selection instead of re-entering handleBookingIntent
+      if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); }
+      else if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; saveSession(phone,session); }
+      else { await showBookingConfirm(phone,session,phoneNumberId); }
       return;
     }
     if (rawText === "update_details") {
@@ -951,16 +953,11 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   }
 
   if (session.step === "select_branch") {
-    if (rawText === "branch_bavdhan") session.booking.branch = "bavdhan";
-    else if (rawText === "branch_baner") session.booking.branch = "baner";
-    else { await askBranch(phone,phoneNumberId); return; }
-    const cust = await getCustomer(phone);
-    if (cust) await saveCustomer(phone, cust.name, cust.address, session.booking.branch);
-    session.step = "idle";
-    if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
-    else if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; }
-    else { await showBookingConfirm(phone,session,phoneNumberId); }
-    saveSession(phone,session); return;
+    if (rawText !== "branch_bavdhan" && rawText !== "branch_baner") {
+      await askBranch(phone,phoneNumberId); return;
+    }
+    // Branch buttons are handled above in Layer 2 — this step is now redundant
+    // Fall through to Layer 2 button handler
   }
 
   if (session.step === "feedback") {
@@ -1070,8 +1067,16 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (rawText==="date_custom")     { session.step="get_custom_date"; saveSession(phone,session); await send("Enter a date (e.g. 25 August):\n(Closed Thursdays)"); return; }
   if (rawText==="slot_morning")    { session.booking.slot="Morning (10 AM - 1 PM)"; await handleSlotSelected(phone,session,phoneNumberId); return; }
   if (rawText==="slot_evening")    { session.booking.slot="Evening (5 PM - 8 PM)";  await handleSlotSelected(phone,session,phoneNumberId); return; }
-  if (rawText==="branch_bavdhan")  { session.step="select_branch"; await handleMessage(phone,"branch_bavdhan",phoneNumberId); return; }
-  if (rawText==="branch_baner")    { session.step="select_branch"; await handleMessage(phone,"branch_baner",phoneNumberId); return; }
+  if (rawText==="branch_bavdhan" || rawText==="branch_baner") {
+    session.booking.branch = rawText==="branch_bavdhan" ? "bavdhan" : "baner";
+    const cust = await getCustomer(phone);
+    if (cust) await saveCustomer(phone, cust.name, cust.address, session.booking.branch);
+    session.step = "idle";
+    if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
+    else if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; }
+    else { await showBookingConfirm(phone,session,phoneNumberId); }
+    saveSession(phone,session); return;
+  }
   if (rawText==="use_saved")       { const s=await getCustomer(phone); if(s){session.booking.name=s.name;session.booking.address=s.address;if(s.branch)session.booking.branch=s.branch;} await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
   if (rawText==="update_details")  { session.booking.address=null; session.step="get_address"; saveSession(phone,session); await send("Enter your new pickup address:"); return; }
   if (rawText==="no_cancel")       { await send("Your order is still active."); return; }
@@ -1505,8 +1510,8 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
     if (!session.booking.name)    session.booking.name    = customer.name;
     if (!session.booking.address) session.booking.address = customer.address;
     if (!session.booking.branch&&customer.branch) session.booking.branch = customer.branch;
-    // Address confirmation for returning customers — ask before jumping to date
-    if (customer.address && !session.booking.date && !session.addressConfirmed) {
+    // Address confirmation for returning customers — only if not already in a step
+    if (customer.address && !session.booking.date && !session.addressConfirmed && session.step === "idle") {
       session.step = "confirm_address";
       saveSession(phone, session);
       await sendButtons(phone,
