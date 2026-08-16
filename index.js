@@ -75,13 +75,20 @@ async function getSession(phone) {
   if (sessionCache[phone]) return sessionCache[phone];
   try {
     const rows = await dbSelect("sessions", `phone=eq.${phone}`);
-    if (rows.length) {
+    if (rows && rows.length) {
       const s = rows[0];
-      sessionCache[phone] = { step: s.step || "idle", booking: s.booking || {}, history: s.history || [] };
+      sessionCache[phone] = {
+        step: s.step || "idle",
+        booking: typeof s.booking === 'object' ? (s.booking || {}) : {},
+        history: Array.isArray(s.history) ? s.history : [],
+      };
     } else {
       sessionCache[phone] = { step: "idle", booking: {}, history: [] };
     }
-  } catch { sessionCache[phone] = { step: "idle", booking: {}, history: [] }; }
+  } catch (e) {
+    console.log(`[session] getSession fallback for ${phone}: ${e.message}`);
+    sessionCache[phone] = { step: "idle", booking: {}, history: [] };
+  }
   return sessionCache[phone];
 }
 
@@ -105,7 +112,11 @@ function enqueueMessage(phone, rawText, phoneNumberId) {
   if (!messageQueues[phone]) messageQueues[phone] = Promise.resolve();
   messageQueues[phone] = messageQueues[phone]
     .then(() => handleMessage(phone, rawText, phoneNumberId))
-    .catch(e => console.error(`[queue] ${phone}:`, e.message));
+    .catch(e => {
+      console.error(`[queue error] ${phone}: ${e.message}`);
+      // Reset queue on error so subsequent messages still process
+      messageQueues[phone] = Promise.resolve();
+    });
 }
 
 // RATE LIMITING
@@ -785,9 +796,23 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   phone = normalizePhone(phone);
   if (blockedNumbers.has(phone)) return;
   if (isRateLimited(phone)) { console.log(`[rate-limit] ${phone}`); return; }
+
+  // If the message is from an admin number, only process admin commands
+  // This prevents buttons in admin notifications from triggering booking flow
+  const isAdminPhone = Object.values(BRANCHES).some(br => normalizePhone(br.admin) === phone) || phone === normalizePhone(OWNER_NUMBER);
+  const branch = getBranch(phoneNumberId);
+
+  if (isAdminPhone) {
+    // Only process text admin commands — not button taps from notifications
+    const isAdminCommand = /^(CONFIRM|REJECT|BLOCK|UNBLOCK|TAKEOVER|RESUME)\s/i.test(rawText);
+    if (!isAdminCommand && isButtonId(rawText)) {
+      console.log(`[admin] Ignoring button tap from admin ${phone}: ${rawText}`);
+      return; // Admin tapped a button in a notification — ignore it
+    }
+  }
+
   const session = await getSession(phone);
   if (session.takeoverActive) return; // bot paused for this customer
-  const branch = getBranch(phoneNumberId);
   const t = norm(rawText);
   if (!session.history) session.history = [];
   session.history.push({ role: "customer", text: rawText });
