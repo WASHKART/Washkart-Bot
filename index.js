@@ -20,6 +20,16 @@ app.use((req, res, next) => {
   next();
 });
 
+// No-cache headers for all API responses
+app.use((req, res, next) => {
+  if (req.path !== '/dashboard') {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+  }
+  next();
+});
+
 // BRANCH CONFIG
 const BRANCHES = {
   "1136879376186203": { name: "Bavdhan", slug: "bavdhan", admin: "917775066002", upi: "washkart@idfcbank", qrMediaId: null },
@@ -964,9 +974,21 @@ async function handleMessage(phone, rawText, phoneNumberId) {
       session.booking.service_type = svcMap[rawText];
       session.step = "idle";
       saveSession(phone, session);
-      if (!session.booking.date) { await askDate(phone, phoneNumberId); session.step = "select_date"; }
-      else if (!session.booking.slot) { await askSlot(phone, phoneNumberId, session.booking.date); session.step = "select_slot"; }
-      else { await showBookingConfirm(phone, session, phoneNumberId); }
+      const bk = session.booking;
+      if (!bk.date) { await askDate(phone, phoneNumberId); session.step = "select_date"; }
+      else if (!bk.slot) { await askSlot(phone, phoneNumberId, bk.date); session.step = "select_slot"; }
+      else {
+        // All data ready — confirm or show confirm screen
+        const cust = await getCustomer(phone);
+        if (cust) {
+          clearDropoffTimer(phone);
+          await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||getBranch(phoneNumberId), phoneNumberId);
+          session.booking = {};
+        } else {
+          await showBookingConfirm(phone, session, phoneNumberId);
+          setNudgeTimer(phone, phoneNumberId);
+        }
+      }
       saveSession(phone, session);
     } else {
       await sendButtons(phone, "Please select a service:",
@@ -1469,6 +1491,17 @@ async function handleSlotSelected(phone, session, phoneNumberId) {
     else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
   }
   if (bk.name && bk.address && bk.date && bk.slot) {
+    // Ask service type if not set yet
+    if (!bk.service_type) {
+      await sendButtons(phone, "What service do you need?",
+        [{ id:"svc_dryclean",title:"Dry Clean" },{ id:"svc_iron",title:"Steam Iron" },{ id:"svc_laundry",title:"Laundry" }], phoneNumberId);
+      await delay(400);
+      await sendButtons(phone, "More options:",
+        [{ id:"svc_shoes",title:"Shoe Cleaning" },{ id:"svc_mixed",title:"Mixed / Not sure" }], phoneNumberId);
+      session.step = "select_service";
+      saveSession(phone, session);
+      return;
+    }
     const customer = await getCustomer(phone);
     if (customer) {
       clearDropoffTimer(phone);
@@ -1689,6 +1722,15 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
   }
   if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
   if (!bk.slot) { await askSlot(phone,phoneNumberId,bk.date); session.step="select_slot"; saveSession(phone,session); return; }
+  // Ask service type if not set
+  if (!bk.service_type) {
+    await sendButtons(phone, "What service do you need?",
+      [{ id:"svc_dryclean",title:"Dry Clean" },{ id:"svc_iron",title:"Steam Iron" },{ id:"svc_laundry",title:"Laundry" }], phoneNumberId);
+    await delay(400);
+    await sendButtons(phone, "More options:",
+      [{ id:"svc_shoes",title:"Shoe Cleaning" },{ id:"svc_mixed",title:"Mixed / Not sure" }], phoneNumberId);
+    session.step = "select_service"; saveSession(phone, session); return;
+  }
   if (customer) {
     clearDropoffTimer(phone);
     await confirmBooking(phone,bk,getBranchBySlug(bk.branch)||branch,phoneNumberId);
