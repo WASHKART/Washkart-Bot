@@ -283,7 +283,12 @@ tr.overdue td{background:#fef2f2;}
     </div>
 
     <!-- ALERT BANNER -->
-    <div class="alert-banner red" id="overdue-banner" onclick="showPage('kanban',document.querySelector('[data-page=kanban]'))"></div>
+    <div id="load-error" style="display:none;background:#fee2e2;color:#991b1b;padding:10px 1.5rem;font-size:13px;font-weight:500;border-bottom:1px solid #fecaca;align-items:center;gap:12px">
+    <span>Could not connect to server.</span>
+    <button onclick="retryNow()" style="padding:4px 12px;background:#991b1b;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">Retry</button>
+    <a href="https://dashboard.render.com" target="_blank" style="font-size:12px;color:#991b1b">Check Render →</a>
+  </div>
+  <div class="alert-banner red" id="overdue-banner" onclick="showPage('kanban',document.querySelector('[data-page=kanban]'))"></div>
 
     <!-- CONTENT -->
     <div class="content">
@@ -804,58 +809,52 @@ async function fetchWithRetry(url, timeoutMs=60000) {
 
 async function loadData() {
   if(loadRetryTimer) { clearTimeout(loadRetryTimer); loadRetryTimer=null; }
-  const bp = activeBranch!=='all'?`?branch=${activeBranch}`:'';
-
-  // Show loading state
-  if(loadRetryCount === 0) showLoading('Loading data...');
-  else showLoading(`Server waking up... attempt ${loadRetryCount+1}`);
-
+  const bp = activeBranch !== 'all' ? '?branch=' + activeBranch : '';
+  const t  = Date.now();
+  const qs = bp ? ('&_t=' + t) : ('?_t=' + t);
+  showLoading(loadRetryCount === 0 ? 'Loading...' : 'Retrying... (' + loadRetryCount + ')');
   try {
-    // First ping the server to wake it up
-    await fetch(`${BOT_URL}/ping`, {cache:'no-store'}).catch(()=>{});
-
-    const [bRes,cRes,rRes,lRes] = await Promise.all([
-      fetchWithRetry(`${BOT_URL}/bookings${bp}`, 90000),
-      fetchWithRetry(`${BOT_URL}/customers${bp}`, 90000),
-      fetch(`${BOT_URL}/ratings${bp}`, {cache:'no-store'}).catch(()=>({ok:true,json:()=>[]})),
-      fetch(`${BOT_URL}/leads${bp}`, {cache:'no-store'}).catch(()=>({ok:true,json:()=>[]})),
+    const [bRes, cRes, rRes, lRes] = await Promise.all([
+      fetch(BOT_URL + '/bookings' + bp + qs),
+      fetch(BOT_URL + '/customers' + bp + qs).catch(() => null),
+      fetch(BOT_URL + '/ratings'   + bp + qs).catch(() => null),
+      fetch(BOT_URL + '/leads'     + bp + qs).catch(() => null),
     ]);
-    allBookings = (await bRes.json()).map(b=>({
-      id:b.order_id,name:b.name||'',phone:b.phone||'',address:b.address||'',
-      date:b.date||'',slot:b.slot||'',status:b.status||'pending',
-      service_type:b.service_type||'',express:b.express||false,
-      delivery_date:b.delivery_date||'',source:b.source||'whatsapp',
-      branch:b.branch||'bavdhan',notes:b.notes||'',created_at:b.created_at||'',
-      amount:b.amount||0,payment_status:b.payment_status||'unpaid',
-      payment_method:b.payment_method||'',payment_date:b.payment_date||'',
-    }));
-    allCustomers = await cRes.json().catch(()=>[]);
-    allRatings   = await rRes.json().catch(()=>[]);
-    allLeads     = await lRes.json().catch(()=>[]);
+    const bData = await bRes.json();
+    allBookings = (Array.isArray(bData) ? bData : []).map(function(b) { return {
+      id:b.order_id, name:b.name||'', phone:b.phone||'', address:b.address||'',
+      date:b.date||'', slot:b.slot||'', status:b.status||'pending',
+      service_type:b.service_type||'', express:b.express||false,
+      delivery_date:b.delivery_date||'', source:b.source||'whatsapp',
+      branch:b.branch||'bavdhan', notes:b.notes||'', created_at:b.created_at||'',
+      amount:b.amount||0, payment_status:b.payment_status||'unpaid',
+      payment_method:b.payment_method||'', payment_date:b.payment_date||'',
+    }; });
+    allCustomers = cRes ? await cRes.json().catch(function(){return[];}) : [];
+    allRatings   = rRes ? await rRes.json().catch(function(){return[];}) : [];
+    allLeads     = lRes ? await lRes.json().catch(function(){return[];}) : [];
     loadRetryCount = 0;
     hideLoading();
+    var errDiv = document.getElementById('load-error');
+    if(errDiv) errDiv.style.display = 'none';
     populateMsgDropdown();
     updateAll();
   } catch(e) {
-    // If error mentions 304, it's a cache issue not a server issue — retry immediately
-    if(e.message && e.message.includes('304')) {
-      console.log('Cache issue detected, retrying...');
-      setTimeout(loadData, 500);
-      return;
-    }
     loadRetryCount++;
     console.error('loadData error:', e.message);
-    const delay = Math.min(15000, 5000 + loadRetryCount * 3000);
-    showLoading(`Server is starting up... retrying in ${Math.round(delay/1000)}s (attempt ${loadRetryCount})`);
-    loadRetryTimer = setTimeout(loadData, delay);
+    if(loadRetryCount <= 5) {
+      var delay = loadRetryCount * 8000;
+      showLoading('Server waking up... retry ' + loadRetryCount + '/5 in ' + (delay/1000) + 's');
+      loadRetryTimer = setTimeout(loadData, delay);
+    } else {
+      hideLoading();
+      var errDiv2 = document.getElementById('load-error');
+      if(errDiv2) errDiv2.style.display = 'flex';
+    }
   }
 }
 
-// Manual retry button
-function retryNow() {
-  loadRetryCount = 0;
-  loadData();
-}
+function retryNow() { loadRetryCount=0; loadData(); }
 
 // UPDATE ALL
 function updateAll() {
