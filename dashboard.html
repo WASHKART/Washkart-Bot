@@ -763,37 +763,52 @@ let loadingIndicator = null;
 function showLoading(msg) {
   if (!loadingIndicator) {
     loadingIndicator = document.createElement('div');
-    loadingIndicator.style.cssText = 'position:fixed;top:56px;left:220px;right:0;background:#fef3c7;color:#92400e;padding:8px 16px;font-size:12px;font-weight:500;z-index:100;border-bottom:1px solid #fde68a;display:flex;align-items:center;gap:8px';
-    loadingIndicator.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block">⟳</span> <span id="loading-msg">Loading...</span>';
+    loadingIndicator.style.cssText = 'position:fixed;top:56px;left:220px;right:0;background:#fef3c7;color:#92400e;padding:8px 16px;font-size:12px;font-weight:500;z-index:100;border-bottom:1px solid #fde68a;display:flex;align-items:center;gap:8px;flex-wrap:wrap';
+    loadingIndicator.innerHTML = '<span style="animation:spin 1s linear infinite;display:inline-block">⟳</span> <span id="loading-msg">Loading...</span><button onclick="retryNow()" id="retry-btn" style="display:none;padding:3px 10px;background:#92400e;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;margin-left:8px">Retry Now</button>';
     document.body.appendChild(loadingIndicator);
   }
   document.getElementById('loading-msg').textContent = msg || 'Loading...';
   loadingIndicator.style.display = 'flex';
+  // Show retry button after 2 attempts
+  const retryBtn = document.getElementById('retry-btn');
+  if(retryBtn) retryBtn.style.display = (loadRetryCount >= 2) ? 'inline-block' : 'none';
 }
 function hideLoading() {
   if (loadingIndicator) loadingIndicator.style.display = 'none';
 }
 
-async function fetchWithRetry(url, retries=2) {
-  for (let i=0; i<=retries; i++) {
-    try {
-      const res = await fetch(url, {cache:'no-store'});
-      if (res.ok) return res;
-      throw new Error(`HTTP ${res.status}`);
-    } catch(e) {
-      if (i === retries) throw e;
-      await new Promise(r => setTimeout(r, 3000));
-    }
+let loadRetryCount = 0;
+let loadRetryTimer = null;
+
+async function fetchWithRetry(url, timeoutMs=60000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {cache:'no-store', signal: controller.signal});
+    clearTimeout(timer);
+    if (res.ok) return res;
+    throw new Error(`HTTP ${res.status}`);
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
   }
 }
 
 async function loadData() {
-  showLoading('Loading data...');
+  if(loadRetryTimer) { clearTimeout(loadRetryTimer); loadRetryTimer=null; }
+  const bp = activeBranch!=='all'?`?branch=${activeBranch}`:'';
+
+  // Show loading state
+  if(loadRetryCount === 0) showLoading('Loading data...');
+  else showLoading(`Server waking up... attempt ${loadRetryCount+1}`);
+
   try {
-    const bp = activeBranch!=='all'?`?branch=${activeBranch}`:'';
+    // First ping the server to wake it up
+    await fetch(`${BOT_URL}/ping`, {cache:'no-store'}).catch(()=>{});
+
     const [bRes,cRes,rRes,lRes] = await Promise.all([
-      fetchWithRetry(`${BOT_URL}/bookings${bp}`),
-      fetchWithRetry(`${BOT_URL}/customers${bp}`),
+      fetchWithRetry(`${BOT_URL}/bookings${bp}`, 90000),
+      fetchWithRetry(`${BOT_URL}/customers${bp}`, 90000),
       fetch(`${BOT_URL}/ratings${bp}`, {cache:'no-store'}).catch(()=>({ok:true,json:()=>[]})),
       fetch(`${BOT_URL}/leads${bp}`, {cache:'no-store'}).catch(()=>({ok:true,json:()=>[]})),
     ]);
@@ -809,15 +824,23 @@ async function loadData() {
     allCustomers = await cRes.json().catch(()=>[]);
     allRatings   = await rRes.json().catch(()=>[]);
     allLeads     = await lRes.json().catch(()=>[]);
+    loadRetryCount = 0;
     hideLoading();
     populateMsgDropdown();
     updateAll();
   } catch(e) {
-    hideLoading();
-    console.error('loadData error:', e);
-    toast('Server waking up... retry in 10s','error');
-    setTimeout(loadData, 10000);
+    loadRetryCount++;
+    console.error('loadData error:', e.message);
+    const delay = Math.min(15000, 5000 + loadRetryCount * 3000);
+    showLoading(`Server is starting up... retrying in ${Math.round(delay/1000)}s (attempt ${loadRetryCount})`);
+    loadRetryTimer = setTimeout(loadData, delay);
   }
+}
+
+// Manual retry button
+function retryNow() {
+  loadRetryCount = 0;
+  loadData();
 }
 
 // UPDATE ALL
