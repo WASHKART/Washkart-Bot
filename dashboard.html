@@ -783,10 +783,18 @@ let loadRetryTimer = null;
 async function fetchWithRetry(url, timeoutMs=60000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  // Add cache-busting timestamp to URL
+  const sep = url.includes('?') ? '&' : '?';
+  const bustUrl = url + sep + '_t=' + Date.now();
   try {
-    const res = await fetch(url, {cache:'no-store', signal: controller.signal});
+    const res = await fetch(bustUrl, {
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+      signal: controller.signal
+    });
     clearTimeout(timer);
-    if (res.ok) return res;
+    // 200 and 304 are both success
+    if (res.ok || res.status === 304) return res;
     throw new Error(`HTTP ${res.status}`);
   } catch(e) {
     clearTimeout(timer);
@@ -829,6 +837,12 @@ async function loadData() {
     populateMsgDropdown();
     updateAll();
   } catch(e) {
+    // If error mentions 304, it's a cache issue not a server issue — retry immediately
+    if(e.message && e.message.includes('304')) {
+      console.log('Cache issue detected, retrying...');
+      setTimeout(loadData, 500);
+      return;
+    }
     loadRetryCount++;
     console.error('loadData error:', e.message);
     const delay = Math.min(15000, 5000 + loadRetryCount * 3000);
