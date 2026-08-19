@@ -807,6 +807,13 @@ async function fetchWithRetry(url, timeoutMs=60000) {
   }
 }
 
+function populateMsgDropdown() {
+  // No-op: the customer picker is the search box (msg-customer-search / msg-customer-results),
+  // which builds its list live from allCustomers inside filterMsgCustomers(). Nothing to pre-populate.
+  // (Previously this referenced a #msg-customer-select element that no longer exists in the DOM,
+  // which threw and made loadData() think every successful fetch had failed.)
+}
+
 async function loadData() {
   if(loadRetryTimer) { clearTimeout(loadRetryTimer); loadRetryTimer=null; }
   const bp = activeBranch !== 'all' ? '?branch=' + activeBranch : '';
@@ -837,8 +844,11 @@ async function loadData() {
     hideLoading();
     var errDiv = document.getElementById('load-error');
     if(errDiv) errDiv.style.display = 'none';
-    populateMsgDropdown();
-    updateAll();
+    try { populateMsgDropdown(); } catch(e2) { console.error('populateMsgDropdown error (non-fatal):', e2.message); }
+    try { updateAll(); } catch(e3) {
+      console.error('updateAll render error:', e3.message);
+      toast('Loaded data but a render step failed — check console','error');
+    }
   } catch(e) {
     loadRetryCount++;
     console.error('loadData error:', e.message);
@@ -1560,11 +1570,6 @@ async function submitNewOrder() {
 }
 
 // ── SEND MESSAGE ──────────────────────────────────────────────────
-function populateMsgDropdown() {
-  const sel=document.getElementById('msg-customer-select');
-  sel.innerHTML='<option value="">— Select customer —</option>';
-  allCustomers.forEach(c=>{const o=document.createElement('option');o.value=c.phone;o.textContent=`${c.name} (${c.phone})`;o.dataset.name=c.name;sel.appendChild(o);});
-}
 function openSendMsg(phone,name) {
   msgCustomerName = name || '';
   document.getElementById('msg-phone').value = phone || '';
