@@ -172,6 +172,35 @@ function calcDeliveryDate(service, isExpress) {
   return formatDate(d);
 }
 function genOrderId() { return `FW-${Date.now().toString().slice(-4)}${Math.floor(100 + Math.random() * 900)}`; }
+function formatPhoneDisplay(num) {
+  const digits = (num || "").replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    const local = digits.slice(2);
+    return `+91 ${local.slice(0,5)} ${local.slice(5)}`;
+  }
+  if (digits.length === 10) return `+91 ${digits.slice(0,5)} ${digits.slice(5)}`;
+  return num || "";
+}
+
+// Builds a formatted itemized invoice as WhatsApp text. Falls back to a simple
+// total-only invoice if no line items were recorded for this order.
+function buildInvoiceText(booking, branchObj) {
+  const br = branchObj || DEFAULT_BRANCH;
+  const items = Array.isArray(booking.items) ? booking.items : [];
+  let lines = `🧾 Invoice - Washkart ${br.name}\n\nOrder: ${booking.order_id}\nDate: ${booking.date || "-"}\n\n`;
+  if (items.length) {
+    items.forEach(it => {
+      const qty = Number(it.qty)||0, price = Number(it.price)||0;
+      lines += `${qty} x ${it.name} @ Rs ${price} = Rs ${qty*price}\n`;
+    });
+    lines += `\nTotal: Rs ${booking.amount || 0}`;
+  } else {
+    lines += `${booking.service_type ? booking.service_type.charAt(0).toUpperCase()+booking.service_type.slice(1) : "Service"}\nTotal: Rs ${booking.amount || 0}`;
+  }
+  lines += `\nPayment: ${booking.payment_status === "paid" ? "Paid ✅" : "Pending"}`;
+  lines += `\n\nPayment via UPI QR or cash.\n📞 ${formatPhoneDisplay(br.admin)}\n\nThank you for choosing Washkart! 🧺`;
+  return lines;
+}
 
 // SEND HELPERS
 async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -693,6 +722,29 @@ async function showBookingConfirm(phone, session, phoneNumberId) {
   session.step = "direct_confirm";
 }
 
+// Called right after an address is captured/confirmed. Asks for the society/apartment
+// complex once per booking flow (skippable), pre-fills from the saved customer record
+// if already known, then continues on to branch/date/slot/confirm as before.
+async function proceedAfterAddress(phone, session, phoneNumberId, customer) {
+  if (!session.booking.society && !session.societyAsked) {
+    if (customer && customer.society) {
+      session.booking.society = customer.society;
+    } else {
+      session.societyAsked = true;
+      session.step = "get_society";
+      saveSession(phone, session);
+      await sendMessage(phone, "Which society / apartment complex is this for?\n(Type 'skip' if not applicable)", phoneNumberId);
+      return;
+    }
+  }
+  session.step = "idle";
+  if (!session.booking.branch) { session.step="select_branch"; await askBranch(phone,phoneNumberId); }
+  else if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
+  else if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; }
+  else { await showBookingConfirm(phone,session,phoneNumberId); }
+  saveSession(phone,session);
+}
+
 async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
   // Reschedule existing order instead of creating new
   if (booking.reschedule && booking.orderId) {
@@ -717,6 +769,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
       status: "pending", reminder_sent: false,
       source: booking.source || "whatsapp",
       branch: br.slug,
+      society: booking.society || "",
       amount: 0, payment_status: "unpaid", payment_method: "",
     });
   } catch (e) { console.error("saveBooking:", e.message); }
@@ -724,7 +777,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
   // Clear address confirmation flag for next booking
   if (session) session.addressConfirmed = false;
   await sendMessage(phone,
-    `✅ Booking confirmed! - Washkart ${br.name}\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
+    `✅ Booking confirmed! - Washkart ${br.name}\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n📞 ${formatPhoneDisplay(br.admin)}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
     phoneNumberId
   );
   await delay(500);
@@ -825,7 +878,7 @@ ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
 }
 
 // BUTTON GUARD
-const TEXT_INPUT_STEPS = ["get_name","get_address","get_custom_date","feedback_comment","payment_method"];
+const TEXT_INPUT_STEPS = ["get_name","get_address","get_society","get_custom_date","feedback_comment","payment_method"];
 function isButtonId(text) {
   return /^(price_|btn_|date_|slot_|branch_|use_saved|update_details|no_cancel|confirm_direct|rating_|pay_|cc_)/.test(text);
 }
@@ -864,7 +917,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
 
   // Button guard during text input steps
   if (TEXT_INPUT_STEPS.includes(session.step) && isButtonId(rawText)) {
-    const msgs = { get_name:"Please type your name first.", get_address:"Please type your pickup address first.", get_custom_date:"Please type the date first (e.g. 25 August)." };
+    const msgs = { get_name:"Please type your name first.", get_address:"Please type your pickup address first.", get_society:"Please type your society name, or 'skip'.", get_custom_date:"Please type the date first (e.g. 25 August)." };
     await send(msgs[session.step] || "Please complete the current step first.");
     return;
   }
@@ -899,12 +952,20 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     if (session.booking.name) await saveCustomer(phone, session.booking.name, session.booking.address, session.booking.branch || branch.slug);
     const detected = detectBranchFromAddress(session.booking.address);
     if (detected) session.booking.branch = detected;
-    session.step = "idle";
-    if (!session.booking.branch) { session.step="select_branch"; await askBranch(phone,phoneNumberId); }
-    else if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
-    else if (!session.booking.slot) { await askSlot(phone,phoneNumberId); session.step="select_slot"; }
-    else { await showBookingConfirm(phone,session,phoneNumberId); }
-    saveSession(phone,session); return;
+    await proceedAfterAddress(phone, session, phoneNumberId, await getCustomer(phone));
+    return;
+  }
+
+  if (session.step === "get_society") {
+    const val = rawText.trim();
+    session.booking.society = (val.toLowerCase() === "skip") ? "" : val;
+    if (session.booking.name && session.booking.address) {
+      await saveCustomer(phone, session.booking.name, session.booking.address, session.booking.branch || branch.slug);
+      // Persist society onto the customer record too, best-effort
+      try { await dbUpdate("customers", `phone=eq.${phone}`, { society: session.booking.society }); } catch (e) {}
+    }
+    await proceedAfterAddress(phone, session, phoneNumberId, null);
+    return;
   }
 
   if (session.step === "get_custom_date") {
@@ -1277,7 +1338,10 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     if (svcWords.includes("shoe"))  { await send(RATES.shoes);     await delay(400); await sendBtn("Want to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]); return; }
   }
 
-  if (has(t,...GREET_KW)) {
+  // Only treat this as a plain greeting if it doesn't ALSO carry clear booking
+  // intent — e.g. "Hi Washkart! ...would like to book a pickup" should go
+  // straight to booking, not the generic welcome menu.
+  if (has(t,...GREET_KW) && !has(t,...BOOKING_KW)) {
     const customer = await getCustomer(phone);
     const active   = await getActiveOrder(phone);
     await logLead(phone,"enquired",rawText,branch.slug,phoneNumberId);
@@ -1657,22 +1721,10 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
   }
   // Clear the bypass flag
   session.allowAnotherBooking = false;
-  if (customer) {
-    if (!session.booking.name)    session.booking.name    = customer.name;
-    if (!session.booking.address) session.booking.address = customer.address;
-    if (!session.booking.branch&&customer.branch) session.booking.branch = customer.branch;
-    // Address confirmation for returning customers — only if not already in a step
-    if (customer.address && !session.booking.date && !session.addressConfirmed && session.step === "idle") {
-      session.step = "confirm_address";
-      saveSession(phone, session);
-      await sendButtons(phone,
-        `Pick up from your saved address?\n\n📍 ${customer.address}`,
-        [{id:"use_saved", title:"Yes, this address"}, {id:"update_details", title:"Different address"}],
-        phoneNumberId
-      );
-      return;
-    }
-  }
+
+  // Parse date/slot from the message FIRST — so we know whether the customer
+  // already told us when they want pickup before deciding whether to interrupt
+  // them with a "use saved address?" prompt.
   const hasTomorrow = has(t,"kal ","tomorrow","kal ko","udya");
   const hasToday    = has(t,"aaj ","today","abhi","aaj ko");
   const hasParso    = has(t,"parso","day after tomorrow","parsoon");
@@ -1703,6 +1755,28 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
   }
   if (hasMorning)      session.booking.slot="Morning (10 AM - 1 PM)";
   else if (hasEvening) session.booking.slot="Evening (5 PM - 8 PM)";
+
+  if (customer) {
+    if (!session.booking.name)    session.booking.name    = customer.name;
+    if (!session.booking.address) session.booking.address = customer.address;
+    if (!session.booking.branch&&customer.branch) session.booking.branch = customer.branch;
+    if (session.booking.date) {
+      // They already told us when they want pickup — use the saved address
+      // directly instead of interrupting with a confirmation prompt.
+      session.addressConfirmed = true;
+    } else if (customer.address && !session.addressConfirmed && session.step === "idle") {
+      // No date given yet — still worth confirming which address, since we
+      // don't have enough to proceed straight to scheduling anyway.
+      session.step = "confirm_address";
+      saveSession(phone, session);
+      await sendButtons(phone,
+        `Pick up from your saved address?\n\n📍 ${customer.address}`,
+        [{id:"use_saved", title:"Yes, this address"}, {id:"update_details", title:"Different address"}],
+        phoneNumberId
+      );
+      return;
+    }
+  }
   const bk = session.booking;
   if (!bk.name) {
     await sendMessage(phone,"Welcome to Washkart. What is your name?",phoneNumberId);
@@ -1719,6 +1793,17 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
     const detected = detectBranchFromAddress(bk.address);
     if (detected) { bk.branch=detected; }
     else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
+  }
+  if (!bk.society && !session.societyAsked) {
+    if (customer && customer.society) {
+      bk.society = customer.society;
+    } else {
+      session.societyAsked = true;
+      session.step = "get_society";
+      saveSession(phone,session);
+      await sendMessage(phone, "Which society / apartment complex is this for?\n(Type 'skip' if not applicable)", phoneNumberId);
+      return;
+    }
   }
   if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
   if (!bk.slot) { await askSlot(phone,phoneNumberId,bk.date); session.step="select_slot"; saveSession(phone,session); return; }
@@ -1875,7 +1960,7 @@ app.get("/bookings", async (req,res) => {
 
 app.post("/bookings", async (req,res) => {
   try {
-    const {name,phone,address,date,slot,source,notes,service_type,branch} = req.body;
+    const {name,phone,address,date,slot,source,notes,service_type,branch,society} = req.body;
     if (!name||!phone) return res.status(400).json({error:"Name and phone required"});
     const isWalkIn   = source==="walkin";
     if (!isWalkIn&&(!address||!date||!slot)) return res.status(400).json({error:"Missing required fields"});
@@ -1891,12 +1976,14 @@ app.post("/bookings", async (req,res) => {
       status:isWalkIn?"picked":"pending",
       reminder_sent:false,source:source||"walkin",
       branch:branchSlug,notes:notes||"",
+      society:society||"",
       amount:0,payment_status:"unpaid",payment_method:"",
       ...(service_type?{service_type}:{}),
     });
     if (address) await saveCustomer(normPhone,name,address,branchSlug);
+    if (society) { try { await dbUpdate("customers", `phone=eq.${normPhone}`, { society }); } catch(e) {} }
     await sendMessage(br.admin,
-      `New Booking [${source||"Walk-in"}] - ${br.name}\n\nOrder: ${orderId}\nName: ${name}\nPhone: +${normPhone}\nAddress: ${address||"Walk-in"}\nDate: ${date||getToday()}\nSlot: ${slot||"Walk-in"}${notes?`\nNotes: ${notes}`:""}`,
+      `New Booking [${source||"Walk-in"}] - ${br.name}\n\nOrder: ${orderId}\nName: ${name}\nPhone: +${normPhone}\nAddress: ${address||"Walk-in"}${society?`\nSociety: ${society}`:""}\nDate: ${date||getToday()}\nSlot: ${slot||"Walk-in"}${notes?`\nNotes: ${notes}`:""}`,
       numId
     );
     res.json({success:true,order_id:orderId});
@@ -1905,7 +1992,7 @@ app.post("/bookings", async (req,res) => {
 
 app.patch("/bookings/:orderId", async (req,res) => {
   try {
-    const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder} = req.body;
+    const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder,items} = req.body;
     const orderId = req.params.orderId;
 
     // Fetch current order BEFORE update to detect status change
@@ -1922,12 +2009,18 @@ app.patch("/bookings/:orderId", async (req,res) => {
     if (payment_status !==undefined) updateData.payment_status = payment_status;
     if (payment_method !==undefined) updateData.payment_method = payment_method;
     if (payment_status==="paid")     updateData.payment_date   = new Date().toISOString();
-    // Only update amount if explicitly provided and > 0 (never wipe existing amount)
-    if (amount!==undefined && amount > 0) updateData.amount = amount;
+    // Line items — when provided, they become the source of truth for the amount
+    if (Array.isArray(items)) {
+      updateData.items = items;
+      const itemsTotal = items.reduce((s,it)=>s + (Number(it.qty)||0) * (Number(it.price)||0), 0);
+      if (itemsTotal > 0) updateData.amount = itemsTotal;
+    }
+    // Only update amount if explicitly provided and > 0 (never wipe existing amount) — items total (above) wins if both given
+    if (updateData.amount===undefined && amount!==undefined && amount > 0) updateData.amount = amount;
     // Auto calc delivery date when service type set
     if (service_type&&!delivery_date) updateData.delivery_date = calcDeliveryDate(service_type,express||false);
     // Auto move to inprogress when amount set on pending/picked order
-    if (amount!==undefined&&amount>0&&prevStatus&&["pending","picked"].includes(prevStatus)) {
+    if (updateData.amount!==undefined&&updateData.amount>0&&prevStatus&&["pending","picked"].includes(prevStatus)) {
       updateData.status = "inprogress";
     }
 
@@ -1983,6 +2076,21 @@ app.patch("/bookings/:orderId", async (req,res) => {
       if (br.qrMediaId) { await delay(500); await sendImage(b.phone,br.qrMediaId,`Scan to pay - Rs ${b.amount}`,numId); }
     }
     res.json({success:true,delivery_date:updateData.delivery_date,status:finalStatus});
+  } catch (e) { res.status(500).json({error:e.message}); }
+});
+
+app.post("/bookings/:orderId/send-invoice", async (req,res) => {
+  try {
+    const orderId = req.params.orderId;
+    const rows = await dbSelect("bookings",`order_id=eq.${orderId}`);
+    const b = rows[0];
+    if (!b) return res.status(404).json({error:"Order not found"});
+    const br = getBranchBySlug(b.branch)||DEFAULT_BRANCH;
+    let numId = getBranchNumId(b.branch||"bavdhan");
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+    const text = buildInvoiceText(b, br);
+    const ok = await sendMessage(b.phone, text, numId, true);
+    res.json({success:ok});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
 
