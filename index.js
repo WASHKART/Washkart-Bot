@@ -504,7 +504,7 @@ function calcEstimate(items) {
 // SMART ITEM PRICE LOOKUP
 const ITEM_PRICE_QUICK = [
   { items:["saree","sari"], svc:["wash","laundry","dhulai"], reply:"Saree Laundry - Rs 150/kg. Express available." },
-  { items:["bedsheet","bed sheet","chadar"], svc:["wash","laundry"], reply:"Bedsheet Wash\nSingle - Rs 150 | Double - Rs 200" },
+  { items:["bedsheet","bed sheet"], svc:["wash","laundry"], reply:"Bedsheet Wash\nSingle - Rs 150 | Double - Rs 200" },
   { items:["blanket","razai","comforter"], svc:["wash","laundry"], reply:"Blanket / Comforter Wash\nSingle - Rs 350 | Double - Rs 450" },
   { items:["shirt","t-shirt","tshirt","top"], svc:["wash","laundry"], reply:"Shirt/T-Shirt\nWash and Fold Rs 80/kg | Wash and Iron Rs 110/kg" },
   { items:["saree","sari"], svc:["dry","dryclean","dc"], reply:"Saree Dry Clean\nRegular - Rs 350 | Silk - Rs 400 | With work - Rs 450" },
@@ -693,7 +693,7 @@ async function showBookingConfirm(phone, session, phoneNumberId) {
   session.step = "direct_confirm";
 }
 
-async function confirmBooking(phone, booking, branch, phoneNumberId) {
+async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
   // Reschedule existing order instead of creating new
   if (booking.reschedule && booking.orderId) {
     const existingId = booking.orderId;
@@ -722,9 +722,9 @@ async function confirmBooking(phone, booking, branch, phoneNumberId) {
   } catch (e) { console.error("saveBooking:", e.message); }
   await logLead(phone, "converted", "booking confirmed", br.slug);
   // Clear address confirmation flag for next booking
-  session.addressConfirmed = false;
+  if (session) session.addressConfirmed = false;
   await sendMessage(phone,
-    `✅ Booking confirmed!\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
+    `✅ Booking confirmed! - Washkart ${br.name}\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
     phoneNumberId
   );
   await delay(500);
@@ -957,7 +957,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     if (rawText === "confirm_direct" || has(t,...YES_KW)) {
       session.step = "idle";
       if (bk.name && bk.address && bk.date && bk.slot) {
-        await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||branch, phoneNumberId);
+        await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||branch, phoneNumberId, session);
         session.booking = {};
       } else { await send("Some details are missing. Type pickup to start again."); }
       saveSession(phone,session); return;
@@ -982,7 +982,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
         const cust = await getCustomer(phone);
         if (cust) {
           clearDropoffTimer(phone);
-          await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||getBranch(phoneNumberId), phoneNumberId);
+          await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||getBranch(phoneNumberId), phoneNumberId, session);
           session.booking = {};
         } else {
           await showBookingConfirm(phone, session, phoneNumberId);
@@ -1181,7 +1181,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     const bk = session.booking;
     if (bk.name && bk.address && bk.date && bk.slot) {
       session.step = "idle";
-      await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||branch, phoneNumberId);
+      await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||branch, phoneNumberId, session);
       session.booking = {}; saveSession(phone,session);
     } else { await send("Some details are missing. Type pickup to start again."); }
     return;
@@ -1392,7 +1392,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
       }
       session.allowAnotherBooking = false;
       if (session.booking.name && session.booking.address && session.booking.date && session.booking.slot) {
-        await confirmBooking(phone,session.booking,getBranchBySlug(session.booking.branch)||branch,phoneNumberId); session.booking={};
+        await confirmBooking(phone,session.booking,getBranchBySlug(session.booking.branch)||branch,phoneNumberId,session); session.booking={};
       } else { await handleBookingIntent(phone,session,rawText,t,branch,phoneNumberId); }
       break;
     case "need_name":    session.step="get_name";    await send(ai.reply||"What is your name?"); break;
@@ -1426,7 +1426,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
           await send(msg); await RATE_FU();
         } else { await send(ai.reply||"Please mention item and service. e.g. 3 shirts dry clean"); }
       } else {
-        const numMatch = rawText.match(/(\d+)\s*(kapde|clothes|shirts?|pants?|sarees?)/i);
+        const numMatch = rawText.match(/(\d+)\s*(kapde|clothes|shirts?|sarees?)/i);
         if (numMatch) {
           await sendBtn("Which service?",
             [{id:"price_dc",title:"Dry Clean"},{id:"price_iron",title:"Steam Iron"},{id:"price_wash",title:"Laundry"}]
@@ -1505,7 +1505,7 @@ async function handleSlotSelected(phone, session, phoneNumberId) {
     const customer = await getCustomer(phone);
     if (customer) {
       clearDropoffTimer(phone);
-      await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||getBranch(phoneNumberId), phoneNumberId);
+      await confirmBooking(phone, bk, getBranchBySlug(bk.branch)||getBranch(phoneNumberId), phoneNumberId, session);
       session.booking = {};
     } else { await showBookingConfirm(phone,session,phoneNumberId); setNudgeTimer(phone,phoneNumberId); }
   } else if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
@@ -1733,7 +1733,7 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
   }
   if (customer) {
     clearDropoffTimer(phone);
-    await confirmBooking(phone,bk,getBranchBySlug(bk.branch)||branch,phoneNumberId);
+    await confirmBooking(phone,bk,getBranchBySlug(bk.branch)||branch,phoneNumberId,session);
     session.booking={}; saveSession(phone,session);
   } else {
     await showBookingConfirm(phone,session,phoneNumberId);
