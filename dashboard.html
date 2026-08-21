@@ -2074,35 +2074,38 @@ function printTag(orderId) {
   const slotShort = b.slot?.includes('Morning') ? 'Morning 10 AM - 1 PM' :
                     b.slot?.includes('Evening') ? 'Evening  5 PM - 8 PM' : (b.slot||'-');
   const now = new Date().toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  const win = window.open('','_blank','width=220,height=220');
+  const win = window.open('','_blank','width=260,height=320');
   win.document.write(`<!DOCTYPE html><html><head><title>Tag ${b.id}</title>
   <style>
-    @page { size: 50mm 50mm; margin: 2mm; }
+    /* Actual label stock is 38mm x 50mm (see print-agent/config.js TAG_WIDTH_MM/TAG_HEIGHT_MM) — must match exactly or content overflows the physical label. */
+    @page { size: 38mm 50mm; margin: 1mm; }
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: monospace; font-size: 9px; width:46mm; }
-    .center { text-align:center; }
+    body { font-family: monospace; font-size: 8px; width:36mm; text-align:center; word-wrap:break-word; overflow-wrap:break-word; }
+    div { text-align:center; word-wrap:break-word; overflow-wrap:break-word; }
     .bold { font-weight:bold; }
-    .large { font-size:13px; }
+    .large { font-size:11px; }
     .line { border-top:1px dashed #000; margin:2px 0; }
-    .row { display:flex; justify-content:space-between; }
+    .field { text-align:left; }
+    .print-btn { font-family:sans-serif; width:100%; padding:8px; margin-bottom:10px; cursor:pointer; background:#16a34a; color:#fff; border:none; border-radius:6px; font-size:12px; }
+    @media print { .print-btn { display:none; } }
   </style></head><body>
-  <div class="center bold" style="font-size:11px">WASHKART ${(b.branch||'bavdhan').toUpperCase()}</div>
+  <button class="print-btn" onclick="window.print()">🖨 Print Tag</button>
+  <div class="bold" style="font-size:10px">WASHKART ${(b.branch||'bavdhan').toUpperCase()}</div>
   <div class="line"></div>
-  <div class="center bold large">${b.id}</div>
+  <div class="bold large">${b.id}</div>
   <div class="line"></div>
-  <div><b>Name :</b> ${b.name}</div>
-  <div><b>Phone:</b> ${b.phone}</div>
-  <div><b>Addr :</b> ${b.address||'Walk-in'}</div>
+  <div class="field"><b>Name:</b> ${b.name}</div>
+  <div class="field"><b>Ph:</b> ${b.phone}</div>
+  <div class="field"><b>Addr:</b> ${(b.address||'Walk-in').slice(0,60)}</div>
   <div class="line"></div>
-  <div class="bold center">${(b.service_type||'TO BE ASSIGNED').toUpperCase()}</div>
-  <div><b>Date :</b> ${b.date||'Walk-in'}</div>
-  <div><b>Slot :</b> ${slotShort}</div>
-  ${b.notes?`<div class="line"></div><div><b>Note:</b> ${b.notes}</div>`:''}
+  <div class="bold">${(b.service_type||'TO BE ASSIGNED').toUpperCase()}</div>
+  <div class="field"><b>Date:</b> ${b.date||'Walk-in'}</div>
+  <div class="field"><b>Slot:</b> ${slotShort}</div>
+  ${b.notes?`<div class="line"></div><div class="field"><b>Note:</b> ${b.notes.slice(0,40)}</div>`:''}
   <div class="line"></div>
-  <div class="center" style="font-size:8px">${now}</div>
+  <div style="font-size:7px">${now}</div>
   </body></html>`);
   win.document.close();
-  win.onload = () => { win.print(); setTimeout(()=>win.close(),1000); };
 }
 
 loadData();
