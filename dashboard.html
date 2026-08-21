@@ -810,6 +810,13 @@ function svcLabel(s) {
 }
 const DASHBOARD_PASSWORD = 'washkart2025';
 
+// Shared label maps — single source of truth for display text, so a status/source/stage
+// is never rendered as a raw lowercase DB value in one place and a proper label in another.
+const STATUS_LABELS = {pending:'Pending',picked:'Picked Up',inprogress:'In Progress',outfordelivery:'Out for Delivery',delivered:'Delivered',cancelled:'Cancelled'};
+const SOURCE_LABELS = {whatsapp:'WhatsApp',walkin:'Walk-in',website:'Website',call:'Phone Call',other:'Other'};
+const LEAD_STAGE_LABELS = {enquired:'Enquired',booking_started:'Booking Started',dropped:'Dropped',converted:'Converted'};
+
+
 // AUTH
 function checkAuth() {
   if (sessionStorage.getItem('wk_auth') === DASHBOARD_PASSWORD) return true;
@@ -876,14 +883,13 @@ function isOverdue(b) {
 // STATUS BADGE
 function statusBadge(s) {
   const map={pending:'b-pending',picked:'b-picked',inprogress:'b-inprogress',outfordelivery:'b-outfordelivery',delivered:'b-delivered',cancelled:'b-cancelled'};
-  const labels={pending:'Pending',picked:'Picked Up',inprogress:'In Progress',outfordelivery:'Out for Delivery',delivered:'Delivered',cancelled:'Cancelled'};
-  return `<span class="badge ${map[s]||''}">${labels[s]||s}</span>`;
+  return `<span class="badge ${map[s]||''}">${STATUS_LABELS[s]||s}</span>`;
 }
 function payBadge(s) {
   return `<span class="badge b-${s||'unpaid'}">${s==='paid'?'Paid':s==='partial'?'Partial':'Unpaid'}</span>`;
 }
 function sourceBadge(s) {
-  return `<span class="badge b-${s==='whatsapp'?'whatsapp':'walkin'}">${s||'whatsapp'}</span>`;
+  return `<span class="badge b-${s==='whatsapp'?'whatsapp':'walkin'}">${SOURCE_LABELS[s]||s||'WhatsApp'}</span>`;
 }
 
 // LOAD DATA
@@ -1084,7 +1090,7 @@ function renderHome() {
         <div style="font-size:12px;font-family:monospace">+${l.phone}</div>
         <div style="font-size:11px;color:var(--muted)">${l.last_message||'-'}</div>
       </div>
-      <span class="badge b-${l.stage}">${l.stage}</span>
+      <span class="badge b-${l.stage}">${LEAD_STAGE_LABELS[l.stage]||l.stage}</span>
     </div>`).join('');
   }
 }
@@ -1185,7 +1191,7 @@ function renderOrders() {
       </td>
       <td>
         <select class="status-select" onchange="updateStatus('${b.id}',this.value)">
-          ${['pending','picked','inprogress','outfordelivery','delivered','cancelled'].map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${s}</option>`).join('')}
+          ${['pending','picked','inprogress','outfordelivery','delivered','cancelled'].map(s=>`<option value="${s}" ${b.status===s?'selected':''}>${STATUS_LABELS[s]}</option>`).join('')}
         </select>
       </td>
       <td>
@@ -1260,7 +1266,11 @@ function updateStatus(id,status) {
   fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
   .then(r=>r.json()).then(d=>{
     if(b){b.status=d.status||status;if(d.delivery_date)b.delivery_date=d.delivery_date;}
-    toast(`${id} → ${status} ✓`);
+    if(d.customerNotified===false) {
+      toast(`${id} → ${status} (customer NOT notified — likely 24h WhatsApp window)`,'error');
+    } else {
+      toast(`${id} → ${status} ✓`);
+    }
     updateAll();
   }).catch(()=>toast('Update failed','error'));
 }
@@ -1389,7 +1399,7 @@ function renderLeads() {
   if(!filtered.length){tbody.innerHTML='<tr><td colspan="6" class="empty"><div class="empty-icon">🎯</div>No leads</td></tr>';return;}
   tbody.innerHTML=filtered.map(l=>`<tr>
     <td style="font-family:monospace;font-size:12px">+${l.phone}</td>
-    <td><span class="badge b-${l.stage}">${l.stage?.replace('_',' ')}</span></td>
+    <td><span class="badge b-${l.stage}">${LEAD_STAGE_LABELS[l.stage]||l.stage}</span></td>
     <td style="font-size:12px;text-transform:capitalize">${l.branch||'bavdhan'}</td>
     <td style="font-size:12px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.last_message||'-'}</td>
     <td style="font-size:11px;color:var(--muted)">${l.updated_at?new Date(l.updated_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-'}</td>
