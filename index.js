@@ -217,9 +217,12 @@ function generateInvoicePDF(booking, branchObj) {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // Header
-      doc.fontSize(22).fillColor("#16a34a").font("Helvetica-Bold").text("WASHKART", 40, 40, { continued: true });
-      doc.fillColor("#111111").text("");
+      // Header — logo image with a text fallback if the asset isn't deployed
+      try {
+        doc.image(path.join(__dirname, "assets", "washkart-logo.png"), 40, 38, { width: 110 });
+      } catch (e) {
+        doc.fontSize(22).fillColor("#12a4da").font("Helvetica-Bold").text("WASHKART", 40, 40);
+      }
       doc.fontSize(10).fillColor("#666666").font("Helvetica")
         .text(`${br.name} Branch`, 40, 68);
 
@@ -228,7 +231,7 @@ function generateInvoicePDF(booking, branchObj) {
         .text(`Order: ${booking.order_id}`, 400, 62, { align: "right" })
         .text(`Date: ${booking.date || "-"}`, 400, 76, { align: "right" });
 
-      doc.moveTo(40, 100).lineTo(555, 100).strokeColor("#16a34a").lineWidth(2).stroke();
+      doc.moveTo(40, 100).lineTo(555, 100).strokeColor("#12a4da").lineWidth(2).stroke();
 
       // Customer block
       doc.fontSize(11).fillColor("#111111").font("Helvetica-Bold").text(booking.name || "-", 40, 115);
@@ -270,6 +273,7 @@ function generateInvoicePDF(booking, branchObj) {
         .text(`Payment: ${booking.payment_status === "paid" ? "Paid" : "Pending"}`, 400, y, { width: 155, align: "right" });
 
       // Footer
+      doc.moveTo(40, 745).lineTo(555, 745).strokeColor("#12a4da").lineWidth(1).stroke();
       doc.fontSize(9).fillColor("#888888")
         .text(`Payment via UPI QR or cash. Contact: ${formatPhoneDisplay(br.admin)}`, 40, 760, { width: 515, align: "center" })
         .text("Thank you for choosing Washkart!", 40, 774, { width: 515, align: "center" });
@@ -860,6 +864,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
   booking.orderId = orderId;
   booking.phone = phone;
   const br = branch || DEFAULT_BRANCH;
+  const svcType = booking.service_type || "";
   try {
     await dbInsert("bookings", {
       order_id: orderId, name: booking.name, phone,
@@ -868,6 +873,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
       source: booking.source || "whatsapp",
       branch: br.slug,
       society: booking.society || "",
+      service_type: svcType,
       amount: 0, payment_status: "unpaid", payment_method: "",
     });
   } catch (e) { console.error("saveBooking:", e.message); }
@@ -879,8 +885,9 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
     phoneNumberId
   );
   await delay(500);
+  const expectedDelivery = svcType ? calcDeliveryDate(svcType, false) : null;
   await sendMessage(phone,
-    `Your clothes are in good hands! 🧺\n\nWe'll have them fresh and ready within 3 days.\nNeed them sooner? Reply *express* after pickup for our 120-minute turnaround.`,
+    `Your order is in good hands! 🧺\n\n${expectedDelivery ? `We'll have it fresh and ready by ${expectedDelivery}.` : "We'll have it fresh and ready soon."}\nNeed it sooner? Reply *express* after pickup for our 120-minute turnaround.`,
     phoneNumberId
   );
   await notifyAdmin(booking, br, safeNumId(phoneNumberId));
@@ -2140,8 +2147,12 @@ app.patch("/bookings/:orderId", async (req,res) => {
       outfordelivery: `🚚 Your order is on the way!\n\nFresh clothes arriving soon.${amountLine}\nOrder: ${orderId}`,
       delivered:   `✅ Delivered!\n\nYour clothes are back — fresh and clean.${amountLine}\n\nPayment done? Reply *paid*.`,
     };
+    let customerNotified = null; // null = no message was applicable for this status change
     if (msgs[finalStatus]&&b?.phone&&statusChanged) {
-      await sendMessage(b.phone,msgs[finalStatus],numId);
+      customerNotified = await sendMessage(b.phone,msgs[finalStatus],numId);
+      if (!customerNotified) {
+        console.error(`[patch] Customer WhatsApp notification FAILED for ${orderId} (status: ${finalStatus}). Likely cause: more than 24h since the customer's last message — WhatsApp blocks free-form text outside that window. A pre-approved message template is required to notify them in that case.`);
+      }
       // Send express button after picked up
       if (finalStatus==="picked") {
         setTimeout(async()=>{
@@ -2173,7 +2184,7 @@ app.patch("/bookings/:orderId", async (req,res) => {
       await sendMessage(b.phone,`Payment reminder - Washkart ${br.name}\n\nHi ${b.name}, payment of Rs ${b.amount} for order ${orderId} is pending.\n\nOur delivery agent carries a QR code. You can also pay cash.\n\nAlready paid? Reply paid.`,numId);
       if (br.qrMediaId) { await delay(500); await sendImage(b.phone,br.qrMediaId,`Scan to pay - Rs ${b.amount}`,numId); }
     }
-    res.json({success:true,delivery_date:updateData.delivery_date,status:finalStatus});
+    res.json({success:true,delivery_date:updateData.delivery_date,status:finalStatus,customerNotified});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
 
