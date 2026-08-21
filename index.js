@@ -1,6 +1,8 @@
 const express = require("express");
 const axios   = require("axios");
 const path    = require("path");
+const PDFDocument = require("pdfkit");
+const FormData = require("form-data");
 const app     = express();
 app.use(express.json());
 
@@ -200,6 +202,102 @@ function buildInvoiceText(booking, branchObj) {
   lines += `\nPayment: ${booking.payment_status === "paid" ? "Paid ✅" : "Pending"}`;
   lines += `\n\nPayment via UPI QR or cash.\n📞 ${formatPhoneDisplay(br.admin)}\n\nThank you for choosing Washkart! 🧺`;
   return lines;
+}
+
+// Renders an itemized invoice as an actual PDF (in memory, no temp files) and
+// resolves with the resulting Buffer.
+function generateInvoicePDF(booking, branchObj) {
+  const br = branchObj || DEFAULT_BRANCH;
+  const items = Array.isArray(booking.items) ? booking.items : [];
+  return new Promise((resolve, reject) => {
+    try {
+      const doc = new PDFDocument({ size: "A4", margin: 40 });
+      const chunks = [];
+      doc.on("data", c => chunks.push(c));
+      doc.on("end", () => resolve(Buffer.concat(chunks)));
+      doc.on("error", reject);
+
+      // Header
+      doc.fontSize(22).fillColor("#16a34a").font("Helvetica-Bold").text("WASHKART", 40, 40, { continued: true });
+      doc.fillColor("#111111").text("");
+      doc.fontSize(10).fillColor("#666666").font("Helvetica")
+        .text(`${br.name} Branch`, 40, 68);
+
+      doc.fontSize(16).fillColor("#111111").font("Helvetica-Bold").text("INVOICE", 400, 40, { align: "right" });
+      doc.fontSize(9).fillColor("#666666").font("Helvetica")
+        .text(`Order: ${booking.order_id}`, 400, 62, { align: "right" })
+        .text(`Date: ${booking.date || "-"}`, 400, 76, { align: "right" });
+
+      doc.moveTo(40, 100).lineTo(555, 100).strokeColor("#16a34a").lineWidth(2).stroke();
+
+      // Customer block
+      doc.fontSize(11).fillColor("#111111").font("Helvetica-Bold").text(booking.name || "-", 40, 115);
+      doc.fontSize(10).fillColor("#444444").font("Helvetica")
+        .text(booking.phone || "-", 40, 132)
+        .text(booking.address || "-", 40, 147, { width: 300 });
+
+      // Table
+      let y = 195;
+      doc.fontSize(9).fillColor("#666666").font("Helvetica-Bold");
+      doc.text("ITEM", 40, y).text("QTY", 340, y, { width: 50, align: "right" })
+        .text("PRICE", 400, y, { width: 60, align: "right" }).text("AMOUNT", 470, y, { width: 85, align: "right" });
+      y += 15;
+      doc.moveTo(40, y).lineTo(555, y).strokeColor("#e5e7eb").lineWidth(1).stroke();
+      y += 10;
+
+      doc.font("Helvetica").fillColor("#111111");
+      const rows = items.length ? items.map(it => ({
+        name: it.name || "-", qty: Number(it.qty)||0, price: Number(it.price)||0,
+        amount: (Number(it.qty)||0) * (Number(it.price)||0),
+      })) : [{ name: booking.service_type ? booking.service_type.charAt(0).toUpperCase()+booking.service_type.slice(1) : "Service", qty: "-", price: "-", amount: booking.amount || 0 }];
+
+      rows.forEach(r => {
+        doc.fontSize(10).text(String(r.name), 40, y, { width: 290 })
+          .text(String(r.qty), 340, y, { width: 50, align: "right" })
+          .text(r.price === "-" ? "-" : `Rs ${r.price}`, 400, y, { width: 60, align: "right" })
+          .text(`Rs ${r.amount}`, 470, y, { width: 85, align: "right" });
+        y += 20;
+      });
+
+      y += 5;
+      doc.moveTo(40, y).lineTo(555, y).strokeColor("#111111").lineWidth(1).stroke();
+      y += 12;
+      doc.fontSize(12).font("Helvetica-Bold")
+        .text("TOTAL", 400, y, { width: 60, align: "right" })
+        .text(`Rs ${booking.amount || 0}`, 470, y, { width: 85, align: "right" });
+      y += 25;
+      doc.fontSize(10).font("Helvetica").fillColor(booking.payment_status === "paid" ? "#166534" : "#991b1b")
+        .text(`Payment: ${booking.payment_status === "paid" ? "Paid" : "Pending"}`, 400, y, { width: 155, align: "right" });
+
+      // Footer
+      doc.fontSize(9).fillColor("#888888")
+        .text(`Payment via UPI QR or cash. Contact: ${formatPhoneDisplay(br.admin)}`, 40, 760, { width: 515, align: "center" })
+        .text("Thank you for choosing Washkart!", 40, 774, { width: 515, align: "center" });
+
+      doc.end();
+    } catch (e) { reject(e); }
+  });
+}
+
+// Uploads a PDF buffer to WhatsApp's media endpoint, returns the media id to use in a document message.
+async function uploadMediaPDF(buffer, filename, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", buffer, { filename, contentType: "application/pdf" });
+  const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/media`, form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${TOKEN}` },
+    maxContentLength: Infinity, maxBodyLength: Infinity,
+  });
+  return res.data.id;
+}
+
+async function sendDocument(to, mediaId, filename, caption, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  await axios.post(`https://graph.facebook.com/v25.0/${numId}/messages`,
+    { messaging_product: "whatsapp", to, type: "document", document: { id: mediaId, filename, caption: caption || "" } },
+    { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
+  );
 }
 
 // SEND HELPERS
@@ -2080,17 +2178,30 @@ app.patch("/bookings/:orderId", async (req,res) => {
 });
 
 app.post("/bookings/:orderId/send-invoice", async (req,res) => {
+  const orderId = req.params.orderId;
   try {
-    const orderId = req.params.orderId;
     const rows = await dbSelect("bookings",`order_id=eq.${orderId}`);
     const b = rows[0];
     if (!b) return res.status(404).json({error:"Order not found"});
     const br = getBranchBySlug(b.branch)||DEFAULT_BRANCH;
     let numId = getBranchNumId(b.branch||"bavdhan");
     if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
-    const text = buildInvoiceText(b, br);
-    const ok = await sendMessage(b.phone, text, numId, true);
-    res.json({success:ok});
+
+    // Try the PDF pipeline first (generate -> upload to WhatsApp media -> send as document).
+    // Any failure at any step falls back to the plain text invoice, so the customer
+    // always gets something even if PDF generation or the media upload has an issue.
+    try {
+      const pdfBuffer = await generateInvoicePDF(b, br);
+      const filename  = `${b.order_id}.pdf`;
+      const mediaId    = await uploadMediaPDF(pdfBuffer, filename, numId);
+      await sendDocument(b.phone, mediaId, filename, `Invoice - Washkart ${br.name}`, numId);
+      return res.json({success:true, format:"pdf"});
+    } catch (pdfErr) {
+      console.error("[invoice] PDF pipeline failed, falling back to text:", pdfErr?.response?.data || pdfErr.message);
+      const text = buildInvoiceText(b, br);
+      const ok = await sendMessage(b.phone, text, numId, true);
+      return res.json({success:ok, format:"text", fallback:true});
+    }
   } catch (e) { res.status(500).json({error:e.message}); }
 });
 
