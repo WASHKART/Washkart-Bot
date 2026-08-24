@@ -748,6 +748,7 @@ tr.overdue td{background:#fef2f2;}
     <div class="modal-header"><div class="modal-title">🧾 Invoice — <span id="inv-order-id"></span></div><button class="modal-close" onclick="closeModal('modal-invoice')">✕</button></div>
     <div class="modal-body">
       <div class="catalog-tabs" id="inv-catalog-tabs"></div>
+      <div id="inv-kg-block" style="display:none;margin-bottom:1rem"></div>
       <div class="catalog-grid" id="inv-catalog-grid"></div>
       <div class="divider"></div>
       <div id="inv-items-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
@@ -1548,13 +1549,35 @@ function renderCatalogTabs() {
 function switchCatalogTab(key) { activeCatalogTab = key; renderCatalogTabs(); renderCatalogGrid(); }
 function renderCatalogGrid() {
   const el = document.getElementById('inv-catalog-grid');
+  const kgBlock = document.getElementById('inv-kg-block');
   if(!el) return;
+  // Laundry is priced per kg in practice, not per piece — offer both.
+  if (activeCatalogTab === 'laundry' && kgBlock) {
+    kgBlock.style.display = 'block';
+    kgBlock.innerHTML = `
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Or bill by weight (kg)</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="number" min="0" step="0.5" id="kg-input" placeholder="Kg" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:7px 8px;font-size:13px">
+        <button class="btn btn-ghost btn-sm" onclick="addKgItem('Wash &amp; Fold',80)">Wash &amp; Fold — Rs 80/kg</button>
+        <button class="btn btn-ghost btn-sm" onclick="addKgItem('Wash &amp; Iron',110)">Wash &amp; Iron — Rs 110/kg</button>
+      </div>`;
+  } else if (kgBlock) {
+    kgBlock.style.display = 'none';
+  }
   const items = ITEM_CATALOG[activeCatalogTab] || [];
   el.innerHTML = items.map(it=>`<button class="catalog-item" onclick="addCatalogItem('${it.name.replace(/'/g,"\\'")}',${it.price})">
     <span class="catalog-icon">${it.icon}</span>
     <span class="catalog-name">${it.name}</span>
     <span class="catalog-price">₹${it.price}</span>
   </button>`).join('');
+}
+function addKgItem(label, ratePerKg) {
+  const kgInput = document.getElementById('kg-input');
+  const kg = parseFloat(kgInput?.value);
+  if (!kg || kg <= 0) { toast('Enter weight in kg first', 'error'); return; }
+  invoiceItems.push({ name: `Laundry ${label} (${kg}kg)`, qty: kg, price: ratePerKg });
+  renderInvoiceRows();
+  if (kgInput) kgInput.value = '';
 }
 function addCatalogItem(name, price) {
   const existing = invoiceItems.find(it=>it.name===name && Number(it.price)===price);
