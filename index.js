@@ -58,7 +58,9 @@ function detectBranchFromAddress(address) {
 // CONFIG
 const TOKEN        = process.env.WHATSAPP_TOKEN;
 const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of branch
-const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // set STAFF_PASSWORD in Render env vars for real deployments
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // legacy combined /staff page — kept working, but not recommended going forward
+const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // set COUNTER_PASSWORD in Render env vars
+const DELIVERY_PASSWORD = process.env.DELIVERY_PASSWORD || "delivery2025"; // set DELIVERY_PASSWORD in Render env vars
 const VERIFY_TOKEN = "washkart_verify_123";
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
@@ -2347,10 +2349,13 @@ app.get("/leads",          async(req,res)=>{ try{ const {branch}=req.query; cons
 app.get("/conversations",  async(req,res)=>{ try{ const {phone}=req.query; if(phone){const rows=await dbSelect("sessions",`phone=eq.${normalizePhone(phone)}`);res.json(rows[0]||{});}else{const rows=await dbSelect("sessions","order=updated_at.desc&limit=100");res.json(rows);} }catch(e){res.status(500).json({error:e.message});} });
 app.post("/takeover",      async(req,res)=>{ try{ const {phone,active}=req.body; const num=normalizePhone(phone); if(!sessionCache[num])sessionCache[num]={step:"idle",booking:{},history:[]}; sessionCache[num].takeoverActive=!!active; res.json({success:true,takeover:!!active}); }catch(e){res.status(500).json({error:e.message});} });
 // STAFF-ONLY ENDPOINTS — deliberately return a restricted field set (no name, phone,
-// amount, or payment info). Gated by STAFF_PASSWORD, separate from the admin dashboard.
+// amount, or payment info). Accepts any of the three passwords — counter and delivery
+// each have their own, plus the legacy combined one still works during transition.
 function checkStaffAuth(req, res) {
   const key = req.headers["x-staff-key"] || req.query.key;
-  if (key !== STAFF_PASSWORD) { res.status(401).json({error:"Unauthorized"}); return false; }
+  if (key !== STAFF_PASSWORD && key !== COUNTER_PASSWORD && key !== DELIVERY_PASSWORD) {
+    res.status(401).json({error:"Unauthorized"}); return false;
+  }
   return true;
 }
 
@@ -2387,6 +2392,7 @@ app.get("/pickups", async (req, res) => {
       notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim(),
       branch: b.branch, society: b.society,
       amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
+      items: Array.isArray(b.items) ? b.items : [],
       // Only a genuine pickup/delivery FAILURE blocks staff actions. A missing-address
       // note is informational only — staff can still tally/process the physical items.
       flagged: (b.notes || "").includes("[STAFF FLAG:FAIL]"),
@@ -2442,7 +2448,7 @@ app.post("/pickups/:orderId/status", async (req, res) => {
 app.post("/pickups/:orderId/tally", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { items } = req.body;
+    const { items, markReady } = req.body;
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "No items provided" });
     const orderId = req.params.orderId;
 
@@ -2451,20 +2457,24 @@ app.post("/pickups/:orderId/tally", async (req, res) => {
     if (!prevOrder) return res.status(404).json({ error: "Order not found" });
 
     const itemsTotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
-    const updateData = { items, status: "outfordelivery" };
+    // Saving the tally never forces a status change by itself — only markReady does that.
+    const updateData = { items };
     if (itemsTotal > 0) updateData.amount = itemsTotal;
-    if (prevOrder.service_type && !prevOrder.delivery_date) {
-      updateData.delivery_date = calcDeliveryDate(prevOrder.service_type, prevOrder.express || false);
+    if (markReady) {
+      updateData.status = "outfordelivery";
+      if (prevOrder.service_type && !prevOrder.delivery_date) {
+        updateData.delivery_date = calcDeliveryDate(prevOrder.service_type, prevOrder.express || false);
+      }
     }
     await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
 
-    if (prevOrder.phone && prevOrder.status !== "outfordelivery") {
+    if (markReady && prevOrder.phone && prevOrder.status !== "outfordelivery") {
       const brSlug = prevOrder.branch || "bavdhan";
       let numId = getBranchNumId(brSlug);
       if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
       await sendMessage(prevOrder.phone, `🚚 Your order is on the way!\n\nOrder: ${orderId}`, numId);
     }
-    res.json({ success: true, amount: updateData.amount || prevOrder.amount || 0 });
+    res.json({ success: true, amount: updateData.amount || prevOrder.amount || 0, status: updateData.status || prevOrder.status });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -2621,7 +2631,15 @@ app.post("/bookings/:orderId/clear-reprint", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.get("/staff", (req, res) => res.sendFile(path.join(__dirname, "staff.html")));
+app.get("/staff", (req, res) => res.send(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px;padding:2rem;text-align:center;}
+a{display:block;width:100%;max-width:280px;padding:20px;border-radius:14px;font-size:20px;font-weight:800;text-decoration:none;color:#fff;}
+</style></head><body>
+<div style="font-size:40px">👋</div>
+<p>This page has moved. Please use:</p>
+<a href="/counter" style="background:#16a34a">🏪 Counter</a>
+<a href="/delivery" style="background:#dc2626">🚚 Delivery</a>
+</body></html>`));
 app.get("/counter", (req, res) => res.sendFile(path.join(__dirname, "counter.html")));
 app.get("/delivery", (req, res) => res.sendFile(path.join(__dirname, "delivery.html")));
 
