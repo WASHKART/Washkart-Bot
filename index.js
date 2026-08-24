@@ -2056,6 +2056,27 @@ async function sendWeeklySummary() {
 }
 setInterval(sendWeeklySummary, 60*60*1000);
 
+// Daily digest — sent every morning so admin can see the day's shape without opening the dashboard.
+async function sendDailyDigest() {
+  const now = new Date();
+  if (now.getHours() !== 8) return; // 8 AM once per day
+  try {
+    const today = getToday();
+    const all = await dbSelect("bookings", "status=neq.cancelled&order=created_at.desc");
+    const pickupsToday = all.filter(b => b.date === today && !["delivered","cancelled"].includes(b.status));
+    const deliveriesToday = all.filter(b => b.delivery_date === today && !["delivered","cancelled"].includes(b.status));
+    const unpaid = all.filter(b => b.status === "delivered" && b.payment_status !== "paid" && b.amount > 0);
+    const unpaidTotal = unpaid.reduce((s,b) => s + (b.amount||0), 0);
+    const flagged = all.filter(b => (b.notes||"").includes("[STAFF FLAG]"));
+    let msg = `Washkart - Today, ${today}\n\nPickups: ${pickupsToday.length}\nDeliveries due: ${deliveriesToday.length}\nUnpaid: ${unpaid.length} orders (Rs ${unpaidTotal})`;
+    if (flagged.length) msg += `\n\n🚩 ${flagged.length} order(s) flagged by staff — needs your attention`;
+    for (const br of Object.values(BRANCHES)) {
+      if (br.admin) await sendMessage(br.admin, msg, getBranchNumId(br.slug));
+    }
+  } catch (e) { console.error("Daily digest error:", e.message); }
+}
+setInterval(sendDailyDigest, 60*60*1000);
+
 // WEBHOOK
 app.get("/webhook", (req, res) => {
   if (req.query["hub.mode"]==="subscribe"&&req.query["hub.verify_token"]===VERIFY_TOKEN)
@@ -2392,6 +2413,58 @@ app.post("/pickups/:orderId/status", async (req, res) => {
       if (msgs[status]) await sendMessage(prevOrder.phone, msgs[status], numId);
     }
     res.json({ success: true, status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Staff item tally at the Cleaning stage — catalog-only (no custom pricing), auto-computes
+// the total, saves it to the order, and advances status straight to Out for Delivery in one step.
+app.post("/pickups/:orderId/tally", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "No items provided" });
+    const orderId = req.params.orderId;
+
+    const prevRows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const prevOrder = prevRows[0];
+    if (!prevOrder) return res.status(404).json({ error: "Order not found" });
+
+    const itemsTotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
+    const updateData = { items, status: "outfordelivery" };
+    if (itemsTotal > 0) updateData.amount = itemsTotal;
+    if (prevOrder.service_type && !prevOrder.delivery_date) {
+      updateData.delivery_date = calcDeliveryDate(prevOrder.service_type, prevOrder.express || false);
+    }
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
+
+    if (prevOrder.phone && prevOrder.status !== "outfordelivery") {
+      const brSlug = prevOrder.branch || "bavdhan";
+      let numId = getBranchNumId(brSlug);
+      if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+      await sendMessage(prevOrder.phone, `🚚 Your order is on the way!\n\nOrder: ${orderId}`, numId);
+    }
+    res.json({ success: true, amount: updateData.amount || prevOrder.amount || 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Staff-triggered payment reminder for an order that was just delivered unpaid.
+app.post("/pickups/:orderId/remind-payment", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const orderId = req.params.orderId;
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+    if (!b.amount) return res.status(400).json({ error: "No amount set on this order" });
+    const brSlug = b.branch || "bavdhan";
+    const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
+    let numId = getBranchNumId(brSlug);
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+    await sendMessage(b.phone,
+      `Payment reminder - Washkart ${br.name}\n\nHi ${b.name}, payment of Rs ${b.amount} for order ${orderId} is pending.\n\nOur delivery agent carries a QR code. You can also pay cash.\n\nAlready paid? Reply paid.`,
+      numId
+    );
+    res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
