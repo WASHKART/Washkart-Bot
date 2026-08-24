@@ -342,6 +342,26 @@ async function sendDocument(to, mediaId, filename, caption, phoneNumberId) {
   );
 }
 
+// Sends an approved WhatsApp message template — works regardless of the 24h customer
+// service window, unlike sendMessage/sendDocument. bodyParams are the {{1}}, {{2}}... values
+// in order. headerComponent is optional (e.g. a document/image header block).
+async function sendTemplateMessage(to, templateName, languageCode, bodyParams, headerComponent, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  const components = [];
+  if (headerComponent) components.push(headerComponent);
+  if (bodyParams && bodyParams.length) {
+    components.push({ type: "body", parameters: bodyParams.map(p => ({ type: "text", text: String(p) })) });
+  }
+  const payload = {
+    messaging_product: "whatsapp", to, type: "template",
+    template: { name: templateName, language: { code: languageCode }, components },
+  };
+  const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/messages`, payload,
+    { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
+  );
+  return res.data;
+}
+
 // SEND HELPERS
 async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -2220,21 +2240,42 @@ app.post("/bookings/:orderId/send-invoice", async (req,res) => {
     let numId = getBranchNumId(b.branch||"bavdhan");
     if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
 
-    // Try the PDF pipeline first (generate -> upload to WhatsApp media -> send as document).
-    // Any failure at any step falls back to the plain text invoice, so the customer
-    // always gets something even if PDF generation or the media upload has an issue.
+    const filename = `${b.order_id}.pdf`;
+    let mediaId = null;
     try {
       const pdfBuffer = await generateInvoicePDF(b, br);
-      const filename  = `${b.order_id}.pdf`;
-      const mediaId    = await uploadMediaPDF(pdfBuffer, filename, numId);
-      await sendDocument(b.phone, mediaId, filename, `Invoice - Washkart ${br.name}`, numId);
-      return res.json({success:true, format:"pdf"});
-    } catch (pdfErr) {
-      console.error("[invoice] PDF pipeline failed, falling back to text:", pdfErr?.response?.data || pdfErr.message);
-      const text = buildInvoiceText(b, br);
-      const ok = await sendMessage(b.phone, text, numId, true);
-      return res.json({success:ok, format:"text", fallback:true});
+      mediaId = await uploadMediaPDF(pdfBuffer, filename, numId);
+    } catch (genErr) {
+      console.error("[invoice] PDF generation/upload failed:", genErr.message);
     }
+
+    if (mediaId) {
+      // Primary path: the approved order_invoice template. Works regardless of the
+      // 24h customer-service window, unlike everything below it.
+      try {
+        await sendTemplateMessage(
+          b.phone, "order_invoice", "en",
+          [b.name || "Customer", b.order_id, String(b.amount || 0)],
+          { type: "header", parameters: [{ type: "document", document: { id: mediaId, filename } }] },
+          numId
+        );
+        return res.json({success:true, format:"template_pdf"});
+      } catch (templateErr) {
+        console.error("[invoice] Template send failed, trying free-form PDF:", templateErr?.response?.data || templateErr.message);
+      }
+      // Fallback 1: free-form document message (only works within the 24h window)
+      try {
+        await sendDocument(b.phone, mediaId, filename, `Invoice - Washkart ${br.name}`, numId);
+        return res.json({success:true, format:"pdf"});
+      } catch (docErr) {
+        console.error("[invoice] Free-form document also failed:", docErr?.response?.data || docErr.message);
+      }
+    }
+
+    // Final fallback: plain text invoice
+    const text = buildInvoiceText(b, br);
+    const ok = await sendMessage(b.phone, text, numId, true);
+    return res.json({success:ok, format:"text", fallback:true});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
 
