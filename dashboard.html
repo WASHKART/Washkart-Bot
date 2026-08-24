@@ -1621,7 +1621,8 @@ async function saveAndSendInvoice() {
     const res = await fetch(`${BOT_URL}/bookings/${invoiceOrderId}/send-invoice`,{method:'POST'});
     const data = await res.json();
     if(data.success){
-      toast(data.format==='pdf' ? 'Invoice PDF sent ✓' : 'Invoice sent (text) ✓');
+      const formatLabels = {template_pdf:'Invoice PDF sent (template) ✓', pdf:'Invoice PDF sent ✓', text:'Invoice sent (text) ✓'};
+      toast(formatLabels[data.format] || 'Invoice sent ✓');
       closeModal('modal-invoice');
     }
     else toast(data.error||'Send failed','error');
