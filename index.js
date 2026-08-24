@@ -4,7 +4,7 @@ const path    = require("path");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
 const app     = express();
-app.use(express.json());
+app.use(express.json({ limit: "10mb" })); // raised from the 100kb default — delivery photos need the headroom
 
 // CORS
 const ALLOWED_ORIGINS = [
@@ -332,6 +332,25 @@ async function uploadMediaPDF(buffer, filename, phoneNumberId) {
     maxContentLength: Infinity, maxBodyLength: Infinity,
   });
   return res.data.id;
+}
+
+async function uploadMediaImage(buffer, filename, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", buffer, { filename, contentType: "image/jpeg" });
+  const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/media`, form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${TOKEN}` },
+    maxContentLength: Infinity, maxBodyLength: Infinity,
+  });
+  return res.data.id;
+}
+async function sendImageToCustomer(to, mediaId, caption, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  await axios.post(`https://graph.facebook.com/v25.0/${numId}/messages`,
+    { messaging_product: "whatsapp", to, type: "image", image: { id: mediaId, caption: caption || "" } },
+    { headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" } }
+  );
 }
 
 async function sendDocument(to, mediaId, filename, caption, phoneNumberId) {
@@ -2067,7 +2086,7 @@ async function sendDailyDigest() {
     const deliveriesToday = all.filter(b => b.delivery_date === today && !["delivered","cancelled"].includes(b.status));
     const unpaid = all.filter(b => b.status === "delivered" && b.payment_status !== "paid" && b.amount > 0);
     const unpaidTotal = unpaid.reduce((s,b) => s + (b.amount||0), 0);
-    const flagged = all.filter(b => (b.notes||"").includes("[STAFF FLAG]"));
+    const flagged = all.filter(b => (b.notes||"").includes("[STAFF FLAG:FAIL]"));
     let msg = `Washkart - Today, ${today}\n\nPickups: ${pickupsToday.length}\nDeliveries due: ${deliveriesToday.length}\nUnpaid: ${unpaid.length} orders (Rs ${unpaidTotal})`;
     if (flagged.length) msg += `\n\n🚩 ${flagged.length} order(s) flagged by staff — needs your attention`;
     for (const br of Object.values(BRANCHES)) {
@@ -2365,10 +2384,12 @@ app.get("/pickups", async (req, res) => {
     const safe = rows.map(b => ({
       order_id: b.order_id, address: b.address, date: b.date, slot: b.slot,
       status: b.status, service_type: b.service_type,
-      notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG]")).join("\n").trim(),
+      notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim(),
       branch: b.branch, society: b.society,
       amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
-      flagged: (b.notes || "").includes("[STAFF FLAG]"),
+      // Only a genuine pickup/delivery FAILURE blocks staff actions. A missing-address
+      // note is informational only — staff can still tally/process the physical items.
+      flagged: (b.notes || "").includes("[STAFF FLAG:FAIL]"),
     }));
     res.json(safe);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2468,6 +2489,44 @@ app.post("/pickups/:orderId/remind-payment", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Delivery completed with a photo — either "left outside" proof (no payment collected,
+// nobody was home) or a photo of a UPI payment confirmation screen. Sends the photo
+// directly to the customer as proof/receipt, updates status and payment in one step.
+app.post("/pickups/:orderId/delivery-photo", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { photoBase64, mode, paid } = req.body; // mode: 'left_outside' | 'upi_proof'
+    if (!photoBase64) return res.status(400).json({ error: "No photo provided" });
+    const orderId = req.params.orderId;
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+
+    const brSlug = b.branch || "bavdhan";
+    const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
+    let numId = getBranchNumId(brSlug);
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+
+    const buffer = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
+    const mediaId = await uploadMediaImage(buffer, "delivery.jpg", numId);
+
+    const updateData = { status: "delivered" };
+    if (paid === true && b.amount > 0) {
+      updateData.payment_status = "paid";
+      updateData.payment_method = mode === "upi_proof" ? "upi" : "cash";
+      updateData.payment_date = new Date().toISOString();
+    }
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
+
+    const caption = mode === "left_outside"
+      ? `✅ Delivered!\n\nYour clothes were left securely as arranged since nobody was available. Order: ${orderId}`
+      : `✅ Payment received — thank you!\n\nOrder: ${orderId}`;
+    if (b.phone) await sendImageToCustomer(b.phone, mediaId, caption, numId);
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Staff hits this when a pickup/delivery fails (customer not home, wrong address, etc).
 // Does NOT change the order's status — just flags it and immediately alerts the owner
 // with full details, since resolving it (reschedule, cancel, etc.) is an admin decision.
@@ -2480,7 +2539,7 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
     const b = rows[0];
     if (!b) return res.status(404).json({ error: "Order not found" });
 
-    const flagNote = `[STAFF FLAG] ${stage === "delivery" ? "Delivery" : "Pickup"} failed — needs attention (${new Date().toLocaleString("en-IN")})`;
+    const flagNote = `[STAFF FLAG:FAIL] ${stage === "delivery" ? "Delivery" : "Pickup"} failed — needs attention (${new Date().toLocaleString("en-IN")})`;
     const newNotes = b.notes ? `${b.notes}\n${flagNote}` : flagNote;
     await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
 
@@ -2521,7 +2580,7 @@ app.post("/pickups/walkin", async (req, res) => {
       status: "picked", reminder_sent: false, source: "walkin",
       branch: branchSlug,
       // Only the address is genuinely missing when there's no saved customer — name always comes from staff now.
-      notes: address ? "" : "[STAFF FLAG] New customer — needs delivery address confirmed",
+      notes: address ? "" : "[STAFF FLAG:INFO] New customer — needs delivery address confirmed",
       society: existing?.society || "",
       amount: 0, payment_status: "unpaid", payment_method: "",
       service_type,
@@ -2541,7 +2600,30 @@ app.post("/pickups/walkin", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Staff requests a manual reprint (backup in case auto-print is slow/missed). Sets a flag
+// the local print agent checks on its normal poll cycle — the cloud server can't talk to
+// the shop laptop's printer directly, so this is the bridge between the two.
+app.post("/pickups/:orderId/reprint", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested: true });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Called by the local print agent after it successfully reprints, to clear the flag.
+// No staff auth — this is the agent itself, using the same unauthenticated pattern it
+// already uses for GET /bookings.
+app.post("/bookings/:orderId/clear-reprint", async (req, res) => {
+  try {
+    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested: false });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/staff", (req, res) => res.sendFile(path.join(__dirname, "staff.html")));
+app.get("/counter", (req, res) => res.sendFile(path.join(__dirname, "counter.html")));
+app.get("/delivery", (req, res) => res.sendFile(path.join(__dirname, "delivery.html")));
 
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
 app.get("/ping", (req,res)=>res.json({
