@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Washkart Delivery</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827;}
+
+.login-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100vh;height:100dvh;gap:24px;padding:2rem;background:#16a34a;}
+.login-logo{font-size:64px;}
+.login-input{width:100%;max-width:260px;padding:18px;border:none;border-radius:14px;font-size:24px;text-align:center;letter-spacing:4px;}
+.login-btn{width:100%;max-width:260px;padding:18px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:32px;cursor:pointer;}
+.login-error{font-size:40px;}
+
+.app{display:none;height:100vh;height:100dvh;flex-direction:column;}
+.tabs{display:flex;background:#111827;flex-shrink:0;padding-top:env(safe-area-inset-top);}
+.tab{flex:1;padding:18px 8px;text-align:center;font-size:38px;background:none;border:none;color:#6b7280;position:relative;}
+.tab.active{color:#fff;}
+.tab.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:4px;background:#4ade80;border-radius:2px;}
+.tab-count{position:absolute;top:8px;right:22%;background:#dc2626;color:#fff;font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;}
+
+.list{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1rem;-webkit-overflow-scrolling:touch;}
+.empty{text-align:center;padding:4rem 1rem;color:#9ca3af;font-size:60px;}
+
+.card{background:#fff;border-radius:20px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;flex-shrink:0;}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#f9fafb;border-bottom:1px solid #f0f0f0;}
+.slot-icon{font-size:28px;}
+.order-id{font-family:monospace;font-size:11px;color:#9ca3af;}
+.card-body{padding:16px;}
+.address-row{display:flex;align-items:center;gap:10px;}
+.address-text{flex:1;font-size:20px;font-weight:600;line-height:1.3;}
+.nav-btn{flex-shrink:0;width:56px;height:56px;background:#eff6ff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;text-decoration:none;}
+.service-icon{font-size:32px;margin-top:10px;}
+.notes-text{font-size:15px;color:#92400e;background:#fffbeb;padding:10px 12px;border-radius:10px;margin-top:12px;line-height:1.4;}
+
+.card-actions{display:flex;gap:10px;padding:12px 16px 8px;}
+.act-btn{flex:1;padding:22px 0;border:none;border-radius:16px;font-size:24px;font-weight:800;cursor:pointer;}
+.act-yes{background:#16a34a;color:#fff;}
+.act-no{background:#fef2f2;color:#dc2626;border:2px solid #fecaca;}
+.left-outside-link{display:block;width:calc(100% - 32px);margin:0 16px 16px;padding:12px 0;background:#eff6ff;border:2px dashed #bfdbfe;border-radius:14px;color:#1e40af;font-size:14px;font-weight:700;}
+.flagged-banner{margin:0 16px 16px;padding:18px 0;background:#fef2f2;color:#dc2626;text-align:center;font-size:32px;border-radius:16px;border:2px dashed #fecaca;}
+
+.bottom-bar{display:flex;gap:10px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;}
+.bottom-btn{flex:1;padding:18px 0;border-radius:14px;font-size:22px;font-weight:800;border:none;text-align:center;text-decoration:none;color:#fff;background:#dc2626;}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
+.overlay.show{display:flex;}
+.confirm-box{background:#fff;border-radius:24px;padding:2rem 1.5rem;width:100%;max-width:340px;text-align:center;max-height:85vh;overflow-y:auto;}
+.confirm-icon{font-size:60px;margin-bottom:1rem;}
+.confirm-sub{font-size:16px;color:#6b7280;margin-bottom:1.5rem;}
+.confirm-actions{display:flex;gap:12px;}
+.confirm-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:22px;font-weight:800;}
+.confirm-yes{background:#16a34a;color:#fff;}
+.confirm-cancel{background:#f3f4f6;color:#374151;}
+.confirm-back-link{display:block;width:100%;margin-top:14px;padding:10px 0;background:none;border:none;color:#6b7280;font-size:14px;font-weight:600;text-decoration:underline;}
+.pay-method-grid{display:flex;flex-direction:column;gap:12px;}
+.pay-method-btn{padding:22px 0;border:2px solid #e5e7eb;border-radius:16px;font-size:22px;font-weight:800;background:#f9fafb;}
+.pay-method-btn.cash{color:#16a34a;}
+.pay-method-btn.upi{color:#2563eb;}
+.photo-preview{width:100%;border-radius:14px;margin-bottom:12px;max-height:200px;object-fit:cover;}
+
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:30px 40px;border-radius:20px;font-size:50px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <div class="login-logo">🚚</div>
+  <input class="login-input" id="login-pass" type="password" inputmode="numeric" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="login-btn" onclick="doLogin()">➡️</button>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<div class="app" id="app">
+  <div class="tabs">
+    <button class="tab active" id="tab-pickup" onclick="switchTab('pickup')">
+      🧺⬆️
+      <span class="tab-count" id="count-pickup" style="display:none">0</span>
+    </button>
+    <button class="tab" id="tab-delivery" onclick="switchTab('delivery')">
+      📦⬇️
+      <span class="tab-count" id="count-delivery" style="display:none">0</span>
+    </button>
+  </div>
+  <div class="list" id="list"></div>
+  <div class="bottom-bar">
+    <a class="bottom-btn" href="tel:+919552552167">📞 CALL OWNER</a>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="confirm-box" id="confirm-content"></div>
+</div>
+
+<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelected(event)">
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BOT_URL = 'https://washkart-bot.onrender.com';
+let staffKey = sessionStorage.getItem('wk_staff_key') || '';
+let activeTab = 'pickup';
+let allPickups = [];
+let photoOrderId = null;
+let photoMode = null; // 'left_outside' | 'upi_proof'
+
+const SVC_ICON = { dryclean: '👔', iron: '🔥', laundry: '🧺', shoes: '👟', specialty: '✨', mixed: '🧺' };
+
+function showToast(icon) {
+  const el = document.getElementById('toast');
+  el.textContent = icon;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!pass) return;
+  const res = await fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(pass)}`);
+  if (res.status === 401) { document.getElementById('login-error').textContent = '❌'; return; }
+  staffKey = pass;
+  sessionStorage.setItem('wk_staff_key', pass);
+  showApp();
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadData();
+  setInterval(loadData, 20000);
+}
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-pickup').className = 'tab' + (tab === 'pickup' ? ' active' : '');
+  document.getElementById('tab-delivery').className = 'tab' + (tab === 'delivery' ? ' active' : '');
+  render();
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(staffKey)}`);
+    if (res.status === 401) { sessionStorage.removeItem('wk_staff_key'); location.reload(); return; }
+    allPickups = await res.json();
+    render();
+  } catch (e) { console.error(e); }
+}
+
+function render() {
+  const pickupList = allPickups.filter(p => p.status === 'pending');
+  const deliveryList = allPickups.filter(p => p.status === 'outfordelivery');
+
+  const pc = document.getElementById('count-pickup');
+  const dc = document.getElementById('count-delivery');
+  if (pickupList.length) { pc.style.display = 'flex'; pc.textContent = pickupList.length; } else pc.style.display = 'none';
+  if (deliveryList.length) { dc.style.display = 'flex'; dc.textContent = deliveryList.length; } else dc.style.display = 'none';
+
+  const items = activeTab === 'pickup' ? pickupList : deliveryList;
+  const list = document.getElementById('list');
+  if (!items.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+
+  list.innerHTML = items.map(p => {
+    const slotIcon = (p.slot || '').includes('Morning') ? '🌅' : '🌆';
+    const svcIcon = SVC_ICON[p.service_type] || '🧺';
+    const navUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.address || '');
+    let actionsHtml;
+    if (p.flagged) {
+      actionsHtml = `<div class="flagged-banner">🚩 WAITING<br>📞 CALLED</div>`;
+    } else {
+      actionsHtml = `<div class="card-actions">
+        <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌ FAILED</button>
+        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅ DONE</button>
+      </div>`;
+      if (activeTab === 'delivery') {
+        actionsHtml += `<button class="left-outside-link" onclick="startLeftOutsidePhoto('${p.order_id}')">📸 Left outside — nobody home</button>`;
+      }
+    }
+    return `<div class="card">
+      <div class="card-head">
+        <span class="slot-icon">${slotIcon}</span>
+        <span class="order-id">${p.order_id}</span>
+      </div>
+      <div class="card-body">
+        <div class="address-row">
+          <div class="address-text">${p.address || 'Walk-in'}</div>
+          <a class="nav-btn" href="${navUrl}" target="_blank">🗺️</a>
+        </div>
+        <div class="service-icon">${svcIcon}</div>
+        ${p.notes ? `<div class="notes-text">📝 ${p.notes}</div>` : ''}
+      </div>
+      ${actionsHtml}
+    </div>`;
+  }).join('');
+}
+
+function showOverlay(html) {
+  document.getElementById('confirm-content').innerHTML = html;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+function askFail(orderId, stage) {
+  showOverlay(`
+    <div class="confirm-icon">🚩</div>
+    <div class="confirm-sub">📞 ${stage === 'pickup' ? '🧺⬆️' : '📦⬇️'} ❌</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" style="background:#dc2626" onclick="doFail('${orderId}','${stage}')">✅ YES</button>
+    </div>
+  `);
+}
+async function doFail(orderId, stage) {
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/flag?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('📞✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+function askSuccess(orderId, stage, amount, paymentStatus) {
+  if (stage === 'pickup') {
+    showOverlay(`
+      <div class="confirm-icon">🧺⬆️</div>
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+        <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','picked',false)">✅ YES</button>
+      </div>
+    `);
+    return;
+  }
+  // Delivery — if unpaid with an amount on file, ask HOW they paid (or if not paid)
+  if (amount > 0 && paymentStatus !== 'paid') {
+    showOverlay(`
+      <div class="confirm-icon">💰</div>
+      <div class="confirm-sub" style="font-size:32px;font-weight:700;color:#111827">₹${amount}</div>
+      <div class="pay-method-grid">
+        <button class="pay-method-btn cash" onclick="doStatus('${orderId}','delivered',true)">💵 CASH</button>
+        <button class="pay-method-btn upi" onclick="startUpiPhoto('${orderId}')">📱 UPI</button>
+        <button class="pay-method-btn" onclick="doStatus('${orderId}','delivered',false)">❌ NOT PAID</button>
+      </div>
+      <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
+    `);
+  } else {
+    showOverlay(`
+      <div class="confirm-icon">📦⬇️</div>
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+        <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',false)">✅ YES</button>
+      </div>
+    `);
+  }
+}
+
+async function doStatus(orderId, status, paid) {
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/status?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, paid })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('✅');
+      loadData();
+      if (status === 'delivered' && paid === false) setTimeout(() => askRemindNow(orderId), 700);
+    } else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+function askRemindNow(orderId) {
+  showOverlay(`
+    <div class="confirm-icon">💰📤</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ NO</button>
+      <button class="confirm-btn confirm-yes" onclick="doRemind('${orderId}')">✅ YES</button>
+    </div>
+  `);
+}
+async function doRemind(orderId) {
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/remind-payment?key=${encodeURIComponent(staffKey)}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) showToast('📤✅');
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+// ── PHOTO CONFIRMATION (left outside / UPI proof) ──────────────────
+function startLeftOutsidePhoto(orderId) {
+  photoOrderId = orderId;
+  photoMode = 'left_outside';
+  closeOverlay();
+  document.getElementById('photo-input').click();
+}
+function startUpiPhoto(orderId) {
+  photoOrderId = orderId;
+  photoMode = 'upi_proof';
+  closeOverlay();
+  document.getElementById('photo-input').click();
+}
+function handlePhotoSelected(event) {
+  const file = event.target.files[0];
+  event.target.value = ''; // reset so selecting the same file again still fires onchange
+  if (!file || !photoOrderId) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    showOverlay(`
+      <img class="photo-preview" src="${e.target.result}">
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
+        <button class="confirm-btn confirm-yes" onclick="submitPhoto('${e.target.result.length}')">✅ SEND</button>
+      </div>
+    `);
+    window._pendingPhotoData = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function submitPhoto() {
+  const photoBase64 = window._pendingPhotoData;
+  const orderId = photoOrderId;
+  const mode = photoMode;
+  closeOverlay();
+  if (!photoBase64 || !orderId) return;
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/delivery-photo?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ photoBase64, mode, paid: mode === 'upi_proof' })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅📤'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+  photoOrderId = null; photoMode = null; window._pendingPhotoData = null;
+}
+
+// Init
+if (staffKey) {
+  fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(staffKey)}`).then(res => {
+    if (res.status === 401) { sessionStorage.removeItem('wk_staff_key'); document.getElementById('login-screen').style.display = 'flex'; }
+    else showApp();
+  });
+} else {
+  document.getElementById('login-screen').style.display = 'flex';
+}
+</script>
+</body>
+</html>

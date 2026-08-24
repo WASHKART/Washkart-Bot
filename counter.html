@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Washkart Counter</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827;}
+
+.login-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100vh;height:100dvh;gap:24px;padding:2rem;background:#16a34a;}
+.login-logo{font-size:64px;}
+.login-input{width:100%;max-width:260px;padding:18px;border:none;border-radius:14px;font-size:24px;text-align:center;letter-spacing:4px;}
+.login-btn{width:100%;max-width:260px;padding:18px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:32px;cursor:pointer;}
+.login-error{font-size:40px;}
+
+.app{display:none;height:100vh;height:100dvh;flex-direction:column;}
+.topbar{padding:14px 16px;background:#111827;color:#fff;font-size:20px;font-weight:800;text-align:center;flex-shrink:0;}
+.topbar span{color:#4ade80;}
+.top-count{display:inline-flex;align-items:center;justify-content:center;background:#dc2626;color:#fff;font-size:13px;font-weight:700;min-width:22px;height:22px;border-radius:11px;padding:0 6px;margin-left:8px;}
+
+.list{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1rem;-webkit-overflow-scrolling:touch;}
+.empty{text-align:center;padding:4rem 1rem;color:#9ca3af;font-size:60px;}
+
+.card{background:#fff;border-radius:20px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;flex-shrink:0;}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:#f9fafb;border-bottom:1px solid #f0f0f0;}
+.order-id{font-family:monospace;font-size:11px;color:#9ca3af;}
+.card-body{padding:16px;}
+.address-text{font-size:18px;font-weight:600;line-height:1.3;}
+.notes-text{font-size:14px;color:#92400e;background:#fffbeb;padding:10px 12px;border-radius:10px;margin-top:10px;line-height:1.4;}
+.print-btn-inline{margin-top:10px;padding:10px 0;width:100%;border-radius:10px;border:2px solid #e5e7eb;background:#f9fafb;font-size:14px;font-weight:700;color:#374151;}
+
+.card-actions{padding:0 16px 16px;}
+.act-btn{width:100%;padding:18px 0;border:none;border-radius:16px;font-size:20px;font-weight:800;cursor:pointer;background:#16a34a;color:#fff;}
+.flagged-banner{margin:0 16px 16px;padding:16px 0;background:#fef2f2;color:#dc2626;text-align:center;font-size:24px;border-radius:16px;border:2px dashed #fecaca;}
+
+.bottom-bar{display:flex;gap:10px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;}
+.bottom-btn{flex:1;padding:18px 0;border-radius:14px;font-size:22px;font-weight:800;border:none;text-align:center;text-decoration:none;color:#fff;}
+.bottom-btn-add{background:#16a34a;}
+.bottom-btn-call{background:#dc2626;}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
+.overlay.show{display:flex;}
+.confirm-box{background:#fff;border-radius:24px;padding:2rem 1.5rem;width:100%;max-width:340px;text-align:center;max-height:85vh;overflow-y:auto;}
+.confirm-icon{font-size:60px;margin-bottom:1rem;}
+.confirm-actions{display:flex;gap:12px;}
+.confirm-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:22px;font-weight:800;}
+.confirm-yes{background:#16a34a;color:#fff;}
+.confirm-cancel{background:#f3f4f6;color:#374151;}
+.act-no{background:#fef2f2;color:#dc2626;}
+.confirm-back-link{display:block;width:100%;margin-top:14px;padding:10px 0;background:none;border:none;color:#6b7280;font-size:14px;font-weight:600;text-decoration:underline;}
+
+.tally-total{font-size:38px;font-weight:800;color:#16a34a;text-align:center;margin-bottom:14px;}
+.catalog-tabs{display:flex;gap:8px;justify-content:center;margin-bottom:14px;}
+.catalog-tab{width:48px;height:48px;border-radius:12px;border:2px solid #e5e7eb;background:#f9fafb;font-size:24px;}
+.catalog-tab.active{background:#dcfce7;border-color:#16a34a;}
+.catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:260px;overflow-y:auto;margin-bottom:10px;}
+.catalog-item{position:relative;padding:14px 4px;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.catalog-item:active{background:#dcfce7;border-color:#16a34a;}
+.catalog-icon{font-size:28px;}
+.catalog-name{font-size:11px;font-weight:700;color:#374151;}
+.tally-qty-badge{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+
+.name-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:22px;text-align:center;margin-bottom:12px;}
+.phone-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:28px;text-align:center;letter-spacing:2px;margin-bottom:1.2rem;}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.svc-btn{padding:16px 0;border:2px solid #e5e7eb;border-radius:16px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.svc-btn:active{background:#dcfce7;border-color:#16a34a;}
+.svc-emoji{font-size:36px;}
+.svc-label{font-size:13px;font-weight:600;color:#374151;}
+
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:30px 40px;border-radius:20px;font-size:50px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <div class="login-logo">🏪</div>
+  <input class="login-input" id="login-pass" type="password" inputmode="numeric" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="login-btn" onclick="doLogin()">➡️</button>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar">🏪 WASH<span>KART</span> COUNTER <span class="top-count" id="count-processing" style="display:none">0</span></div>
+  <div class="list" id="list"></div>
+  <div class="bottom-bar">
+    <button class="bottom-btn bottom-btn-add" onclick="openNewWalkin()">➕ NEW</button>
+    <a class="bottom-btn bottom-btn-call" href="tel:+919552552167">📞 CALL</a>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="confirm-box" id="confirm-content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BOT_URL = 'https://washkart-bot.onrender.com';
+let staffKey = sessionStorage.getItem('wk_staff_key') || '';
+let allPickups = [];
+
+// Same price data as index.js (ITEM_PRICES) — kept in sync manually.
+const RAW_ITEM_PRICES = {
+  shirt:{dryclean:100,iron:20,laundry:80},pant:{dryclean:100,iron:20,laundry:80},
+  trouser:{dryclean:100,iron:20,laundry:80},jeans:{dryclean:100,iron:20,laundry:80},
+  tshirt:{dryclean:100,iron:20,laundry:80},top:{dryclean:100,iron:20,laundry:80},
+  kurta:{dryclean:100,iron:30,laundry:80},kurti:{dryclean:100,iron:30,laundry:80},
+  blouse:{dryclean:100,iron:20},salwar:{dryclean:100,iron:20},
+  saree:{dryclean:350,iron:120},lehenga:{dryclean:350,iron:120},
+  blazer:{dryclean:300,iron:120},jacket:{dryclean:250,iron:60},
+  overcoat:{dryclean:400,iron:60},sweater:{dryclean:200,iron:40},
+  dupatta:{dryclean:120,iron:50},shawl:{dryclean:120,iron:50},
+  anarkali:{dryclean:200,iron:50},suit:{dryclean:400,iron:100},
+  dress:{dryclean:350,iron:60},gown:{dryclean:350,iron:120},
+  sherwani:{dryclean:400,iron:120},towel:{dryclean:150},
+  sneaker:{shoes:350},shoe:{shoes:350},canvas:{shoes:300},
+  bedsheet:{laundry:150,iron:60},blanket:{laundry:350},curtain:{dryclean:15},
+  bag:{specialty:200},helmet:{specialty:150},carpet:{specialty:40},toy:{specialty:200},
+};
+const ITEM_ICONS = {
+  shirt:'👔',pant:'👖',trouser:'👖',jeans:'👖',tshirt:'👕',top:'👚',kurta:'👘',kurti:'👘',
+  blouse:'👚',salwar:'👗',saree:'🥻',lehenga:'👗',blazer:'🧥',jacket:'🧥',overcoat:'🧥',
+  sweater:'🧶',dupatta:'🧣',shawl:'🧣',anarkali:'👗',suit:'🤵',dress:'👗',gown:'👗',
+  sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
+  curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
+};
+const ITEM_CATALOG = {};
+Object.entries(RAW_ITEM_PRICES).forEach(([item, prices]) => {
+  Object.entries(prices).forEach(([svc, price]) => {
+    if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+    ITEM_CATALOG[svc].push({ name: item.charAt(0).toUpperCase()+item.slice(1), price, icon: ITEM_ICONS[item] || '🧺' });
+  });
+});
+const SVC_ICON = { dryclean: '👔', iron: '🔥', laundry: '🧺', shoes: '👟', specialty: '✨', mixed: '🧺' };
+const TALLY_TABS = [
+  {key:'dryclean', icon:'👔'}, {key:'iron', icon:'🔥'}, {key:'laundry', icon:'🧺'},
+  {key:'shoes', icon:'👟'}, {key:'specialty', icon:'✨'},
+];
+let tallyOrderId = null;
+let tallyItems = [];
+let activeTallyTab = 'dryclean';
+
+function showToast(icon) {
+  const el = document.getElementById('toast');
+  el.textContent = icon;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!pass) return;
+  const res = await fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(pass)}`);
+  if (res.status === 401) { document.getElementById('login-error').textContent = '❌'; return; }
+  staffKey = pass;
+  sessionStorage.setItem('wk_staff_key', pass);
+  showApp();
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadData();
+  setInterval(loadData, 20000);
+}
+
+async function loadData() {
+  try {
+    const res = await fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(staffKey)}`);
+    if (res.status === 401) { sessionStorage.removeItem('wk_staff_key'); location.reload(); return; }
+    allPickups = await res.json();
+    render();
+  } catch (e) { console.error(e); }
+}
+
+function render() {
+  // Counter only cares about items ready to be tallied/processed — picked or already in-progress.
+  const processing = allPickups.filter(p => p.status === 'picked' || p.status === 'inprogress');
+  const cc = document.getElementById('count-processing');
+  if (processing.length) { cc.style.display = 'inline-flex'; cc.textContent = processing.length; } else cc.style.display = 'none';
+
+  const list = document.getElementById('list');
+  if (!processing.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+  list.innerHTML = processing.map(p => {
+    const svcIcon = SVC_ICON[p.service_type] || '🧺';
+    let actionsHtml;
+    if (p.flagged) {
+      actionsHtml = `<div class="flagged-banner">🚩 WAITING<br>📞 CALLED</div>`;
+    } else {
+      actionsHtml = `<div class="card-actions"><button class="act-btn" onclick="openTally('${p.order_id}')">✅ TALLY &amp; READY</button></div>`;
+    }
+    return `<div class="card">
+      <div class="card-head">
+        <span style="font-size:24px">${svcIcon}</span>
+        <span class="order-id">${p.order_id}</span>
+      </div>
+      <div class="card-body">
+        <div class="address-text">${p.address || 'Walk-in'}</div>
+        ${p.notes ? `<div class="notes-text">📝 ${p.notes}</div>` : ''}
+        <button class="print-btn-inline" onclick="requestReprint('${p.order_id}')">🖨️ REPRINT TAG</button>
+      </div>
+      ${actionsHtml}
+    </div>`;
+  }).join('');
+}
+
+async function requestReprint(orderId) {
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/reprint?key=${encodeURIComponent(staffKey)}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) showToast('🖨️✅');
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+function showOverlay(html) {
+  document.getElementById('confirm-content').innerHTML = html;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ── ITEM TALLY ────────────────────────────────────────────────────
+function openTally(orderId) {
+  tallyOrderId = orderId;
+  tallyItems = [];
+  activeTallyTab = 'dryclean';
+  showOverlay(`
+    <div class="tally-total" id="tally-total">₹0</div>
+    <div class="catalog-tabs" id="tally-tabs"></div>
+    <div class="catalog-grid" id="tally-grid"></div>
+    <div class="confirm-actions" style="margin-top:14px">
+      <button class="confirm-btn confirm-cancel" onclick="tallyClear()">↩️ CLEAR</button>
+      <button class="confirm-btn confirm-yes" onclick="submitTally()">✅ READY</button>
+    </div>
+    <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
+  `);
+  renderTallyTabs();
+  renderTallyGrid();
+}
+function renderTallyTabs() {
+  const el = document.getElementById('tally-tabs');
+  if (!el) return;
+  el.innerHTML = TALLY_TABS.map(t=>`<button class="catalog-tab ${t.key===activeTallyTab?'active':''}" onclick="switchTallyTab('${t.key}')">${t.icon}</button>`).join('');
+}
+function switchTallyTab(key) { activeTallyTab = key; renderTallyTabs(); renderTallyGrid(); }
+function renderTallyGrid() {
+  const el = document.getElementById('tally-grid');
+  if (!el) return;
+  const items = ITEM_CATALOG[activeTallyTab] || [];
+  el.innerHTML = items.map(it=>{
+    const existing = tallyItems.find(ti=>ti.name===it.name && ti.price===it.price);
+    const qty = existing ? existing.qty : 0;
+    return `<button class="catalog-item" onclick="tallyAdd('${it.name.replace(/'/g,"\\'")}',${it.price})">
+      <span class="catalog-icon">${it.icon}</span>
+      <span class="catalog-name">${it.name}</span>
+      ${qty>0?`<span class="tally-qty-badge">${qty}</span>`:''}
+    </button>`;
+  }).join('');
+}
+function tallyAdd(name, price) {
+  const existing = tallyItems.find(it=>it.name===name && it.price===price);
+  if (existing) existing.qty += 1;
+  else tallyItems.push({name, qty:1, price});
+  renderTallyGrid();
+  updateTallyTotal();
+}
+function tallyClear() { tallyItems = []; renderTallyGrid(); updateTallyTotal(); }
+function updateTallyTotal() {
+  const total = tallyItems.reduce((s,it)=>s+it.qty*it.price,0);
+  const el = document.getElementById('tally-total');
+  if (el) el.textContent = `₹${total}`;
+}
+async function submitTally() {
+  if (!tallyItems.length) { showToast('⚠️'); return; }
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${tallyOrderId}/tally?key=${encodeURIComponent(staffKey)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items: tallyItems })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch(e) { showToast('⚠️'); }
+}
+
+// ── WALK-IN CREATE ──────────────────────────────────────────────
+function openNewWalkin() {
+  showOverlay(`
+    <div class="confirm-icon">➕🧺</div>
+    <input class="name-input" id="walkin-name" type="text" placeholder="Name">
+    <input class="phone-input" id="walkin-phone" type="tel" inputmode="numeric" placeholder="XXXXXXXXXX" maxlength="10">
+    <div class="svc-grid">
+      <button class="svc-btn" onclick="createWalkin('dryclean')"><span class="svc-emoji">👔</span><span class="svc-label">Dry Clean</span></button>
+      <button class="svc-btn" onclick="createWalkin('iron')"><span class="svc-emoji">🔥</span><span class="svc-label">Iron</span></button>
+      <button class="svc-btn" onclick="createWalkin('laundry')"><span class="svc-emoji">🧺</span><span class="svc-label">Laundry</span></button>
+      <button class="svc-btn" onclick="createWalkin('shoes')"><span class="svc-emoji">👟</span><span class="svc-label">Shoes</span></button>
+      <button class="svc-btn" onclick="createWalkin('specialty')"><span class="svc-emoji">✨</span><span class="svc-label">Special</span></button>
+      <button class="svc-btn" onclick="closeOverlay()"><span class="svc-emoji">↩️</span><span class="svc-label">Cancel</span></button>
+    </div>
+  `);
+}
+async function createWalkin(serviceType) {
+  const name = document.getElementById('walkin-name').value.trim();
+  const phone = document.getElementById('walkin-phone').value.trim();
+  if (!name) { showToast('👤❌'); return; }
+  if (phone.length < 10) { showToast('📱❌'); return; }
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/walkin?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, service_type: serviceType })
+    });
+    const data = await res.json();
+    if (data.success) { showToast(data.foundExisting ? '👤✅' : '🆕✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+// Init
+if (staffKey) {
+  fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(staffKey)}`).then(res => {
+    if (res.status === 401) { sessionStorage.removeItem('wk_staff_key'); document.getElementById('login-screen').style.display = 'flex'; }
+    else showApp();
+  });
+} else {
+  document.getElementById('login-screen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
