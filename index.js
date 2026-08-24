@@ -2349,6 +2349,50 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Staff-created walk-in order. Staff only ever enters a phone number + taps a service
+// icon — if the phone matches a saved customer, their name/address auto-fill from file.
+// If it's a brand new number, the order still gets created (address collection is
+// deferred to the owner) rather than forcing staff to type a full name/address.
+app.post("/pickups/walkin", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { phone, service_type, branch } = req.body;
+    if (!phone || !service_type) return res.status(400).json({ error: "Missing phone or service" });
+    const normPhone = normalizePhone(phone);
+    const orderId = genOrderId();
+    const existing = await getCustomer(normPhone);
+    const name = existing?.name || "Walk-in Customer";
+    const address = existing?.address || "";
+    const branchSlug = existing?.branch || branch || "bavdhan";
+    const br = getBranchBySlug(branchSlug) || DEFAULT_BRANCH;
+    const numId = getBranchNumId(branchSlug);
+
+    await dbInsert("bookings", {
+      order_id: orderId, name, phone: normPhone,
+      address: address || "Walk-in (address needed)",
+      date: getToday(), slot: "Walk-in",
+      status: "picked", reminder_sent: false, source: "walkin",
+      branch: branchSlug,
+      notes: existing ? "" : "[STAFF FLAG] New customer — needs name/address confirmed",
+      society: existing?.society || "",
+      amount: 0, payment_status: "unpaid", payment_method: "",
+      service_type,
+    });
+
+    await notifyAdmin(
+      { orderId, name, phone: normPhone, address: address || "Walk-in", date: getToday(), slot: "Walk-in", source: "walkin (staff)", society: existing?.society },
+      br, numId
+    );
+    if (!existing) {
+      await sendMessage(OWNER_NUMBER,
+        `🆕 NEW walk-in customer — needs details\n\nOrder: ${orderId}\nPhone: +${normPhone}\nService: ${service_type}\n\nNo saved name/address on file — please follow up to collect the delivery address before this ships out.`,
+        "1136879376186203"
+      );
+    }
+    res.json({ success: true, order_id: orderId, foundExisting: !!existing, name });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/staff", (req, res) => res.sendFile(path.join(__dirname, "staff.html")));
 
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
