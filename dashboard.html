@@ -680,7 +680,7 @@ tr.overdue td{background:#fef2f2;}
       <div class="walkin-banner show" id="walkin-banner">Walk-in order — clothes already received. Status auto-set to Picked Up.</div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="new-name" placeholder="Customer name"></div>
-        <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="new-phone" placeholder="10-digit" type="tel"></div>
+        <div class="form-group"><label class="form-label">Phone *</label><input class="form-input" id="new-phone" placeholder="10-digit" type="tel" onblur="lookupExistingCustomer()"></div>
       </div>
       <div class="form-group" id="field-address"><label class="form-label" id="label-address">Address</label><input class="form-input" id="new-address" placeholder="Pickup address"></div>
       <div class="form-group"><label class="form-label">Society / Apartment (optional)</label><input class="form-input" id="new-society" placeholder="e.g. Blue Ridge Society"></div>
@@ -1812,6 +1812,23 @@ function renderRatings() {
 }
 
 // ── NEW ORDER ─────────────────────────────────────────────────────
+function lookupExistingCustomer() {
+  const phone = document.getElementById('new-phone').value.trim().replace(/\D/g,'');
+  if (phone.length < 10) return;
+  const normPhone = phone.length===10 ? '91'+phone : phone;
+  const cust = allCustomers.find(c=>c.phone===normPhone);
+  if (!cust) return;
+  const nameEl = document.getElementById('new-name');
+  const addrEl = document.getElementById('new-address');
+  const societyEl = document.getElementById('new-society');
+  const branchEl = document.getElementById('new-branch');
+  if (nameEl && !nameEl.value) nameEl.value = cust.name || '';
+  if (addrEl && !addrEl.value) addrEl.value = cust.address || '';
+  if (societyEl && !societyEl.value && cust.society) societyEl.value = cust.society;
+  if (branchEl && cust.branch) branchEl.value = cust.branch;
+  toast(`Found saved customer: ${cust.name || phone} 👤`);
+}
+
 function onSourceChange(src) {
   const isWi=src==='walkin';
   document.getElementById('field-datetime').style.display=isWi?'none':'';
