@@ -1129,7 +1129,9 @@ function renderKanban() {
         <span>${col.label}</span><span>${cards.length}</span>
       </div>
       <div class="kanban-cards">
-        ${cards.length?cards.map(b=>`<div class="k-card" onclick="openOrderDetail('${b.id}')">
+        ${cards.length?cards.map(b=>{
+          const isFlagged = (b.notes||'').includes('[STAFF FLAG:FAIL]');
+          return `<div class="k-card" onclick="openOrderDetail('${b.id}')">
           <div class="k-card-name">${b.name}</div>
           <div class="k-card-meta">
             ${b.id}<br>
@@ -1137,9 +1139,13 @@ function renderKanban() {
             ${b.address||'Walk-in'}
             ${b.express?'<br><span style="color:#d97706;font-weight:600">⚡ Express</span>':''}
             ${b.service_type?'<br><span style="font-size:10px;background:#f3f4f6;padding:1px 5px;border-radius:3px">'+svcLabel(b.service_type)+'</span>':''}
-            ${b.notes?'<br><span style="font-size:10px;color:#6b7280;font-style:italic">'+b.notes.slice(0,40)+'</span>':''}
+            ${b.notes?'<br><span style="font-size:10px;color:#6b7280;font-style:italic">'+b.notes.slice(0,60)+'</span>':''}
             ${isOverdue(b)?'<br><span class="tag overdue-tag">OVERDUE</span>':''}
           </div>
+          ${isFlagged?`<div style="margin-top:6px;padding:6px 8px;background:#fef2f2;border:1px dashed #fecaca;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:6px">
+            <span style="font-size:11px;color:#dc2626;font-weight:700">🚩 Staff flagged</span>
+            <button class="btn btn-sm" style="background:#dc2626;color:#fff;padding:3px 8px" onclick="event.stopPropagation();clearStaffFlag('${b.id}')">Resolved — Clear</button>
+          </div>`:''}
           ${b.amount?`<div class="k-card-amount">Rs ${b.amount} — ${payBadge(b.payment_status)}</div>`:''}
           <div style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap">
             ${col.key!=='delivered'&&col.key!=='cancelled'?`<select class="status-select" onclick="event.stopPropagation()" onchange="updateStatus('${b.id}',this.value)">
@@ -1147,10 +1153,19 @@ function renderKanban() {
               <option value="cancelled" ${b.status==='cancelled'?'selected':''}>Cancelled</option>
             </select>`:''}
           </div>
-        </div>`).join(''):'<div style="color:#9ca3af;font-size:12px;padding:.5rem;text-align:center">Empty</div>'}
+        </div>`;
+        }).join(''):'<div style="color:#9ca3af;font-size:12px;padding:.5rem;text-align:center">Empty</div>'}
       </div>
     </div>`;
   }).join('');
+}
+
+function clearStaffFlag(id) {
+  fetch(`${BOT_URL}/bookings/${id}/clear-flag`, { method: 'POST' })
+    .then(r=>r.json()).then(d=>{
+      if (d.success) { toast('Flag cleared ✓'); loadData(); }
+      else toast(d.error||'Failed','error');
+    }).catch(()=>toast('Network error','error'));
 }
 
 function openOrderDetail(id) {
@@ -1182,11 +1197,14 @@ function renderOrders() {
   if(!page.length){tbody.innerHTML='<tr><td colspan="8" class="empty"><div class="empty-icon">📋</div>No orders</td></tr>';return;}
   tbody.innerHTML=page.map(b=>{
     const over=isOverdue(b);
-    const addr=b.source==='walkin'&&(!b.address||b.address==='Walk-in (In-store)')?'<span style="color:var(--muted);font-style:italic">Walk-in</span>':b.address||'—';
+    const needsAddress = b.source==='walkin' && (!b.address || b.address==='Walk-in (In-store)' || b.address==='Walk-in (address needed)');
+    const addrValue = needsAddress ? '' : (b.address||'');
     return `<tr class="${over?'overdue':''}">
       <td><div style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</div>${sourceBadge(b.source)}${over?'<div class="tag overdue-tag" style="margin-top:2px">OVERDUE</div>':''}</td>
       <td><div style="font-weight:500">${b.name}</div><div style="font-size:11px;color:var(--muted);font-family:monospace">${b.phone}</div></td>
-      <td style="font-size:12px;color:var(--muted);max-width:130px">${addr}</td>
+      <td style="max-width:150px">
+        <input class="search-input" style="font-size:12px;padding:5px 7px;${needsAddress?'border-color:var(--red);background:var(--red-light)':''}" value="${addrValue.replace(/"/g,'&quot;')}" placeholder="${needsAddress?'⚠️ Address needed':'Walk-in'}" onchange="updateAddress('${b.id}',this.value)">
+      </td>
       <td><div style="font-size:12px">${b.date||'—'}</div><div style="font-size:11px;color:var(--muted)">${b.slot?.includes('Morning')?'🌅':'🌆'} ${b.slot||'—'}</div>${b.delivery_date?`<div style="font-size:11px;color:${over?'var(--red)':'var(--green)'}">📦 ${b.delivery_date}</div>`:''}</td>
       <td>
         <select class="status-select" style="width:100%;margin-bottom:3px" onchange="updateService('${b.id}',this.value)">
@@ -1301,6 +1319,13 @@ function updateAmount(id,amount) {
   b.amount=parseInt(amount)||0;
   fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,amount:b.amount})})
   .then(()=>updateAll()).catch(()=>toast('Failed','error'));
+}
+function updateAddress(id,address) {
+  const b=allBookings.find(x=>x.id===id); if(!b) return;
+  if(!address.trim()) { toast('Address cannot be blank','error'); renderOrders(); return; }
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,address})})
+  .then(r=>r.json()).then(d=>{ if(d.error){toast(d.error,'error');return;} b.address=address; toast('Address saved ✓'); loadData(); })
+  .catch(()=>toast('Failed','error'));
 }
 function updatePaymentStatus(id,ps) {
   const b=allBookings.find(x=>x.id===id); if(!b) return;
