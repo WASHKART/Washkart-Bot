@@ -37,11 +37,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .address-text{flex:1;font-size:20px;font-weight:600;line-height:1.3;}
 .nav-btn{flex-shrink:0;width:56px;height:56px;background:#eff6ff;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:28px;text-decoration:none;}
 .service-icon{font-size:32px;margin-top:10px;}
+.notes-text{font-size:15px;color:#92400e;background:#fffbeb;padding:10px 12px;border-radius:10px;margin-top:12px;line-height:1.4;}
 
 .card-actions{display:flex;gap:10px;padding:12px 16px 16px;}
 .act-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:36px;cursor:pointer;}
 .act-yes{background:#16a34a;color:#fff;}
 .act-no{background:#fef2f2;color:#dc2626;border:2px solid #fecaca;}
+.flagged-banner{margin:0 16px 16px;padding:18px 0;background:#fef2f2;color:#dc2626;text-align:center;font-size:32px;border-radius:16px;border:2px dashed #fecaca;}
 
 /* CONFIRM OVERLAY */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
@@ -175,11 +177,16 @@ function render() {
           <a class="nav-btn" href="${navUrl}" target="_blank">🗺️</a>
         </div>
         <div class="service-icon">${svcIcon}</div>
+        ${p.notes ? `<div class="notes-text">📝 ${p.notes}</div>` : ''}
       </div>
+      ${p.flagged ? `
+      <div class="flagged-banner">🚩 ⏳ 📞</div>
+      ` : `
       <div class="card-actions">
         <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌</button>
         <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅</button>
       </div>
+      `}
     </div>`;
   }).join('');
 }
