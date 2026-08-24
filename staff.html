@@ -61,10 +61,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .add-fab{position:fixed;bottom:20px;left:20px;width:64px;height:64px;background:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;border:none;box-shadow:0 4px 14px rgba(22,163,74,.4);z-index:50;}
 
 /* WALK-IN CREATE */
+.name-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:22px;text-align:center;margin-bottom:12px;}
 .phone-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:28px;text-align:center;letter-spacing:2px;margin-bottom:1.2rem;}
 .svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.svc-btn{padding:20px 0;border:2px solid #e5e7eb;border-radius:16px;font-size:40px;background:#f9fafb;}
+.svc-btn{padding:16px 0;border:2px solid #e5e7eb;border-radius:16px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:4px;}
 .svc-btn:active{background:#dcfce7;border-color:#16a34a;}
+.svc-emoji{font-size:36px;}
+.svc-label{font-size:13px;font-weight:600;color:#374151;}
 
 /* TOAST */
 .toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:30px 40px;border-radius:20px;font-size:60px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
@@ -303,26 +306,29 @@ async function doStatus(orderId, status, paid) {
 function openNewWalkin() {
   showOverlay(`
     <div class="confirm-icon">➕🧺</div>
+    <input class="name-input" id="walkin-name" type="text" placeholder="Name">
     <input class="phone-input" id="walkin-phone" type="tel" inputmode="numeric" placeholder="XXXXXXXXXX" maxlength="10">
     <div class="svc-grid">
-      <button class="svc-btn" onclick="createWalkin('dryclean')">👔</button>
-      <button class="svc-btn" onclick="createWalkin('iron')">🔥</button>
-      <button class="svc-btn" onclick="createWalkin('laundry')">🧺</button>
-      <button class="svc-btn" onclick="createWalkin('shoes')">👟</button>
-      <button class="svc-btn" onclick="createWalkin('specialty')">✨</button>
-      <button class="svc-btn" onclick="closeOverlay()">↩️</button>
+      <button class="svc-btn" onclick="createWalkin('dryclean')"><span class="svc-emoji">👔</span><span class="svc-label">Dry Clean</span></button>
+      <button class="svc-btn" onclick="createWalkin('iron')"><span class="svc-emoji">🔥</span><span class="svc-label">Iron</span></button>
+      <button class="svc-btn" onclick="createWalkin('laundry')"><span class="svc-emoji">🧺</span><span class="svc-label">Laundry</span></button>
+      <button class="svc-btn" onclick="createWalkin('shoes')"><span class="svc-emoji">👟</span><span class="svc-label">Shoes</span></button>
+      <button class="svc-btn" onclick="createWalkin('specialty')"><span class="svc-emoji">✨</span><span class="svc-label">Special</span></button>
+      <button class="svc-btn" onclick="closeOverlay()"><span class="svc-emoji">↩️</span><span class="svc-label">Cancel</span></button>
     </div>
   `);
 }
 
 async function createWalkin(serviceType) {
+  const name = document.getElementById('walkin-name').value.trim();
   const phone = document.getElementById('walkin-phone').value.trim();
+  if (!name) { showToast('👤❌'); return; }
   if (phone.length < 10) { showToast('📱❌'); return; }
   closeOverlay();
   try {
     const res = await fetch(`${BOT_URL}/pickups/walkin?key=${encodeURIComponent(staffKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, service_type: serviceType })
+      body: JSON.stringify({ name, phone, service_type: serviceType })
     });
     const data = await res.json();
     if (data.success) { showToast(data.foundExisting ? '👤✅' : '🆕✅'); loadData(); }
