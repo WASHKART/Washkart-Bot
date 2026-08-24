@@ -24,7 +24,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .tab.active::after{content:'';position:absolute;bottom:0;left:20%;right:20%;height:4px;background:#4ade80;border-radius:2px;}
 .tab-count{position:absolute;top:8px;right:22%;background:#dc2626;color:#fff;font-size:12px;font-weight:700;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;}
 
-.list{flex:1;overflow-y:auto;padding:1rem;padding-bottom:100px;display:flex;flex-direction:column;gap:1rem;-webkit-overflow-scrolling:touch;}
+.list{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1rem;-webkit-overflow-scrolling:touch;}
 .empty{text-align:center;padding:4rem 1rem;color:#9ca3af;font-size:60px;}
 
 /* CARD */
@@ -40,7 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .notes-text{font-size:15px;color:#92400e;background:#fffbeb;padding:10px 12px;border-radius:10px;margin-top:12px;line-height:1.4;}
 
 .card-actions{display:flex;gap:10px;padding:12px 16px 16px;}
-.act-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:36px;cursor:pointer;}
+.act-btn{flex:1;padding:22px 0;border:none;border-radius:16px;font-size:24px;font-weight:800;cursor:pointer;}
 .act-yes{background:#16a34a;color:#fff;}
 .act-no{background:#fef2f2;color:#dc2626;border:2px solid #fecaca;}
 .flagged-banner{margin:0 16px 16px;padding:18px 0;background:#fef2f2;color:#dc2626;text-align:center;font-size:32px;border-radius:16px;border:2px dashed #fecaca;}
@@ -52,13 +52,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .confirm-icon{font-size:80px;margin-bottom:1rem;}
 .confirm-sub{font-size:16px;color:#6b7280;margin-bottom:1.5rem;}
 .confirm-actions{display:flex;gap:12px;}
-.confirm-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:40px;}
+.confirm-btn{flex:1;padding:22px 0;border:none;border-radius:16px;font-size:22px;font-weight:800;}
 .confirm-yes{background:#16a34a;color:#fff;}
 .confirm-cancel{background:#f3f4f6;color:#374151;}
 
-/* CALL FAB */
-.call-fab{position:fixed;bottom:20px;right:20px;width:64px;height:64px;background:#dc2626;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;text-decoration:none;box-shadow:0 4px 14px rgba(220,38,38,.4);z-index:50;}
-.add-fab{position:fixed;bottom:20px;left:20px;width:64px;height:64px;background:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;border:none;box-shadow:0 4px 14px rgba(22,163,74,.4);z-index:50;}
+/* BOTTOM BAR — part of the fixed layout, never overlaps scrollable content */
+.bottom-bar{display:flex;gap:10px;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;}
+.bottom-btn{flex:1;padding:16px 0;border-radius:14px;font-size:20px;font-weight:800;border:none;text-align:center;text-decoration:none;color:#fff;}
+.bottom-btn-add{background:#16a34a;}
+.bottom-btn-call{background:#dc2626;}
 
 /* WALK-IN CREATE */
 .name-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:22px;text-align:center;margin-bottom:12px;}
@@ -99,10 +101,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     </button>
   </div>
   <div class="list" id="list"></div>
+  <div class="bottom-bar">
+    <button class="bottom-btn bottom-btn-add" onclick="openNewWalkin()">➕ NEW</button>
+    <a class="bottom-btn bottom-btn-call" href="tel:+919552552167">📞 CALL</a>
+  </div>
 </div>
-
-<a class="call-fab" id="call-fab" href="tel:+919552552167" style="display:none">📞</a>
-<button class="add-fab" id="add-fab" onclick="openNewWalkin()" style="display:none">➕</button>
 
 <div class="overlay" id="overlay">
   <div class="confirm-box" id="confirm-content"></div>
@@ -139,8 +142,6 @@ async function doLogin() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
-  document.getElementById('call-fab').style.display = 'flex';
-  document.getElementById('add-fab').style.display = 'flex';
   loadData();
   setInterval(loadData, 20000);
 }
@@ -188,13 +189,13 @@ function render() {
     const navUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.address || '');
     let actionsHtml;
     if (p.flagged) {
-      actionsHtml = `<div class="flagged-banner">🚩 ⏳ 📞</div>`;
+      actionsHtml = `<div class="flagged-banner">🚩 WAITING<br>📞 CALLED</div>`;
     } else if (activeTab === 'cleaning') {
-      actionsHtml = `<div class="card-actions"><button class="act-btn act-yes" style="flex:1" onclick="askReady('${p.order_id}')">✅ 📦⬇️</button></div>`;
+      actionsHtml = `<div class="card-actions"><button class="act-btn act-yes" style="flex:1" onclick="askReady('${p.order_id}')">✅ READY</button></div>`;
     } else {
       actionsHtml = `<div class="card-actions">
-        <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌</button>
-        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅</button>
+        <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌ FAILED</button>
+        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅ DONE</button>
       </div>`;
     }
     return `<div class="card">
@@ -219,8 +220,8 @@ function askReady(orderId) {
   showOverlay(`
     <div class="confirm-icon">🫧➡️📦</div>
     <div class="confirm-actions">
-      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️</button>
-      <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','outfordelivery',false)">✅</button>
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','outfordelivery',false)">✅ YES</button>
     </div>
   `);
 }
@@ -238,8 +239,8 @@ function askFail(orderId, stage) {
     <div class="confirm-icon">🚩</div>
     <div class="confirm-sub">📞 ${stage === 'pickup' ? '🧺⬆️' : '📦⬇️'} ❌</div>
     <div class="confirm-actions">
-      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️</button>
-      <button class="confirm-btn confirm-yes" style="background:#dc2626" onclick="doFail('${orderId}','${stage}')">✅</button>
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" style="background:#dc2626" onclick="doFail('${orderId}','${stage}')">✅ YES</button>
     </div>
   `);
 }
@@ -262,8 +263,8 @@ function askSuccess(orderId, stage, amount, paymentStatus) {
     showOverlay(`
       <div class="confirm-icon">🧺⬆️</div>
       <div class="confirm-actions">
-        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️</button>
-        <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','picked',false)">✅</button>
+        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+        <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','picked',false)">✅ YES</button>
       </div>
     `);
   } else {
@@ -273,16 +274,16 @@ function askSuccess(orderId, stage, amount, paymentStatus) {
         <div class="confirm-icon">💰</div>
         <div class="confirm-sub" style="font-size:32px;font-weight:700;color:#111827">₹${amount}</div>
         <div class="confirm-actions">
-          <button class="confirm-btn act-no" onclick="doStatus('${orderId}','delivered',false)">❌</button>
-          <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',true)">✅</button>
+          <button class="confirm-btn act-no" onclick="doStatus('${orderId}','delivered',false)">❌ NO</button>
+          <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',true)">✅ YES</button>
         </div>
       `);
     } else {
       showOverlay(`
         <div class="confirm-icon">📦⬇️</div>
         <div class="confirm-actions">
-          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️</button>
-          <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',false)">✅</button>
+          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+          <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',false)">✅ YES</button>
         </div>
       `);
     }
