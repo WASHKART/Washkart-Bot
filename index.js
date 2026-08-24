@@ -167,10 +167,34 @@ function isThursdayStr(str) {
   try { const d = new Date(str); if (!isNaN(d.getTime()) && d.getDay() === 4) return true; } catch {}
   return false;
 }
+// Single source of truth for turnaround times, used both for calculating delivery
+// dates and for any customer-facing message that states a turnaround.
+const SERVICE_HOURS = {
+  iron:      { standard: 48, express: 1.5 },   // Standard 24-48h | Express 90 min
+  laundry:   { standard: 72, express: 1.5 },   // Standard 48-72h | Express 90 min
+  dryclean:  { standard: 96, express: 6   },   // Standard 48-96h | Express 6h
+  shoes:     { standard: 96, express: 24  },   // Standard 48-96h | Express 24h
+  mixed:     { standard: 96, express: 24  },   // Not separately specified — longest known figures used as the safest fallback
+  specialty: { standard: 96, express: 24  },   // Not separately specified — longest known figures used as the safest fallback
+};
+function formatHours(h) {
+  if (h < 24) return `${h % 1 === 0 ? h : h.toFixed(1)} hour${h === 1 ? "" : "s"}`;
+  const days = h / 24;
+  return `${days % 1 === 0 ? days : days.toFixed(1)} day${days === 1 ? "" : "s"}`;
+}
+// Compact version for WhatsApp button titles, which have a hard 20-character limit.
+function formatHoursShort(h) {
+  if (h < 1 || h % 1 !== 0) return `${Math.round(h*60)}min`;
+  return `${h}h`;
+}
+
 function calcDeliveryDate(service, isExpress) {
-  const hours = { iron: isExpress ? 2 : 36, laundry: isExpress ? 2 : 72, dryclean: isExpress ? 2 : 96, shoes: isExpress ? 2 : 48, mixed: isExpress ? 2 : 96, specialty: isExpress ? 2 : 72 };
+  // Standard turnaround uses the upper end of each range (safer to under-promise than be late).
+  // Express times are fixed, not ranges.
+  const cfg = SERVICE_HOURS[service] || SERVICE_HOURS.laundry;
+  const hrs = isExpress ? cfg.express : cfg.standard;
   const d = new Date();
-  d.setHours(d.getHours() + (hours[service] || 72));
+  d.setHours(d.getHours() + hrs);
   if (d.getDay() === 4) d.setDate(d.getDate() + 1);
   return formatDate(d);
 }
@@ -648,34 +672,34 @@ function calcEstimate(items) {
 
 // SMART ITEM PRICE LOOKUP
 const ITEM_PRICE_QUICK = [
-  { items:["saree","sari"], svc:["wash","laundry","dhulai"], reply:"Saree Laundry - Rs 150/kg. Express available." },
-  { items:["bedsheet","bed sheet"], svc:["wash","laundry"], reply:"Bedsheet Wash\nSingle - Rs 150 | Double - Rs 200" },
-  { items:["blanket","razai","comforter"], svc:["wash","laundry"], reply:"Blanket / Comforter Wash\nSingle - Rs 350 | Double - Rs 450" },
-  { items:["shirt","t-shirt","tshirt","top"], svc:["wash","laundry"], reply:"Shirt/T-Shirt\nWash and Fold Rs 80/kg | Wash and Iron Rs 110/kg" },
-  { items:["saree","sari"], svc:["dry","dryclean","dc"], reply:"Saree Dry Clean\nRegular - Rs 350 | Silk - Rs 400 | With work - Rs 450" },
-  { items:["lehenga","lehnga"], svc:["dry","dryclean","dc"], reply:"Lehenga Dry Clean - from Rs 350" },
-  { items:["suit"], svc:["dry","dryclean","dc"], reply:"Suit Dry Clean\n2 Piece - Rs 400 | 3 Piece - from Rs 350" },
-  { items:["blazer","coat"], svc:["dry","dryclean","dc"], reply:"Blazer / Coat Dry Clean - Rs 300" },
-  { items:["jacket"], svc:["dry","dryclean","dc"], reply:"Jacket Dry Clean - Rs 250" },
-  { items:["kurta","kurti"], svc:["dry","dryclean","dc"], reply:"Kurta / Kurti Dry Clean - Rs 100" },
-  { items:["shirt","pant","trouser","jeans","tshirt","top"], svc:["dry","dryclean","dc"], reply:"Shirt / Pant / Jeans / Top Dry Clean - Rs 100/piece" },
-  { items:["blouse"], svc:["dry","dryclean","dc"], reply:"Blouse Dry Clean - Rs 100 | With work - Rs 120" },
-  { items:["sweater","sweatshirt"], svc:["dry","dryclean","dc"], reply:"Sweater / Sweatshirt Dry Clean - from Rs 200" },
-  { items:["dupatta"], svc:["dry","dryclean","dc"], reply:"Dupatta Dry Clean - from Rs 120" },
-  { items:["curtain","parda"], svc:["dry","dryclean","dc","clean"], reply:"Curtain Dry Clean - Rs 15/sq.ft" },
-  { items:["bag","purse","handbag"], svc:["dry","dryclean","dc","clean"], reply:"Bag / Purse Cleaning - from Rs 200" },
-  { items:["saree","sari"], svc:["iron","press","istri","steam"], reply:"Saree Steam Iron - Rs 120/piece" },
-  { items:["lehenga","lehnga"], svc:["iron","press","istri","steam"], reply:"Lehenga Steam Iron - Rs 120/piece" },
-  { items:["blazer","coat"], svc:["iron","press","istri","steam"], reply:"Blazer Steam Iron - Rs 120/piece" },
-  { items:["kurta","kurti"], svc:["iron","press","istri","steam"], reply:"Kurta Steam Iron - Rs 30/piece" },
-  { items:["shirt","pant","trouser","jeans"], svc:["iron","press","istri","steam"], reply:"Shirt / Pant Steam Iron - Rs 20/piece" },
-  { items:["bedsheet","bed sheet"], svc:["iron","press","istri","steam"], reply:"Bedsheet Steam Iron - Rs 60/piece" },
-  { items:["sneaker","canvas","white shoe"], svc:["clean","wash","shoe"], reply:"Canvas / Sneaker Cleaning - Rs 300/pair" },
-  { items:["leather shoe","formal shoe","suede"], svc:["clean","wash","shoe"], reply:"Leather / Suede Shoe Cleaning - from Rs 400/pair" },
-  { items:["sports shoe","running shoe"], svc:["clean","wash","shoe"], reply:"Sports Shoe Cleaning - Rs 350/pair" },
-  { items:["helmet"], svc:["clean","wash"], reply:"Helmet Cleaning - from Rs 150" },
-  { items:["soft toy","teddy","stuffed toy"], svc:["clean","wash"], reply:"Soft Toy Cleaning - from Rs 200" },
-  { items:["carpet","rug"], svc:["clean","wash","dry"], reply:"Carpet Dry Cleaning - from Rs 40/sq.ft" },
+  { items:["saree","sari"], svc:["wash","laundry","dhulai"], category:"laundry", reply:"Saree Laundry - Rs 150/kg. Express available." },
+  { items:["bedsheet","bed sheet"], svc:["wash","laundry"], category:"laundry", reply:"Bedsheet Wash\nSingle - Rs 150 | Double - Rs 200" },
+  { items:["blanket","razai","comforter"], svc:["wash","laundry"], category:"laundry", reply:"Blanket / Comforter Wash\nSingle - Rs 350 | Double - Rs 450" },
+  { items:["shirt","t-shirt","tshirt","top"], svc:["wash","laundry"], category:"laundry", reply:"Shirt/T-Shirt\nWash and Fold Rs 80/kg | Wash and Iron Rs 110/kg" },
+  { items:["saree","sari"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Saree Dry Clean\nRegular - Rs 350 | Silk - Rs 400 | With work - Rs 450" },
+  { items:["lehenga","lehnga"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Lehenga Dry Clean - from Rs 350" },
+  { items:["suit"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Suit Dry Clean\n2 Piece - Rs 400 | 3 Piece - from Rs 350" },
+  { items:["blazer","coat"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Blazer / Coat Dry Clean - Rs 300" },
+  { items:["jacket"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Jacket Dry Clean - Rs 250" },
+  { items:["kurta","kurti"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Kurta / Kurti Dry Clean - Rs 100" },
+  { items:["shirt","pant","trouser","jeans","tshirt","top"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Shirt / Pant / Jeans / Top Dry Clean - Rs 100/piece" },
+  { items:["blouse"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Blouse Dry Clean - Rs 100 | With work - Rs 120" },
+  { items:["sweater","sweatshirt"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Sweater / Sweatshirt Dry Clean - from Rs 200" },
+  { items:["dupatta"], svc:["dry","dryclean","dc"], category:"dryclean", reply:"Dupatta Dry Clean - from Rs 120" },
+  { items:["curtain","parda"], svc:["dry","dryclean","dc","clean"], category:"dryclean", reply:"Curtain Dry Clean - Rs 15/sq.ft" },
+  { items:["bag","purse","handbag"], svc:["dry","dryclean","dc","clean"], category:"specialty", reply:"Bag / Purse Cleaning - from Rs 200" },
+  { items:["saree","sari"], svc:["iron","press","istri","steam"], category:"iron", reply:"Saree Steam Iron - Rs 120/piece" },
+  { items:["lehenga","lehnga"], svc:["iron","press","istri","steam"], category:"iron", reply:"Lehenga Steam Iron - Rs 120/piece" },
+  { items:["blazer","coat"], svc:["iron","press","istri","steam"], category:"iron", reply:"Blazer Steam Iron - Rs 120/piece" },
+  { items:["kurta","kurti"], svc:["iron","press","istri","steam"], category:"iron", reply:"Kurta Steam Iron - Rs 30/piece" },
+  { items:["shirt","pant","trouser","jeans"], svc:["iron","press","istri","steam"], category:"iron", reply:"Shirt / Pant Steam Iron - Rs 20/piece" },
+  { items:["bedsheet","bed sheet"], svc:["iron","press","istri","steam"], category:"iron", reply:"Bedsheet Steam Iron - Rs 60/piece" },
+  { items:["sneaker","canvas","white shoe"], svc:["clean","wash","shoe"], category:"shoes", reply:"Canvas / Sneaker Cleaning - Rs 300/pair" },
+  { items:["leather shoe","formal shoe","suede"], svc:["clean","wash","shoe"], category:"shoes", reply:"Leather / Suede Shoe Cleaning - from Rs 400/pair" },
+  { items:["sports shoe","running shoe"], svc:["clean","wash","shoe"], category:"shoes", reply:"Sports Shoe Cleaning - Rs 350/pair" },
+  { items:["helmet"], svc:["clean","wash"], category:"specialty", reply:"Helmet Cleaning - from Rs 150" },
+  { items:["soft toy","teddy","stuffed toy"], svc:["clean","wash"], category:"specialty", reply:"Soft Toy Cleaning - from Rs 200" },
+  { items:["carpet","rug"], svc:["clean","wash","dry"], category:"specialty", reply:"Carpet Dry Cleaning - from Rs 40/sq.ft" },
 ];
 
 const SERVICE_AVAIL = [
@@ -898,9 +922,10 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
     phoneNumberId
   );
   await delay(500);
+  const svcHours = SERVICE_HOURS[svcType] || SERVICE_HOURS.laundry;
   const expectedDelivery = svcType ? calcDeliveryDate(svcType, false) : null;
   await sendMessage(phone,
-    `Your order is in good hands! 🧺\n\n${expectedDelivery ? `We'll have it fresh and ready by ${expectedDelivery}.` : "We'll have it fresh and ready soon."}\nNeed it sooner? Reply *express* after pickup for our 120-minute turnaround.`,
+    `Your order is in good hands! 🧺\n\n${expectedDelivery ? `We'll have it fresh and ready by ${expectedDelivery}.` : "We'll have it fresh and ready soon."}\nNeed it sooner? Reply *express* after pickup — ${formatHours(svcHours.express)} turnaround for this service.`,
     phoneNumberId
   );
   await notifyAdmin(booking, br, safeNumId(phoneNumberId));
@@ -959,7 +984,8 @@ ACTIVE ORDER: ${activeOrder ? `${activeOrder.order_id} - ${STATUS_MAP[activeOrde
 TODAY: ${getToday()}${isTodayThursday() ? " (THURSDAY - CLOSED)" : ""}
 BOOKING: name=${session.booking?.name || "?"} address=${session.booking?.address || "?"} date=${session.booking?.date || "?"} slot=${session.booking?.slot || "?"}
 
-RATES: Iron Rs20-120/pc | Dry Clean Rs100-450 | Laundry Rs80-110/kg | Shoes Rs300-400 | Express 120min 1.5x | Standard 3 days
+RATES: Iron Rs20-120/pc | Dry Clean Rs100-450 | Laundry Rs80-110/kg | Shoes Rs300-400 | Prices are 1.5x for express
+TURNAROUND: Iron standard 24-48h, express 90min | Laundry standard 48-72h, express 90min | Dry Clean standard 48-96h, express 6h | Shoes standard 48-96h, express 24h
 
 RESPOND JSON only:
 {"reply":"short reply","action":"none|book_now|need_name|need_address|need_date|need_slot|show_iron|show_dryclean|show_laundry|show_shoes|show_rates_menu|track_order|complaint|estimate","extracted":{"name":null,"address":null,"date":null,"slot":null,"items":null}}
@@ -1354,7 +1380,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     return;
   }
   if (rawText==="express_yes") { await handleExpress(phone,branch,phoneNumberId); return; }
-  if (rawText==="express_no")  { await send("Got it! We'll have your clothes ready in 3 days. \u{1F9BA}"); return; }
+  if (rawText==="express_no")  { await send("Got it! We'll have it ready within the estimated time we shared. \u{1F9BA}"); return; }
   if (rawText==="btn_book") {
     session.booking={};
     session.allowAnotherBooking = true; // bypass active order check for this tap
@@ -1381,7 +1407,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (has(t,...DELIVERY_TIME_KW)) {
     const active = await getActiveOrder(phone);
     if (active && active.delivery_date) { await send(`Order ${active.order_id}\nStatus: ${STATUS_MAP[active.status]?.label}\nEstimated delivery: ${active.delivery_date}`); }
-    else { await send("Standard delivery: 3 days.\nExpress: 120 minutes (1.5x price).\n\nClosed Thursdays."); }
+    else { await send("Turnaround times:\nSteam Iron - 24-48h (express 90 min)\nLaundry - 48-72h (express 90 min)\nDry Clean - 48-96h (express 6h)\nShoes - 48-96h (express 24h)\n\nExpress is 1.5x price. Closed Thursdays."); }
     return;
   }
   if (has(t,...BULK_KW)) {
@@ -1501,8 +1527,8 @@ async function handleMessage(phone, rawText, phoneNumberId) {
         breakdown.forEach(l => msg += l + "\n");
         if (unknown.length) msg += "\nCould not estimate: " + unknown.join(", ") + "\n";
         msg += "\nTotal: Rs " + total;
-        msg += "\nExpress (120 min): Rs " + Math.ceil(total * 1.5);
-        msg += "\n\nStandard turnaround is 3 days. Final amount confirmed before cleaning starts.";
+        msg += "\nExpress: Rs " + Math.ceil(total * 1.5) + " (timing varies by service)";
+        msg += "\n\nTurnaround varies by service — we'll confirm exact timing once your items are checked in. Final amount confirmed before cleaning starts.";
         await send(msg);
         await delay(400);
         await sendBtn("Ready to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]);
@@ -1514,7 +1540,8 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (has(t,...RATES_KW)) {
     for (const entry of ITEM_PRICE_QUICK) {
       if (entry.items.some(i=>t.includes(i)) && entry.svc.some(s=>t.includes(s))) {
-        await send(entry.reply + "\n\nStandard: 3 days | Express: 120 min");
+        const eh = SERVICE_HOURS[entry.category] || SERVICE_HOURS.laundry;
+        await send(entry.reply + `\n\nStandard: ${formatHours(eh.standard)} | Express: ${formatHours(eh.express)}`);
         await delay(400);
         await sendBtn("Ready to book a pickup?", [{id:"btn_book",title:"Book Pickup"},{id:"btn_price",title:"See All Rates"}]);
         return;
@@ -1592,7 +1619,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
           let msg = "Estimate\n\n";
           breakdown.forEach(l => msg += `${l}\n`);
           if (unknown.length) msg += `\nCould not estimate: ${unknown.join(", ")}\n`;
-          msg += `\nTotal: Rs ${total}\nExpress (120 min): Rs ${Math.ceil(total*1.5)}\n\nFinal amount confirmed before cleaning.`;
+          msg += `\nTotal: Rs ${total}\nExpress: Rs ${Math.ceil(total*1.5)} (timing varies by service)\n\nFinal amount confirmed before cleaning.`;
           await send(msg); await RATE_FU();
         } else { await send(ai.reply||"Please mention item and service. e.g. 3 shirts dry clean"); }
       } else {
@@ -1773,8 +1800,10 @@ async function handleExpress(phone, branch, phoneNumberId) {
   const active = await getActiveOrder(phone);
   if (active?.status==="picked"||active?.status==="inprogress") {
     if (isTodayThursday()) { await sendMessage(phone,"Express is not available on Thursdays.",phoneNumberId); return; }
-    await dbUpdate("bookings",`order_id=eq.${active.order_id}`,{express:true});
-    await sendMessage(phone,`Express confirmed for order ${active.order_id}.\n\nReady in 120 minutes. Charges are 1.5x the standard price.`,phoneNumberId);
+    const newDeliveryDate = active.service_type ? calcDeliveryDate(active.service_type, true) : null;
+    await dbUpdate("bookings",`order_id=eq.${active.order_id}`,{express:true, ...(newDeliveryDate?{delivery_date:newDeliveryDate}:{})});
+    const eh = SERVICE_HOURS[active.service_type] || SERVICE_HOURS.laundry;
+    await sendMessage(phone,`Express confirmed for order ${active.order_id}.\n\n${newDeliveryDate ? `Ready by ${newDeliveryDate}` : `Ready in ${formatHours(eh.express)}`}. Charges are 1.5x the standard price.`,phoneNumberId);
     await sendMessage(branch.admin,`Express requested\nOrder: ${active.order_id}\nName: ${active.name}\nPhone: +${active.phone}`,phoneNumberId);
     return;
   }
@@ -2146,10 +2175,12 @@ app.patch("/bookings/:orderId", async (req,res) => {
       }
       // Send express button after picked up
       if (finalStatus==="picked") {
+        const svcHrs = SERVICE_HOURS[b?.service_type] || SERVICE_HOURS.laundry;
+        const expressLabel = `⚡ Express (${formatHoursShort(svcHrs.express)})`;
         setTimeout(async()=>{
           await sendButtons(b.phone,
             "Need your clothes faster?",
-            [{id:"express_yes",title:"⚡ Express (120 min)"},{id:"express_no",title:"3 days is fine"}],
+            [{id:"express_yes",title:expressLabel},{id:"express_no",title:"Standard is fine"}],
             numId
           );
         }, 1500);
