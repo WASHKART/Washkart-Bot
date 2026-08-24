@@ -227,20 +227,22 @@ function closeOverlay() {
 // ── ITEM TALLY ────────────────────────────────────────────────────
 function openTally(orderId) {
   tallyOrderId = orderId;
-  tallyItems = [];
+  const existingOrder = allPickups.find(p => p.order_id === orderId);
+  tallyItems = (existingOrder?.items || []).map(it => ({...it})); // resume any previously saved tally
   activeTallyTab = 'dryclean';
   showOverlay(`
     <div class="tally-total" id="tally-total">₹0</div>
     <div class="catalog-tabs" id="tally-tabs"></div>
     <div class="catalog-grid" id="tally-grid"></div>
     <div class="confirm-actions" style="margin-top:14px">
-      <button class="confirm-btn confirm-cancel" onclick="tallyClear()">↩️ CLEAR</button>
-      <button class="confirm-btn confirm-yes" onclick="submitTally()">✅ READY</button>
+      <button class="confirm-btn confirm-cancel" onclick="submitTally(false)">💾 SAVE</button>
+      <button class="confirm-btn confirm-yes" onclick="submitTally(true)">✅ READY</button>
     </div>
-    <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
+    <button class="confirm-back-link" onclick="tallyClear()">↩️ CLEAR ALL</button>
   `);
   renderTallyTabs();
   renderTallyGrid();
+  updateTallyTotal();
 }
 function renderTallyTabs() {
   const el = document.getElementById('tally-tabs');
@@ -275,16 +277,16 @@ function updateTallyTotal() {
   const el = document.getElementById('tally-total');
   if (el) el.textContent = `₹${total}`;
 }
-async function submitTally() {
+async function submitTally(markReady) {
   if (!tallyItems.length) { showToast('⚠️'); return; }
   closeOverlay();
   try {
     const res = await fetch(`${BOT_URL}/pickups/${tallyOrderId}/tally?key=${encodeURIComponent(staffKey)}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items: tallyItems })
+      body: JSON.stringify({ items: tallyItems, markReady })
     });
     const data = await res.json();
-    if (data.success) { showToast('✅'); loadData(); }
+    if (data.success) { showToast(markReady ? '✅' : '💾'); loadData(); }
     else showToast('⚠️');
   } catch(e) { showToast('⚠️'); }
 }
