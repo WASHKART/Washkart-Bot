@@ -52,6 +52,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .confirm-icon{font-size:80px;margin-bottom:1rem;}
 .confirm-sub{font-size:16px;color:#6b7280;margin-bottom:1.5rem;}
 .confirm-actions{display:flex;gap:12px;}
+.confirm-back-link{display:block;width:100%;margin-top:14px;padding:10px 0;background:none;border:none;color:#6b7280;font-size:14px;font-weight:600;text-decoration:underline;}
 .confirm-btn{flex:1;padding:22px 0;border:none;border-radius:16px;font-size:22px;font-weight:800;}
 .confirm-yes{background:#16a34a;color:#fff;}
 .confirm-cancel{background:#f3f4f6;color:#374151;}
@@ -61,6 +62,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .bottom-btn{flex:1;padding:16px 0;border-radius:14px;font-size:20px;font-weight:800;border:none;text-align:center;text-decoration:none;color:#fff;}
 .bottom-btn-add{background:#16a34a;}
 .bottom-btn-call{background:#dc2626;}
+
+/* ITEM TALLY (Cleaning stage) */
+.tally-total{font-size:38px;font-weight:800;color:#16a34a;text-align:center;margin-bottom:14px;}
+.catalog-tabs{display:flex;gap:8px;justify-content:center;margin-bottom:14px;}
+.catalog-tab{width:48px;height:48px;border-radius:12px;border:2px solid #e5e7eb;background:#f9fafb;font-size:24px;}
+.catalog-tab.active{background:#dcfce7;border-color:#16a34a;}
+.catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:260px;overflow-y:auto;margin-bottom:10px;}
+.catalog-item{position:relative;padding:14px 4px;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.catalog-item:active{background:#dcfce7;border-color:#16a34a;}
+.catalog-icon{font-size:28px;}
+.catalog-name{font-size:11px;font-weight:700;color:#374151;}
+.tally-qty-badge{position:absolute;top:-8px;right:-8px;width:26px;height:26px;border-radius:50%;background:#16a34a;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;}
 
 /* WALK-IN CREATE */
 .name-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:22px;text-align:center;margin-bottom:12px;}
@@ -165,6 +178,46 @@ async function loadData() {
 
 const SVC_ICON = { dryclean: '👔', iron: '🔥', laundry: '🧺', shoes: '👟', specialty: '✨', mixed: '🧺' };
 
+// Same price data as index.js (ITEM_PRICES) and dashboard.html's catalog — kept in sync manually.
+const RAW_ITEM_PRICES = {
+  shirt:{dryclean:100,iron:20,laundry:80},pant:{dryclean:100,iron:20,laundry:80},
+  trouser:{dryclean:100,iron:20,laundry:80},jeans:{dryclean:100,iron:20,laundry:80},
+  tshirt:{dryclean:100,iron:20,laundry:80},top:{dryclean:100,iron:20,laundry:80},
+  kurta:{dryclean:100,iron:30,laundry:80},kurti:{dryclean:100,iron:30,laundry:80},
+  blouse:{dryclean:100,iron:20},salwar:{dryclean:100,iron:20},
+  saree:{dryclean:350,iron:120},lehenga:{dryclean:350,iron:120},
+  blazer:{dryclean:300,iron:120},jacket:{dryclean:250,iron:60},
+  overcoat:{dryclean:400,iron:60},sweater:{dryclean:200,iron:40},
+  dupatta:{dryclean:120,iron:50},shawl:{dryclean:120,iron:50},
+  anarkali:{dryclean:200,iron:50},suit:{dryclean:400,iron:100},
+  dress:{dryclean:350,iron:60},gown:{dryclean:350,iron:120},
+  sherwani:{dryclean:400,iron:120},towel:{dryclean:150},
+  sneaker:{shoes:350},shoe:{shoes:350},canvas:{shoes:300},
+  bedsheet:{laundry:150,iron:60},blanket:{laundry:350},curtain:{dryclean:15},
+  bag:{specialty:200},helmet:{specialty:150},carpet:{specialty:40},toy:{specialty:200},
+};
+const ITEM_ICONS = {
+  shirt:'👔',pant:'👖',trouser:'👖',jeans:'👖',tshirt:'👕',top:'👚',kurta:'👘',kurti:'👘',
+  blouse:'👚',salwar:'👗',saree:'🥻',lehenga:'👗',blazer:'🧥',jacket:'🧥',overcoat:'🧥',
+  sweater:'🧶',dupatta:'🧣',shawl:'🧣',anarkali:'👗',suit:'🤵',dress:'👗',gown:'👗',
+  sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
+  curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
+};
+const ITEM_CATALOG = {};
+Object.entries(RAW_ITEM_PRICES).forEach(([item, prices]) => {
+  Object.entries(prices).forEach(([svc, price]) => {
+    if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+    ITEM_CATALOG[svc].push({ name: item.charAt(0).toUpperCase()+item.slice(1), price, icon: ITEM_ICONS[item] || '🧺' });
+  });
+});
+const TALLY_TABS = [
+  {key:'dryclean', icon:'👔'}, {key:'iron', icon:'🔥'}, {key:'laundry', icon:'🧺'},
+  {key:'shoes', icon:'👟'}, {key:'specialty', icon:'✨'},
+];
+let tallyOrderId = null;
+let tallyItems = [];
+let activeTallyTab = 'dryclean';
+
 function render() {
   const pickupList = allPickups.filter(p => p.status === 'pending');
   const cleaningList = allPickups.filter(p => p.status === 'inprogress' || p.status === 'picked');
@@ -191,7 +244,7 @@ function render() {
     if (p.flagged) {
       actionsHtml = `<div class="flagged-banner">🚩 WAITING<br>📞 CALLED</div>`;
     } else if (activeTab === 'cleaning') {
-      actionsHtml = `<div class="card-actions"><button class="act-btn act-yes" style="flex:1" onclick="askReady('${p.order_id}')">✅ READY</button></div>`;
+      actionsHtml = `<div class="card-actions"><button class="act-btn act-yes" style="flex:1" onclick="openTally('${p.order_id}')">✅ TALLY & READY</button></div>`;
     } else {
       actionsHtml = `<div class="card-actions">
         <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌ FAILED</button>
@@ -216,14 +269,72 @@ function render() {
   }).join('');
 }
 
-function askReady(orderId) {
+function openTally(orderId) {
+  tallyOrderId = orderId;
+  tallyItems = [];
+  activeTallyTab = 'dryclean';
   showOverlay(`
-    <div class="confirm-icon">🫧➡️📦</div>
-    <div class="confirm-actions">
-      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
-      <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','outfordelivery',false)">✅ YES</button>
+    <div class="tally-total" id="tally-total">₹0</div>
+    <div class="catalog-tabs" id="tally-tabs"></div>
+    <div class="catalog-grid" id="tally-grid"></div>
+    <div class="confirm-actions" style="margin-top:14px">
+      <button class="confirm-btn confirm-cancel" onclick="tallyClear()">↩️ CLEAR</button>
+      <button class="confirm-btn confirm-yes" onclick="submitTally()">✅ READY</button>
     </div>
+    <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
   `);
+  renderTallyTabs();
+  renderTallyGrid();
+}
+function renderTallyTabs() {
+  const el = document.getElementById('tally-tabs');
+  if (!el) return;
+  el.innerHTML = TALLY_TABS.map(t=>`<button class="catalog-tab ${t.key===activeTallyTab?'active':''}" onclick="switchTallyTab('${t.key}')">${t.icon}</button>`).join('');
+}
+function switchTallyTab(key) { activeTallyTab = key; renderTallyTabs(); renderTallyGrid(); }
+function renderTallyGrid() {
+  const el = document.getElementById('tally-grid');
+  if (!el) return;
+  const items = ITEM_CATALOG[activeTallyTab] || [];
+  el.innerHTML = items.map(it=>{
+    const existing = tallyItems.find(ti=>ti.name===it.name && ti.price===it.price);
+    const qty = existing ? existing.qty : 0;
+    return `<button class="catalog-item" onclick="tallyAdd('${it.name.replace(/'/g,"\\'")}',${it.price})">
+      <span class="catalog-icon">${it.icon}</span>
+      <span class="catalog-name">${it.name}</span>
+      ${qty>0?`<span class="tally-qty-badge">${qty}</span>`:''}
+    </button>`;
+  }).join('');
+}
+function tallyAdd(name, price) {
+  const existing = tallyItems.find(it=>it.name===name && it.price===price);
+  if (existing) existing.qty += 1;
+  else tallyItems.push({name, qty:1, price});
+  renderTallyGrid();
+  updateTallyTotal();
+}
+function tallyClear() {
+  tallyItems = [];
+  renderTallyGrid();
+  updateTallyTotal();
+}
+function updateTallyTotal() {
+  const total = tallyItems.reduce((s,it)=>s+it.qty*it.price,0);
+  const el = document.getElementById('tally-total');
+  if (el) el.textContent = `₹${total}`;
+}
+async function submitTally() {
+  if (!tallyItems.length) { showToast('⚠️'); return; }
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${tallyOrderId}/tally?key=${encodeURIComponent(staffKey)}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ items: tallyItems })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch(e) { showToast('⚠️'); }
 }
 
 function showOverlay(html) {
@@ -277,6 +388,7 @@ function askSuccess(orderId, stage, amount, paymentStatus) {
           <button class="confirm-btn act-no" onclick="doStatus('${orderId}','delivered',false)">❌ NO</button>
           <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','delivered',true)">✅ YES</button>
         </div>
+        <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
       `);
     } else {
       showOverlay(`
@@ -298,7 +410,32 @@ async function doStatus(orderId, status, paid) {
       body: JSON.stringify({ status, paid })
     });
     const data = await res.json();
-    if (data.success) { showToast('✅'); loadData(); }
+    if (data.success) {
+      showToast('✅');
+      loadData();
+      if (status === 'delivered' && paid === false) {
+        setTimeout(() => askRemindNow(orderId), 700);
+      }
+    }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+function askRemindNow(orderId) {
+  showOverlay(`
+    <div class="confirm-icon">💰📤</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ NO</button>
+      <button class="confirm-btn confirm-yes" onclick="doRemind('${orderId}')">✅ YES</button>
+    </div>
+  `);
+}
+async function doRemind(orderId) {
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/remind-payment?key=${encodeURIComponent(staffKey)}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.success) showToast('📤✅');
     else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
 }
