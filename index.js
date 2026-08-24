@@ -58,6 +58,7 @@ function detectBranchFromAddress(address) {
 // CONFIG
 const TOKEN        = process.env.WHATSAPP_TOKEN;
 const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of branch
+const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // set STAFF_PASSWORD in Render env vars for real deployments
 const VERIFY_TOKEN = "washkart_verify_123";
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
@@ -182,6 +183,19 @@ function formatPhoneDisplay(num) {
   }
   if (digits.length === 10) return `+91 ${digits.slice(0,5)} ${digits.slice(5)}`;
   return num || "";
+}
+
+// Both branches' contact numbers, each labeled — used in booking confirmations so
+// customers always have both numbers regardless of which branch is servicing them.
+function bothBranchContactLines() {
+  const seen = new Set();
+  const lines = [];
+  for (const br of Object.values(BRANCHES)) {
+    if (seen.has(br.slug)) continue;
+    seen.add(br.slug);
+    lines.push(`${br.name}: ${formatPhoneDisplay(br.admin)}`);
+  }
+  return lines.join("\n");
 }
 
 // Builds a formatted itemized invoice as WhatsApp text. Falls back to a simple
@@ -833,21 +847,11 @@ async function showBookingConfirm(phone, session, phoneNumberId) {
   session.step = "direct_confirm";
 }
 
-// Called right after an address is captured/confirmed. Asks for the society/apartment
-// complex once per booking flow (skippable), pre-fills from the saved customer record
-// if already known, then continues on to branch/date/slot/confirm as before.
+// Called right after an address is captured/confirmed. Continues on to
+// branch/date/slot/confirm. (Society/apartment question removed — was adding
+// unnecessary friction to the booking flow.)
 async function proceedAfterAddress(phone, session, phoneNumberId, customer) {
-  if (!session.booking.society && !session.societyAsked) {
-    if (customer && customer.society) {
-      session.booking.society = customer.society;
-    } else {
-      session.societyAsked = true;
-      session.step = "get_society";
-      saveSession(phone, session);
-      await sendMessage(phone, "Which society / apartment complex is this for?\n(Type 'skip' if not applicable)", phoneNumberId);
-      return;
-    }
-  }
+  if (customer && customer.society && !session.booking.society) session.booking.society = customer.society;
   session.step = "idle";
   if (!session.booking.branch) { session.step="select_branch"; await askBranch(phone,phoneNumberId); }
   else if (!session.booking.date) { await askDate(phone,phoneNumberId); session.step="select_date"; }
@@ -890,7 +894,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
   // Clear address confirmation flag for next booking
   if (session) session.addressConfirmed = false;
   await sendMessage(phone,
-    `✅ Booking confirmed! - Washkart ${br.name}\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n📞 ${formatPhoneDisplay(br.admin)}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
+    `✅ Booking confirmed! - Washkart ${br.name}\n\n🆔 ${orderId}\n📍 ${booking.address || "-"}\n📅 ${booking.date || "-"} | ${booking.slot || "-"}\n\n📞 Contact us:\n${bothBranchContactLines()}\n\nOur team will arrive within your slot. 💚\nPayment via UPI QR or cash at delivery.\n\nTo cancel anytime, type *cancel*`,
     phoneNumberId
   );
   await delay(500);
@@ -992,7 +996,7 @@ ${history.map(h => `${h.role}: ${h.text}`).join("\n")}`;
 }
 
 // BUTTON GUARD
-const TEXT_INPUT_STEPS = ["get_name","get_address","get_society","get_custom_date","feedback_comment","payment_method"];
+const TEXT_INPUT_STEPS = ["get_name","get_address","get_custom_date","feedback_comment","payment_method"];
 function isButtonId(text) {
   return /^(price_|btn_|date_|slot_|branch_|use_saved|update_details|no_cancel|confirm_direct|rating_|pay_|cc_)/.test(text);
 }
@@ -1031,7 +1035,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
 
   // Button guard during text input steps
   if (TEXT_INPUT_STEPS.includes(session.step) && isButtonId(rawText)) {
-    const msgs = { get_name:"Please type your name first.", get_address:"Please type your pickup address first.", get_society:"Please type your society name, or 'skip'.", get_custom_date:"Please type the date first (e.g. 25 August)." };
+    const msgs = { get_name:"Please type your name first.", get_address:"Please type your pickup address first.", get_custom_date:"Please type the date first (e.g. 25 August)." };
     await send(msgs[session.step] || "Please complete the current step first.");
     return;
   }
@@ -1067,18 +1071,6 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     const detected = detectBranchFromAddress(session.booking.address);
     if (detected) session.booking.branch = detected;
     await proceedAfterAddress(phone, session, phoneNumberId, await getCustomer(phone));
-    return;
-  }
-
-  if (session.step === "get_society") {
-    const val = rawText.trim();
-    session.booking.society = (val.toLowerCase() === "skip") ? "" : val;
-    if (session.booking.name && session.booking.address) {
-      await saveCustomer(phone, session.booking.name, session.booking.address, session.booking.branch || branch.slug);
-      // Persist society onto the customer record too, best-effort
-      try { await dbUpdate("customers", `phone=eq.${phone}`, { society: session.booking.society }); } catch (e) {}
-    }
-    await proceedAfterAddress(phone, session, phoneNumberId, null);
     return;
   }
 
@@ -1908,17 +1900,7 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
     if (detected) { bk.branch=detected; }
     else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
   }
-  if (!bk.society && !session.societyAsked) {
-    if (customer && customer.society) {
-      bk.society = customer.society;
-    } else {
-      session.societyAsked = true;
-      session.step = "get_society";
-      saveSession(phone,session);
-      await sendMessage(phone, "Which society / apartment complex is this for?\n(Type 'skip' if not applicable)", phoneNumberId);
-      return;
-    }
-  }
+  if (customer && customer.society && !bk.society) bk.society = customer.society;
   if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
   if (!bk.slot) { await askSlot(phone,phoneNumberId,bk.date); session.step="select_slot"; saveSession(phone,session); return; }
   // Ask service type if not set
@@ -2252,6 +2234,101 @@ app.get("/ratings",        async(req,res)=>{ try{ const {branch}=req.query; cons
 app.get("/leads",          async(req,res)=>{ try{ const {branch}=req.query; const f=branch&&branch!=="all"?`branch=eq.${branch}&order=updated_at.desc`:"order=updated_at.desc"; res.json(await dbSelect("leads",f)); }catch(e){res.status(500).json({error:e.message});} });
 app.get("/conversations",  async(req,res)=>{ try{ const {phone}=req.query; if(phone){const rows=await dbSelect("sessions",`phone=eq.${normalizePhone(phone)}`);res.json(rows[0]||{});}else{const rows=await dbSelect("sessions","order=updated_at.desc&limit=100");res.json(rows);} }catch(e){res.status(500).json({error:e.message});} });
 app.post("/takeover",      async(req,res)=>{ try{ const {phone,active}=req.body; const num=normalizePhone(phone); if(!sessionCache[num])sessionCache[num]={step:"idle",booking:{},history:[]}; sessionCache[num].takeoverActive=!!active; res.json({success:true,takeover:!!active}); }catch(e){res.status(500).json({error:e.message});} });
+// STAFF-ONLY ENDPOINTS — deliberately return a restricted field set (no name, phone,
+// amount, or payment info). Gated by STAFF_PASSWORD, separate from the admin dashboard.
+function checkStaffAuth(req, res) {
+  const key = req.headers["x-staff-key"] || req.query.key;
+  if (key !== STAFF_PASSWORD) { res.status(401).json({error:"Unauthorized"}); return false; }
+  return true;
+}
+
+app.get("/pickups", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { branch } = req.query;
+    const filters = ["status=neq.delivered", "status=neq.cancelled", "order=created_at.desc"];
+    if (branch && branch !== "all") filters.push(`branch=eq.${branch}`);
+    const rows = await dbSelect("bookings", filters.join("&"));
+    const safe = rows.map(b => ({
+      order_id: b.order_id, address: b.address, date: b.date, slot: b.slot,
+      status: b.status, service_type: b.service_type, notes: b.notes,
+      branch: b.branch, society: b.society,
+      amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
+    }));
+    res.json(safe);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/pickups/:orderId/status", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { status, paid } = req.body;
+    const allowed = ["picked", "inprogress", "outfordelivery", "delivered"];
+    if (!allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
+    const orderId = req.params.orderId;
+
+    const prevRows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const prevOrder = prevRows[0];
+    if (!prevOrder) return res.status(404).json({ error: "Order not found" });
+
+    const updateData = { status };
+    if (prevOrder.service_type && !prevOrder.delivery_date) {
+      updateData.delivery_date = calcDeliveryDate(prevOrder.service_type, prevOrder.express || false);
+    }
+    // Payment confirmation — staff can only confirm/deny the EXISTING amount, never enter a new one
+    if (status === "delivered" && paid === true && prevOrder.amount > 0) {
+      updateData.payment_status = "paid";
+      updateData.payment_method = "cash";
+      updateData.payment_date = new Date().toISOString();
+    }
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
+
+    // Best-effort customer notification, reusing the same message wording as the admin dashboard's status changes
+    if (status !== prevOrder.status && prevOrder.phone) {
+      const brSlug = prevOrder.branch || "bavdhan";
+      const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
+      let numId = getBranchNumId(brSlug);
+      if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+      const msgs = {
+        picked: `🚗 Picked up!\n\nOrder: ${orderId}`,
+        inprogress: `🫧 Cleaning started!\n\nOrder: ${orderId}`,
+        outfordelivery: `🚚 Your order is on the way!\n\nOrder: ${orderId}`,
+        delivered: `✅ Delivered!\n\nYour clothes are back — fresh and clean.\n\nPayment done? Reply *paid*.\n\nOrder: ${orderId}`,
+      };
+      if (msgs[status]) await sendMessage(prevOrder.phone, msgs[status], numId);
+    }
+    res.json({ success: true, status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Staff hits this when a pickup/delivery fails (customer not home, wrong address, etc).
+// Does NOT change the order's status — just flags it and immediately alerts the owner
+// with full details, since resolving it (reschedule, cancel, etc.) is an admin decision.
+app.post("/pickups/:orderId/flag", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const orderId = req.params.orderId;
+    const { stage } = req.body; // 'pickup' or 'delivery', just for a clearer alert message
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+
+    const flagNote = `[STAFF FLAG] ${stage === "delivery" ? "Delivery" : "Pickup"} failed — needs attention (${new Date().toLocaleString("en-IN")})`;
+    const newNotes = b.notes ? `${b.notes}\n${flagNote}` : flagNote;
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+
+    const alertMsg = `🚩 STAFF ALERT — ${stage === "delivery" ? "Delivery" : "Pickup"} failed\n\nOrder: ${orderId}\nName: ${b.name}\nPhone: +${b.phone}\nAddress: ${b.address || "-"}\n\nStaff could not complete this ${stage === "delivery" ? "delivery" : "pickup"}. Please follow up.`;
+    await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203");
+    const brSlug = b.branch || "bavdhan";
+    const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
+    if (br.admin !== OWNER_NUMBER) await sendMessage(br.admin, alertMsg, "1136879376186203");
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/staff", (req, res) => res.sendFile(path.join(__dirname, "staff.html")));
+
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
 app.get("/ping", (req,res)=>res.json({
   status:"ok",
