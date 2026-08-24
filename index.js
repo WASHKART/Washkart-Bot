@@ -2356,40 +2356,43 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
 app.post("/pickups/walkin", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { phone, service_type, branch } = req.body;
-    if (!phone || !service_type) return res.status(400).json({ error: "Missing phone or service" });
+    const { phone, name, service_type, branch } = req.body;
+    if (!phone || !name || !service_type) return res.status(400).json({ error: "Missing name, phone, or service" });
     const normPhone = normalizePhone(phone);
     const orderId = genOrderId();
     const existing = await getCustomer(normPhone);
-    const name = existing?.name || "Walk-in Customer";
+    // Name always comes from staff (or is topped up from the saved record if staff left it blank) —
+    // this is what prints on the tag, so it needs to be a real name, not a placeholder.
+    const finalName = name.trim() || existing?.name || "Walk-in Customer";
     const address = existing?.address || "";
     const branchSlug = existing?.branch || branch || "bavdhan";
     const br = getBranchBySlug(branchSlug) || DEFAULT_BRANCH;
     const numId = getBranchNumId(branchSlug);
 
     await dbInsert("bookings", {
-      order_id: orderId, name, phone: normPhone,
+      order_id: orderId, name: finalName, phone: normPhone,
       address: address || "Walk-in (address needed)",
       date: getToday(), slot: "Walk-in",
       status: "picked", reminder_sent: false, source: "walkin",
       branch: branchSlug,
-      notes: existing ? "" : "[STAFF FLAG] New customer — needs name/address confirmed",
+      // Only the address is genuinely missing when there's no saved customer — name always comes from staff now.
+      notes: address ? "" : "[STAFF FLAG] New customer — needs delivery address confirmed",
       society: existing?.society || "",
       amount: 0, payment_status: "unpaid", payment_method: "",
       service_type,
     });
 
     await notifyAdmin(
-      { orderId, name, phone: normPhone, address: address || "Walk-in", date: getToday(), slot: "Walk-in", source: "walkin (staff)", society: existing?.society },
+      { orderId, name: finalName, phone: normPhone, address: address || "Walk-in", date: getToday(), slot: "Walk-in", source: "walkin (staff)", society: existing?.society },
       br, numId
     );
-    if (!existing) {
+    if (!address) {
       await sendMessage(OWNER_NUMBER,
-        `🆕 NEW walk-in customer — needs details\n\nOrder: ${orderId}\nPhone: +${normPhone}\nService: ${service_type}\n\nNo saved name/address on file — please follow up to collect the delivery address before this ships out.`,
+        `🆕 New walk-in — needs address\n\nOrder: ${orderId}\nName: ${finalName}\nPhone: +${normPhone}\nService: ${service_type}\n\nNo saved delivery address on file — please follow up before this ships out.`,
         "1136879376186203"
       );
     }
-    res.json({ success: true, order_id: orderId, foundExisting: !!existing, name });
+    res.json({ success: true, order_id: orderId, foundExisting: !!existing, name: finalName });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
