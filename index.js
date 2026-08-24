@@ -2242,18 +2242,40 @@ function checkStaffAuth(req, res) {
   return true;
 }
 
+// Parses human-readable date strings like "Friday, 21 August" into a comparable Date.
+// Returns null if unparseable (e.g. "Walk-in") — those stay visible rather than being hidden.
+function parseHumanDate(str) {
+  if (!str) return null;
+  const parts = str.match(/(\d+)\w{0,2}\s+(\w+)/);
+  if (!parts) return null;
+  try {
+    const d = new Date(`${parts[2]} ${parts[1]} ${new Date().getFullYear()}`);
+    d.setHours(0, 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d;
+  } catch { return null; }
+}
+
 app.get("/pickups", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
     const { branch } = req.query;
     const filters = ["status=neq.delivered", "status=neq.cancelled", "order=created_at.desc"];
     if (branch && branch !== "all") filters.push(`branch=eq.${branch}`);
-    const rows = await dbSelect("bookings", filters.join("&"));
+    let rows = await dbSelect("bookings", filters.join("&"));
+    // Only show today's pickups + anything overdue — hide future-dated ones so staff
+    // never gets confused about what to actually do right now.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    rows = rows.filter(b => {
+      const d = parseHumanDate(b.date);
+      return !d || d <= today;
+    });
     const safe = rows.map(b => ({
       order_id: b.order_id, address: b.address, date: b.date, slot: b.slot,
-      status: b.status, service_type: b.service_type, notes: b.notes,
+      status: b.status, service_type: b.service_type,
+      notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG]")).join("\n").trim(),
       branch: b.branch, society: b.society,
       amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
+      flagged: (b.notes || "").includes("[STAFF FLAG]"),
     }));
     res.json(safe);
   } catch (e) { res.status(500).json({ error: e.message }); }
