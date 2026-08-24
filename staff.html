@@ -58,6 +58,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 
 /* CALL FAB */
 .call-fab{position:fixed;bottom:20px;right:20px;width:64px;height:64px;background:#dc2626;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;text-decoration:none;box-shadow:0 4px 14px rgba(220,38,38,.4);z-index:50;}
+.add-fab{position:fixed;bottom:20px;left:20px;width:64px;height:64px;background:#16a34a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;border:none;box-shadow:0 4px 14px rgba(22,163,74,.4);z-index:50;}
+
+/* WALK-IN CREATE */
+.phone-input{width:100%;padding:18px;border:2px solid #e5e7eb;border-radius:14px;font-size:28px;text-align:center;letter-spacing:2px;margin-bottom:1.2rem;}
+.svc-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.svc-btn{padding:20px 0;border:2px solid #e5e7eb;border-radius:16px;font-size:40px;background:#f9fafb;}
+.svc-btn:active{background:#dcfce7;border-color:#16a34a;}
 
 /* TOAST */
 .toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:30px 40px;border-radius:20px;font-size:60px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
@@ -79,6 +86,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       🧺⬆️
       <span class="tab-count" id="count-pickup" style="display:none">0</span>
     </button>
+    <button class="tab" id="tab-cleaning" onclick="switchTab('cleaning')">
+      🫧
+      <span class="tab-count" id="count-cleaning" style="display:none">0</span>
+    </button>
     <button class="tab" id="tab-delivery" onclick="switchTab('delivery')">
       📦⬇️
       <span class="tab-count" id="count-delivery" style="display:none">0</span>
@@ -88,6 +99,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 </div>
 
 <a class="call-fab" id="call-fab" href="tel:+919552552167" style="display:none">📞</a>
+<button class="add-fab" id="add-fab" onclick="openNewWalkin()" style="display:none">➕</button>
 
 <div class="overlay" id="overlay">
   <div class="confirm-box" id="confirm-content"></div>
@@ -125,6 +137,7 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('call-fab').style.display = 'flex';
+  document.getElementById('add-fab').style.display = 'flex';
   loadData();
   setInterval(loadData, 20000);
 }
@@ -132,6 +145,7 @@ function showApp() {
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById('tab-pickup').className = 'tab' + (tab === 'pickup' ? ' active' : '');
+  document.getElementById('tab-cleaning').className = 'tab' + (tab === 'cleaning' ? ' active' : '');
   document.getElementById('tab-delivery').className = 'tab' + (tab === 'delivery' ? ' active' : '');
   render();
 }
@@ -149,14 +163,17 @@ const SVC_ICON = { dryclean: '👔', iron: '🔥', laundry: '🧺', shoes: '👟
 
 function render() {
   const pickupList = allPickups.filter(p => p.status === 'pending');
+  const cleaningList = allPickups.filter(p => p.status === 'inprogress' || p.status === 'picked');
   const deliveryList = allPickups.filter(p => p.status === 'outfordelivery');
 
   const pc = document.getElementById('count-pickup');
+  const cc = document.getElementById('count-cleaning');
   const dc = document.getElementById('count-delivery');
   if (pickupList.length) { pc.style.display = 'flex'; pc.textContent = pickupList.length; } else pc.style.display = 'none';
+  if (cleaningList.length) { cc.style.display = 'flex'; cc.textContent = cleaningList.length; } else cc.style.display = 'none';
   if (deliveryList.length) { dc.style.display = 'flex'; dc.textContent = deliveryList.length; } else dc.style.display = 'none';
 
-  const items = activeTab === 'pickup' ? pickupList : deliveryList;
+  const items = activeTab === 'pickup' ? pickupList : activeTab === 'cleaning' ? cleaningList : deliveryList;
   const list = document.getElementById('list');
   if (!items.length) {
     list.innerHTML = `<div class="empty">🎉</div>`;
@@ -166,6 +183,17 @@ function render() {
     const slotIcon = (p.slot || '').includes('Morning') ? '🌅' : '🌆';
     const svcIcon = SVC_ICON[p.service_type] || '🧺';
     const navUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(p.address || '');
+    let actionsHtml;
+    if (p.flagged) {
+      actionsHtml = `<div class="flagged-banner">🚩 ⏳ 📞</div>`;
+    } else if (activeTab === 'cleaning') {
+      actionsHtml = `<div class="card-actions"><button class="act-btn act-yes" style="flex:1" onclick="askReady('${p.order_id}')">✅ 📦⬇️</button></div>`;
+    } else {
+      actionsHtml = `<div class="card-actions">
+        <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌</button>
+        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅</button>
+      </div>`;
+    }
     return `<div class="card">
       <div class="card-head">
         <span class="slot-icon">${slotIcon}</span>
@@ -179,16 +207,19 @@ function render() {
         <div class="service-icon">${svcIcon}</div>
         ${p.notes ? `<div class="notes-text">📝 ${p.notes}</div>` : ''}
       </div>
-      ${p.flagged ? `
-      <div class="flagged-banner">🚩 ⏳ 📞</div>
-      ` : `
-      <div class="card-actions">
-        <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌</button>
-        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅</button>
-      </div>
-      `}
+      ${actionsHtml}
     </div>`;
   }).join('');
+}
+
+function askReady(orderId) {
+  showOverlay(`
+    <div class="confirm-icon">🫧➡️📦</div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️</button>
+      <button class="confirm-btn confirm-yes" onclick="doStatus('${orderId}','outfordelivery',false)">✅</button>
+    </div>
+  `);
 }
 
 function showOverlay(html) {
@@ -264,6 +295,37 @@ async function doStatus(orderId, status, paid) {
     });
     const data = await res.json();
     if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+// ── WALK-IN CREATE ──────────────────────────────────────────────
+function openNewWalkin() {
+  showOverlay(`
+    <div class="confirm-icon">➕🧺</div>
+    <input class="phone-input" id="walkin-phone" type="tel" inputmode="numeric" placeholder="XXXXXXXXXX" maxlength="10">
+    <div class="svc-grid">
+      <button class="svc-btn" onclick="createWalkin('dryclean')">👔</button>
+      <button class="svc-btn" onclick="createWalkin('iron')">🔥</button>
+      <button class="svc-btn" onclick="createWalkin('laundry')">🧺</button>
+      <button class="svc-btn" onclick="createWalkin('shoes')">👟</button>
+      <button class="svc-btn" onclick="createWalkin('specialty')">✨</button>
+      <button class="svc-btn" onclick="closeOverlay()">↩️</button>
+    </div>
+  `);
+}
+
+async function createWalkin(serviceType) {
+  const phone = document.getElementById('walkin-phone').value.trim();
+  if (phone.length < 10) { showToast('📱❌'); return; }
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/walkin?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, service_type: serviceType })
+    });
+    const data = await res.json();
+    if (data.success) { showToast(data.foundExisting ? '👤✅' : '🆕✅'); loadData(); }
     else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
 }
