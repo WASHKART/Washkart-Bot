@@ -732,10 +732,19 @@ function safeNumId(numId) {
 async function notifyAdmin(booking, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
   const src = booking.source ? ` [${booking.source}]` : "";
-  const msg = `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}`;
+  const societyLine = booking.society ? `\nSociety: ${booking.society}` : "";
+  const notesLine = booking.notes ? `\nNotes: ${booking.notes}` : "";
+  const msg = `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}${societyLine}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}${notesLine}`;
   const nid = safeNumId(phoneNumberId);
-  await sendMessage(br.admin, msg, nid);
-  if (br.admin !== OWNER_NUMBER) await sendMessage(OWNER_NUMBER, msg, nid);
+  const sentToAdmin = await sendMessage(br.admin, msg, nid);
+  let sentToOwner = true;
+  if (br.admin !== OWNER_NUMBER) sentToOwner = await sendMessage(OWNER_NUMBER, msg, nid);
+  if (!sentToAdmin && !sentToOwner) {
+    console.error(`[notifyAdmin] BOTH admin and owner notifications FAILED for order ${booking.orderId}. Likely cause: 24h WhatsApp window closed for both numbers. Nobody was notified of this booking.`);
+  } else if (!sentToAdmin) {
+    console.error(`[notifyAdmin] Branch admin notification FAILED for order ${booking.orderId} (owner was notified as backup). Admin may be outside the 24h WhatsApp window.`);
+  }
+  return sentToAdmin || sentToOwner;
 }
 async function notifyAdminComplaint(phone, name, message, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
@@ -2087,11 +2096,11 @@ app.post("/bookings", async (req,res) => {
     });
     if (address) await saveCustomer(normPhone,name,address,branchSlug);
     if (society) { try { await dbUpdate("customers", `phone=eq.${normPhone}`, { society }); } catch(e) {} }
-    await sendMessage(br.admin,
-      `New Booking [${source||"Walk-in"}] - ${br.name}\n\nOrder: ${orderId}\nName: ${name}\nPhone: +${normPhone}\nAddress: ${address||"Walk-in"}${society?`\nSociety: ${society}`:""}\nDate: ${date||getToday()}\nSlot: ${slot||"Walk-in"}${notes?`\nNotes: ${notes}`:""}`,
-      numId
+    const notified = await notifyAdmin(
+      { orderId, name, phone: normPhone, address, date: date||getToday(), slot: slot||"Walk-in", source: source||"walkin", society, notes },
+      br, numId
     );
-    res.json({success:true,order_id:orderId});
+    res.json({success:true,order_id:orderId,adminNotified:notified});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
 
