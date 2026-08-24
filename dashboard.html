@@ -1843,7 +1843,11 @@ async function submitNewOrder() {
   try {
     const res=await fetch(`${BOT_URL}/bookings`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const data=await res.json();
-    if(data.success){toast(`Order ${data.order_id} created!`);closeModal('modal-order');['new-name','new-phone','new-address','new-society','new-date','new-notes','new-amount'].forEach(i=>{if(document.getElementById(i))document.getElementById(i).value=''});document.getElementById('new-source').value='walkin';document.getElementById('new-service').value='';onSourceChange('walkin');loadData();}
+    if(data.success){
+      if(data.adminNotified===false) toast(`Order ${data.order_id} created — but admin notification FAILED (24h WhatsApp window?)`,'error');
+      else toast(`Order ${data.order_id} created!`);
+      closeModal('modal-order');['new-name','new-phone','new-address','new-society','new-date','new-notes','new-amount'].forEach(i=>{if(document.getElementById(i))document.getElementById(i).value=''});document.getElementById('new-source').value='walkin';document.getElementById('new-service').value='';onSourceChange('walkin');loadData();
+    }
     else toast(data.error||'Failed','error');
   } catch { toast('Network error','error'); }
 }
