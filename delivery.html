@@ -131,7 +131,46 @@ function showApp() {
   document.getElementById('app').style.display = 'flex';
   loadData();
   setInterval(loadData, 20000);
+  setupPushNotifications();
 }
+
+// ── PUSH NOTIFICATIONS — works even with the browser closed ────────
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
+async function setupPushNotifications() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return; // not supported, just skip silently
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) { sendSubscriptionToServer(existing); return; }
+
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return;
+
+    const keyRes = await fetch(`${BOT_URL}/push/vapid-public-key`);
+    const { key } = await keyRes.json();
+    if (!key) return; // VAPID keys not configured on the server yet
+
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+    sendSubscriptionToServer(sub);
+  } catch (e) { console.error('[push] setup failed:', e); }
+}
+async function sendSubscriptionToServer(subscription) {
+  try {
+    await fetch(`${BOT_URL}/push/subscribe?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription, role: 'delivery' })
+    });
+  } catch (e) { console.error('[push] subscribe failed:', e); }
+}
+
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById('tab-pickup').className = 'tab' + (tab === 'pickup' ? ' active' : '');
