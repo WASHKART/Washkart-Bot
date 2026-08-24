@@ -224,6 +224,17 @@ tr.overdue td{background:#fef2f2;}
 .inv-row input{border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;font-family:"Inter",sans-serif;}
 .inv-row .inv-remove{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;}
 
+/* INVOICE CATALOG PICKER */
+.catalog-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:10px;}
+.catalog-tab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--white);color:var(--text);white-space:nowrap;cursor:pointer;}
+.catalog-tab.active{background:var(--green);color:#fff;border-color:var(--green);}
+.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;margin-bottom:1rem;max-height:220px;overflow-y:auto;padding:2px;}
+.catalog-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 4px;border:1px solid var(--border);border-radius:10px;background:var(--bg);cursor:pointer;}
+.catalog-item:hover{background:var(--green-light);border-color:var(--green-mid);}
+.catalog-icon{font-size:24px;}
+.catalog-name{font-size:11px;font-weight:600;text-align:center;line-height:1.2;}
+.catalog-price{font-size:11px;color:var(--green);font-weight:700;}
+
 
 /* ALERT BANNER */
 .alert-banner{padding:10px 1.5rem;font-size:13px;font-weight:500;display:none;border-bottom:1px solid transparent;cursor:pointer;}
@@ -733,11 +744,14 @@ tr.overdue td{background:#fef2f2;}
 
 <!-- INVOICE MODAL -->
 <div class="modal-overlay" id="modal-invoice">
-  <div class="modal" style="max-width:600px">
+  <div class="modal" style="max-width:640px">
     <div class="modal-header"><div class="modal-title">🧾 Invoice — <span id="inv-order-id"></span></div><button class="modal-close" onclick="closeModal('modal-invoice')">✕</button></div>
     <div class="modal-body">
+      <div class="catalog-tabs" id="inv-catalog-tabs"></div>
+      <div class="catalog-grid" id="inv-catalog-grid"></div>
+      <div class="divider"></div>
       <div id="inv-items-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px"></div>
-      <button class="btn btn-ghost btn-sm" onclick="addInvoiceRow()">+ Add item</button>
+      <button class="btn btn-ghost btn-sm" onclick="addInvoiceRow()">+ Add custom item</button>
       <div class="divider"></div>
       <div style="display:flex;justify-content:space-between;align-items:center;font-size:15px;font-weight:700">
         <span>Total</span><span id="inv-total">Rs 0</span>
@@ -1473,6 +1487,46 @@ function renderSocieties() {
 }
 
 // ── INVOICE BUILDER ───────────────────────────────────────────────
+// Same price data your bot already quotes customers with (ITEM_PRICES in index.js) —
+// kept as one source of truth. Update a price there, it updates here too on next deploy.
+const RAW_ITEM_PRICES = {
+  shirt:{dryclean:100,iron:20,laundry:80},pant:{dryclean:100,iron:20,laundry:80},
+  trouser:{dryclean:100,iron:20,laundry:80},jeans:{dryclean:100,iron:20,laundry:80},
+  tshirt:{dryclean:100,iron:20,laundry:80},top:{dryclean:100,iron:20,laundry:80},
+  kurta:{dryclean:100,iron:30,laundry:80},kurti:{dryclean:100,iron:30,laundry:80},
+  blouse:{dryclean:100,iron:20},salwar:{dryclean:100,iron:20},
+  saree:{dryclean:350,iron:120},lehenga:{dryclean:350,iron:120},
+  blazer:{dryclean:300,iron:120},jacket:{dryclean:250,iron:60},
+  overcoat:{dryclean:400,iron:60},sweater:{dryclean:200,iron:40},
+  dupatta:{dryclean:120,iron:50},shawl:{dryclean:120,iron:50},
+  anarkali:{dryclean:200,iron:50},suit:{dryclean:400,iron:100},
+  dress:{dryclean:350,iron:60},gown:{dryclean:350,iron:120},
+  sherwani:{dryclean:400,iron:120},towel:{dryclean:150},
+  sneaker:{shoes:350},shoe:{shoes:350},canvas:{shoes:300},
+  bedsheet:{laundry:150,iron:60},blanket:{laundry:350},curtain:{dryclean:15},
+  bag:{specialty:200},helmet:{specialty:150},carpet:{specialty:40},toy:{specialty:200},
+};
+const ITEM_ICONS = {
+  shirt:'👔',pant:'👖',trouser:'👖',jeans:'👖',tshirt:'👕',top:'👚',kurta:'👘',kurti:'👘',
+  blouse:'👚',salwar:'👗',saree:'🥻',lehenga:'👗',blazer:'🧥',jacket:'🧥',overcoat:'🧥',
+  sweater:'🧶',dupatta:'🧣',shawl:'🧣',anarkali:'👗',suit:'🤵',dress:'👗',gown:'👗',
+  sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
+  curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
+};
+// Invert item-first data into category-first buckets for the tabbed picker
+const ITEM_CATALOG = {};
+Object.entries(RAW_ITEM_PRICES).forEach(([item, prices]) => {
+  Object.entries(prices).forEach(([svc, price]) => {
+    if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+    ITEM_CATALOG[svc].push({ name: item.charAt(0).toUpperCase()+item.slice(1), price, icon: ITEM_ICONS[item] || '🧺' });
+  });
+});
+const CATALOG_TABS = [
+  {key:'dryclean', label:'Dry Clean'}, {key:'iron', label:'Iron'}, {key:'laundry', label:'Laundry'},
+  {key:'shoes', label:'Shoes'}, {key:'specialty', label:'Specialty'},
+];
+let activeCatalogTab = 'dryclean';
+
 let invoiceOrderId = null;
 let invoiceItems = [];
 function openInvoiceModal(orderId) {
@@ -1481,13 +1535,37 @@ function openInvoiceModal(orderId) {
   invoiceOrderId = orderId;
   invoiceItems = Array.isArray(b.items) && b.items.length ? b.items.map(it=>({...it})) : [];
   document.getElementById('inv-order-id').textContent = orderId;
+  renderCatalogTabs();
+  renderCatalogGrid();
   renderInvoiceRows();
   openModal('modal-invoice');
+}
+function renderCatalogTabs() {
+  const el = document.getElementById('inv-catalog-tabs');
+  if(!el) return;
+  el.innerHTML = CATALOG_TABS.map(t=>`<button class="catalog-tab ${t.key===activeCatalogTab?'active':''}" onclick="switchCatalogTab('${t.key}')">${t.label}</button>`).join('');
+}
+function switchCatalogTab(key) { activeCatalogTab = key; renderCatalogTabs(); renderCatalogGrid(); }
+function renderCatalogGrid() {
+  const el = document.getElementById('inv-catalog-grid');
+  if(!el) return;
+  const items = ITEM_CATALOG[activeCatalogTab] || [];
+  el.innerHTML = items.map(it=>`<button class="catalog-item" onclick="addCatalogItem('${it.name.replace(/'/g,"\\'")}',${it.price})">
+    <span class="catalog-icon">${it.icon}</span>
+    <span class="catalog-name">${it.name}</span>
+    <span class="catalog-price">₹${it.price}</span>
+  </button>`).join('');
+}
+function addCatalogItem(name, price) {
+  const existing = invoiceItems.find(it=>it.name===name && Number(it.price)===price);
+  if (existing) { existing.qty = (Number(existing.qty)||0) + 1; }
+  else { invoiceItems.push({ name, qty: 1, price }); }
+  renderInvoiceRows();
 }
 function renderInvoiceRows() {
   const el = document.getElementById('inv-items-list');
   if(!invoiceItems.length) {
-    el.innerHTML = '<div class="empty" style="padding:1rem">No items yet — tap "+ Add item" below</div>';
+    el.innerHTML = '<div class="empty" style="padding:1rem">No items yet — tap a catalog item above, or "+ Add item" below</div>';
   } else {
     el.innerHTML = invoiceItems.map((it,i)=>`<div class="inv-row">
       <input placeholder="Item name" value="${(it.name||'').replace(/"/g,'&quot;')}" oninput="invoiceItems[${i}].name=this.value">
