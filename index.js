@@ -3,6 +3,7 @@ const axios   = require("axios");
 const path    = require("path");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
+const webpush = require("web-push");
 const app     = express();
 app.use(express.json({ limit: "10mb" })); // raised from the 100kb default — delivery photos need the headroom
 
@@ -61,6 +62,36 @@ const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of bran
 const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // legacy combined /staff page — kept working, but not recommended going forward
 const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // set COUNTER_PASSWORD in Render env vars
 const DELIVERY_PASSWORD = process.env.DELIVERY_PASSWORD || "delivery2025"; // set DELIVERY_PASSWORD in Render env vars
+
+// PUSH NOTIFICATIONS — real push, works even with the browser fully closed
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails("mailto:owner@washkart.co.in", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+// Sends a push notification to every subscribed device for a given role ('delivery' or 'counter').
+// Silently no-ops if VAPID keys aren't configured yet, or if a subscription has gone stale
+// (browser unsubscribed, etc.) — stale ones get cleaned up automatically.
+async function sendPushToRole(role, title, body) {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  try {
+    const subs = await dbSelect("push_subscriptions", `role=eq.${role}`);
+    const payload = JSON.stringify({ title, body });
+    for (const row of subs) {
+      try {
+        await webpush.sendNotification(row.subscription, payload);
+      } catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          // Subscription no longer valid (browser data cleared, uninstalled, etc.) — remove it.
+          await dbDelete("push_subscriptions", `id=eq.${row.id}`).catch(() => {});
+        } else {
+          console.error("[push] send failed:", err.message);
+        }
+      }
+    }
+  } catch (e) { console.error("[push] sendPushToRole error:", e.message); }
+}
+
 const VERIFY_TOKEN = "washkart_verify_123";
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 const GEMINI_URL   = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`;
@@ -956,6 +987,7 @@ async function confirmBooking(phone, booking, branch, phoneNumberId, session) {
     });
   } catch (e) { console.error("saveBooking:", e.message); }
   await logLead(phone, "converted", "booking confirmed", br.slug);
+  sendPushToRole("delivery", "🧺⬆️ New Pickup", `${booking.name} — ${booking.address || "Walk-in"}`).catch(()=>{});
   // Clear address confirmation flag for next booking
   if (session) session.addressConfirmed = false;
   await sendMessage(phone,
@@ -2173,6 +2205,8 @@ app.post("/bookings", async (req,res) => {
       { orderId, name, phone: normPhone, address, date: date||getToday(), slot: slot||"Walk-in", source: source||"walkin", society, notes },
       br, numId
     );
+    // Only walk-ins (already collected) skip the "new pickup" alert — everything else needs picking up.
+    if (!isWalkIn) sendPushToRole("delivery", "🧺⬆️ New Pickup", `${name} — ${address || "-"}`).catch(()=>{});
     res.json({success:true,order_id:orderId,adminNotified:notified});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
@@ -2221,6 +2255,9 @@ app.patch("/bookings/:orderId", async (req,res) => {
     const finalStatus = updateData.status||status;
     const statusChanged = finalStatus && finalStatus !== prevStatus;
     console.log(`[patch] ${orderId} ${prevStatus}→${finalStatus} changed:${statusChanged}`);
+    if (statusChanged && finalStatus === "outfordelivery") {
+      sendPushToRole("delivery", "📦⬇️ New Delivery", `${b?.name || orderId} — ${b?.address || "-"}`).catch(()=>{});
+    }
 
     const amountLine  = b?.amount?`\nBill: Rs ${b.amount} - payable via UPI QR or cash.`:"";
     const msgs = {
@@ -2359,6 +2396,23 @@ function checkStaffAuth(req, res) {
   return true;
 }
 
+app.get("/push/vapid-public-key", (req, res) => res.json({ key: VAPID_PUBLIC_KEY }));
+
+app.post("/push/subscribe", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const { subscription, role } = req.body;
+    if (!subscription || !subscription.endpoint || !role) return res.status(400).json({ error: "Missing subscription or role" });
+    const existing = await dbSelect("push_subscriptions", `endpoint=eq.${encodeURIComponent(subscription.endpoint)}`).catch(() => []);
+    if (existing.length) {
+      await dbUpdate("push_subscriptions", `endpoint=eq.${encodeURIComponent(subscription.endpoint)}`, { subscription, role });
+    } else {
+      await dbInsert("push_subscriptions", { endpoint: subscription.endpoint, subscription, role });
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Parses human-readable date strings like "Friday, 21 August" into a comparable Date.
 // Returns null if unparseable (e.g. "Walk-in") — those stay visible rather than being hidden.
 function parseHumanDate(str) {
@@ -2473,6 +2527,7 @@ app.post("/pickups/:orderId/tally", async (req, res) => {
       let numId = getBranchNumId(brSlug);
       if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
       await sendMessage(prevOrder.phone, `🚚 Your order is on the way!\n\nOrder: ${orderId}`, numId);
+      sendPushToRole("delivery", "📦⬇️ New Delivery", `${prevOrder.name || orderId} — ${prevOrder.address || "-"}`).catch(()=>{});
     }
     res.json({ success: true, amount: updateData.amount || prevOrder.amount || 0, status: updateData.status || prevOrder.status });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2528,10 +2583,17 @@ app.post("/pickups/:orderId/delivery-photo", async (req, res) => {
     }
     await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
 
-    const caption = mode === "left_outside"
+    const custCaption = mode === "left_outside"
       ? `✅ Delivered!\n\nYour clothes were left securely as arranged since nobody was available. Order: ${orderId}`
       : `✅ Payment received — thank you!\n\nOrder: ${orderId}`;
-    if (b.phone) await sendImageToCustomer(b.phone, mediaId, caption, numId);
+    if (b.phone) await sendImageToCustomer(b.phone, mediaId, custCaption, numId);
+
+    // Also send a copy to the owner — this is the business's own proof/record, and there's
+    // otherwise no way to see it again once it's only in the customer's WhatsApp chat.
+    const adminCaption = mode === "left_outside"
+      ? `📸 Delivery proof - Order ${orderId}\nLeft outside — customer not home.\nName: ${b.name}\nAddress: ${b.address || "-"}`
+      : `📸 UPI payment proof - Order ${orderId}\nName: ${b.name}\nAmount: Rs ${b.amount || 0}`;
+    await sendImageToCustomer(OWNER_NUMBER, mediaId, adminCaption, "1136879376186203");
 
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2631,6 +2693,20 @@ app.post("/bookings/:orderId/clear-reprint", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Admin resolves a staff-reported failure (called the customer, sorted it out) and clears
+// the flag so it becomes actionable for staff again.
+app.post("/bookings/:orderId/clear-flag", async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+    const newNotes = (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim();
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/staff", (req, res) => res.send(`<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>body{font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px;padding:2rem;text-align:center;}
 a{display:block;width:100%;max-width:280px;padding:20px;border-radius:14px;font-size:20px;font-weight:800;text-decoration:none;color:#fff;}
@@ -2642,6 +2718,7 @@ a{display:block;width:100%;max-width:280px;padding:20px;border-radius:14px;font-
 </body></html>`));
 app.get("/counter", (req, res) => res.sendFile(path.join(__dirname, "counter.html")));
 app.get("/delivery", (req, res) => res.sendFile(path.join(__dirname, "delivery.html")));
+app.get("/sw.js", (req, res) => res.sendFile(path.join(__dirname, "sw.js")));
 
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
 app.get("/ping", (req,res)=>res.json({
