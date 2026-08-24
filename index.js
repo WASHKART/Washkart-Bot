@@ -2213,7 +2213,7 @@ app.post("/bookings", async (req,res) => {
 
 app.patch("/bookings/:orderId", async (req,res) => {
   try {
-    const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder,items} = req.body;
+    const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder,items,address} = req.body;
     const orderId = req.params.orderId;
 
     // Fetch current order BEFORE update to detect status change
@@ -2230,6 +2230,14 @@ app.patch("/bookings/:orderId", async (req,res) => {
     if (payment_status !==undefined) updateData.payment_status = payment_status;
     if (payment_method !==undefined) updateData.payment_method = payment_method;
     if (payment_status==="paid")     updateData.payment_date   = new Date().toISOString();
+    if (address        !==undefined && address.trim()) {
+      updateData.address = address.trim();
+      // Filling in the address resolves exactly what the "needs address" flag was waiting
+      // on — clear it automatically rather than making admin do a separate manual step.
+      const existingNotes = notes !== undefined ? notes : (prevOrder?.notes || "");
+      updateData.notes = existingNotes.split("\n").filter(line => !line.startsWith("[STAFF FLAG:INFO]")).join("\n").trim();
+      if (prevOrder?.phone) await saveCustomer(prevOrder.phone, prevOrder.name, address.trim(), prevOrder.branch).catch(()=>{});
+    }
     // Line items — when provided, they become the source of truth for the amount
     if (Array.isArray(items)) {
       updateData.items = items;
