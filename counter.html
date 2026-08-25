@@ -151,12 +151,28 @@ const ITEM_ICONS = {
   sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
   curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
 };
+// Everyday basics that cost the same regardless of exact type — combined into one
+// "Clothes" entry so staff isn't tapping through Shirt/Pant/Trouser/Jeans/T-shirt/Top
+// separately. Distinctive/ethnic/formal garments (kurta, saree, blazer, etc.) stay
+// individually listed since their prices genuinely differ.
+const BASIC_CLOTHES = ['shirt','pant','trouser','jeans','tshirt','top'];
 const ITEM_CATALOG = {};
 Object.entries(RAW_ITEM_PRICES).forEach(([item, prices]) => {
+  if (BASIC_CLOTHES.includes(item)) return; // handled as one combined entry below
   Object.entries(prices).forEach(([svc, price]) => {
     if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
     ITEM_CATALOG[svc].push({ name: item.charAt(0).toUpperCase()+item.slice(1), price, icon: ITEM_ICONS[item] || '🧺' });
   });
+});
+// One "Clothes" entry per service, using the shared basics price for that service
+const basicSvcSet = new Set();
+BASIC_CLOTHES.forEach(item => Object.keys(RAW_ITEM_PRICES[item] || {}).forEach(svc => basicSvcSet.add(svc)));
+basicSvcSet.forEach(svc => {
+  const price = RAW_ITEM_PRICES['shirt']?.[svc];
+  if (price !== undefined) {
+    if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+    ITEM_CATALOG[svc].unshift({ name: 'Clothes', price, icon: '👕' });
+  }
 });
 const SVC_LIST = [
   {key:'dryclean', icon:'👔', label:'Dry Clean'}, {key:'iron', icon:'🔥', label:'Iron'},
