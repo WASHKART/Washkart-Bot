@@ -790,6 +790,14 @@ tr.overdue td{background:#fef2f2;}
   </div>
 </div>
 
+<!-- ORDER PHOTOS MODAL -->
+<div class="modal-overlay" id="modal-photos">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header"><div class="modal-title">📷 Order Photos — <span id="photos-order-id"></span></div><button class="modal-close" onclick="closeModal('modal-photos')">✕</button></div>
+    <div class="modal-body" id="photos-modal-body" style="display:flex;flex-direction:column;gap:1rem;max-height:70vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <!-- CUSTOMER PROFILE MODAL -->
 <div class="modal-overlay" id="modal-profile">
   <div class="modal" style="max-width:700px">
@@ -1007,6 +1015,7 @@ async function loadData() {
       society:b.society||'',
       items:Array.isArray(b.items)?b.items:[],
       needs_delivery: b.needs_delivery !== false,
+      photos: Array.isArray(b.photos) ? b.photos : [],
     }; });
     allCustomers = cRes ? await cRes.json().catch(function(){return[];}) : [];
     allRatings   = rRes ? await rRes.json().catch(function(){return[];}) : [];
@@ -1193,6 +1202,20 @@ function clearStaffFlag(id) {
     }).catch(()=>toast('Network error','error'));
 }
 
+const PHOTO_KIND_LABELS = { left_outside:'📦 Left Outside', upi_proof:'📱 UPI Payment', issue:'⚠️ Issue Report', taken:'🧺 Taken by Customer' };
+function viewOrderPhotos(id) {
+  const b = allBookings.find(x=>x.id===id);
+  if (!b || !b.photos || !b.photos.length) { toast('No photos for this order','error'); return; }
+  document.getElementById('photos-order-id').textContent = id;
+  document.getElementById('photos-modal-body').innerHTML = b.photos.map(p => `
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">${PHOTO_KIND_LABELS[p.kind]||p.kind} — ${p.caption||''} <span style="float:right">${new Date(p.at).toLocaleString('en-IN')}</span></div>
+      <img src="${p.url}" style="width:100%;border-radius:8px;display:block" onclick="window.open('${p.url}','_blank')">
+    </div>
+  `).join('');
+  openModal('modal-photos');
+}
+
 function openOrderDetail(id) {
   const b = allBookings.find(x=>x.id===id);
   if(!b) return;
@@ -1225,7 +1248,7 @@ function renderOrders() {
     const needsAddress = b.source==='walkin' && (!b.address || b.address==='Walk-in (In-store)' || b.address==='Walk-in (address needed)');
     const addrValue = needsAddress ? '' : (b.address||'');
     return `<tr class="${over?'overdue':''}">
-      <td><div style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</div>${sourceBadge(b.source)}${over?'<div class="tag overdue-tag" style="margin-top:2px">OVERDUE</div>':''}</td>
+      <td><div style="font-family:monospace;font-size:12px;color:var(--green)">${b.id}</div>${sourceBadge(b.source)}${over?'<div class="tag overdue-tag" style="margin-top:2px">OVERDUE</div>':''}${b.photos&&b.photos.length?`<div style="margin-top:2px;cursor:pointer;font-size:11px;color:#2563eb" onclick="event.stopPropagation();viewOrderPhotos('${b.id}')">📷 ${b.photos.length} photo${b.photos.length>1?'s':''}</div>`:''}</td>
       <td><div style="font-weight:500">${b.name}</div><div style="font-size:11px;color:var(--muted);font-family:monospace">${b.phone}</div></td>
       <td style="max-width:150px">
         <input class="search-input" style="font-size:12px;padding:5px 7px;${needsAddress?'border-color:var(--red);background:var(--red-light)':''}" value="${addrValue.replace(/"/g,'&quot;')}" placeholder="${needsAddress?'⚠️ Address needed':'Walk-in'}" onchange="updateAddress('${b.id}',this.value)">
