@@ -87,6 +87,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .pay-method-btn.upi{color:#2563eb;}
 
 .toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:26px 36px;border-radius:20px;font-size:44px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
+
+/* CAMERA — explicit getUserMedia capture, forces rear camera reliably (unlike <input capture> hint) */
+.camera-overlay{display:none;position:fixed;inset:0;background:#000;z-index:300;flex-direction:column;}
+.camera-overlay video{flex:1;width:100%;object-fit:cover;}
+.camera-controls{display:flex;align-items:center;justify-content:center;gap:40px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom));background:#000;}
+.camera-btn{border:none;border-radius:50%;font-size:28px;cursor:pointer;}
+.camera-shutter{width:76px;height:76px;background:#fff;}
+.camera-cancel{width:52px;height:52px;background:#374151;color:#fff;font-size:20px;}
 .toast.show{opacity:1;}
 </style>
 </head>
@@ -115,7 +123,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <div class="confirm-box" id="confirm-content"></div>
 </div>
 
-<input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhotoSelected(event)">
+<div class="camera-overlay" id="camera-overlay" style="display:none">
+  <video id="camera-video" autoplay playsinline muted></video>
+  <div class="camera-controls">
+    <button class="camera-btn camera-cancel" onclick="cancelCamera()">✕</button>
+    <button class="camera-btn camera-shutter" onclick="captureFrame()">📸</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -481,37 +495,59 @@ function startTakenByCustomer(orderId, needsPhotoConfirm) {
 }
 function startTakenPhoto() {
   closeOverlay();
-  photoPurpose = 'taken';
-  document.getElementById('photo-input').click();
-}
-function handlePhotoSelected(event) {
-  const file = event.target.files[0];
-  event.target.value = '';
-  if (!file) return;
-  compressImage(file, 1000, 0.65).then((dataUrl) => {
-    window._pendingPhotoData = dataUrl;
-    if (photoPurpose === 'issue') {
-      showOverlay(`
-        <img class="photo-preview" src="${dataUrl}">
-        <div class="confirm-actions">
-          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
-          <button class="confirm-btn confirm-yes" onclick="submitIssueReport()">✅ SEND</button>
-        </div>
-      `);
-    } else {
-      showOverlay(`
-        <img class="photo-preview" src="${dataUrl}">
-        <div class="confirm-actions">
-          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
-          <button class="confirm-btn confirm-yes" onclick="finishTaken(true)">✅ SEND</button>
-        </div>
-      `);
-    }
-  }).catch(() => showToast('⚠️'));
+  openCameraWithPreview(() => finishTaken(true));
 }
 
+// ── CAMERA — explicit getUserMedia capture, forces rear camera reliably ──
+let cameraStream = null;
+let pendingPhotoConfirmFn = null;
+async function openCamera(onCapture) {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
+  } catch (e) {
+    try {
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch (e2) { showToast('⚠️'); return; }
+  }
+  const video = document.getElementById('camera-video');
+  video.srcObject = cameraStream;
+  document.getElementById('camera-overlay').style.display = 'flex';
+  window._cameraCaptureCallback = onCapture;
+}
+function cancelCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t => t.stop()); cameraStream = null; }
+  document.getElementById('camera-overlay').style.display = 'none';
+}
+function captureFrame() {
+  const video = document.getElementById('camera-video');
+  let w = video.videoWidth, h = video.videoHeight;
+  const maxDim = 1000;
+  if (w > h && w > maxDim) { h = h * maxDim / w; w = maxDim; }
+  else if (h > maxDim) { w = w * maxDim / h; h = maxDim; }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+  cancelCamera();
+  if (window._cameraCaptureCallback) window._cameraCaptureCallback(dataUrl);
+}
+function openCameraWithPreview(onConfirm) {
+  pendingPhotoConfirmFn = onConfirm;
+  openCamera((dataUrl) => {
+    window._pendingPhotoData = dataUrl;
+    showOverlay(`
+      <img class="photo-preview" src="${dataUrl}">
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-cancel" onclick="retakePhoto()">↩️ RETAKE</button>
+        <button class="confirm-btn confirm-yes" onclick="confirmPhoto()">✅ SEND</button>
+      </div>
+    `);
+  });
+}
+function retakePhoto() { openCameraWithPreview(pendingPhotoConfirmFn); }
+function confirmPhoto() { if (pendingPhotoConfirmFn) pendingPhotoConfirmFn(); }
+
 // ── DAMAGE / ISSUE REPORTING ──────────────────────────────────────
-let photoPurpose = 'taken';
 let issueOrderId = null;
 let issueReason = null;
 function askReportIssue(orderId) {
@@ -529,9 +565,8 @@ function askReportIssue(orderId) {
 }
 function pickIssueReason(reason) {
   issueReason = reason;
-  photoPurpose = 'issue';
   closeOverlay();
-  document.getElementById('photo-input').click();
+  openCameraWithPreview(() => submitIssueReport());
 }
 async function submitIssueReport() {
   const orderId = issueOrderId, reason = issueReason, photoBase64 = window._pendingPhotoData;
@@ -546,28 +581,6 @@ async function submitIssueReport() {
     else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
   issueOrderId = null; issueReason = null; window._pendingPhotoData = null;
-}
-
-function compressImage(file, maxDimension, quality) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > maxDimension) { height *= maxDimension / width; width = maxDimension; }
-        else if (height > maxDimension) { width *= maxDimension / height; height = maxDimension; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = e.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 async function finishTaken(withPhoto) {
   const orderId = takenOrderId;
