@@ -216,6 +216,7 @@ function render() {
       if (activeTab === 'delivery') {
         actionsHtml += `<button class="left-outside-link" onclick="startLeftOutsidePhoto('${p.order_id}')">📸 Left outside — nobody home</button>`;
       }
+      actionsHtml += `<button class="left-outside-link" style="background:#fffbeb;border-color:#fde68a;color:#92400e" onclick="askReportIssue('${p.order_id}')">⚠️ Report an issue</button>`;
     }
     return `<div class="card">
       <div class="card-head">
@@ -354,14 +355,24 @@ function handlePhotoSelected(event) {
   event.target.value = ''; // reset so selecting the same file again still fires onchange
   if (!file || !photoOrderId) return;
   compressImage(file, 1000, 0.65).then((dataUrl) => {
-    showOverlay(`
-      <img class="photo-preview" src="${dataUrl}">
-      <div class="confirm-actions">
-        <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
-        <button class="confirm-btn confirm-yes" onclick="submitPhoto()">✅ SEND</button>
-      </div>
-    `);
     window._pendingPhotoData = dataUrl;
+    if (photoMode === 'issue') {
+      showOverlay(`
+        <img class="photo-preview" src="${dataUrl}">
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
+          <button class="confirm-btn confirm-yes" onclick="submitIssueReport()">✅ SEND</button>
+        </div>
+      `);
+    } else {
+      showOverlay(`
+        <img class="photo-preview" src="${dataUrl}">
+        <div class="confirm-actions">
+          <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ RETAKE</button>
+          <button class="confirm-btn confirm-yes" onclick="submitPhoto()">✅ SEND</button>
+        </div>
+      `);
+    }
   }).catch(() => showToast('⚠️'));
 }
 // Resizes and re-compresses a photo client-side before upload — a raw phone camera photo
@@ -403,6 +414,42 @@ async function submitPhoto() {
     else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
   photoOrderId = null; photoMode = null; window._pendingPhotoData = null;
+}
+
+// ── DAMAGE / ISSUE REPORTING ──────────────────────────────────────
+let issueReason = null;
+function askReportIssue(orderId) {
+  photoOrderId = orderId;
+  showOverlay(`
+    <div class="confirm-icon">⚠️</div>
+    <div class="pay-method-grid">
+      <button class="pay-method-btn" onclick="pickIssueReason('damaged')">🩹 Damaged</button>
+      <button class="pay-method-btn" onclick="pickIssueReason('stain')">🎨 Stain</button>
+      <button class="pay-method-btn" onclick="pickIssueReason('broken')">🔘 Button/Zip</button>
+      <button class="pay-method-btn" onclick="pickIssueReason('other')">❓ Other</button>
+    </div>
+    <button class="confirm-back-link" onclick="closeOverlay()">↩️ CANCEL</button>
+  `);
+}
+function pickIssueReason(reason) {
+  issueReason = reason;
+  photoMode = 'issue';
+  closeOverlay();
+  document.getElementById('photo-input').click();
+}
+async function submitIssueReport() {
+  const orderId = photoOrderId, reason = issueReason, photoBase64 = window._pendingPhotoData;
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/report-issue?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason, photoBase64 })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('⚠️✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+  photoOrderId = null; photoMode = null; issueReason = null; window._pendingPhotoData = null;
 }
 
 // Init
