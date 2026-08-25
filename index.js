@@ -2697,6 +2697,41 @@ app.post("/pickups/:orderId/uncollected", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Staff-initiated damage/quality issue report — documented with a photo for the record,
+// in case of a later dispute. Informational only, does NOT block further actions on
+// the order (unlike a genuine pickup/delivery failure).
+app.post("/pickups/:orderId/report-issue", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const orderId = req.params.orderId;
+    const { reason, photoBase64 } = req.body; // reason: 'damaged' | 'stain' | 'broken' | 'other'
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+
+    const reasonLabels = { damaged: "Damaged", stain: "Stain not removed", broken: "Button/Zip broken", other: "Other issue" };
+    const label = reasonLabels[reason] || "Issue reported";
+    const noteLine = `[STAFF FLAG:ISSUE] ${label} — reported by staff (${new Date().toLocaleString("en-IN")})`;
+    const newNotes = b.notes ? `${b.notes}\n${noteLine}` : noteLine;
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+
+    const brSlug2 = b.branch || "bavdhan";
+    let numId = getBranchNumId(brSlug2);
+    if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+    const alertMsg2 = `⚠️ ISSUE REPORTED\n\nOrder: ${orderId}\nName: ${b.name}\nIssue: ${label}`;
+
+    if (photoBase64) {
+      const buffer = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
+      const mediaId = await uploadMediaImage(buffer, "issue.jpg", numId);
+      await sendImageToCustomer(OWNER_NUMBER, mediaId, alertMsg2, "1136879376186203");
+    } else {
+      await sendMessage(OWNER_NUMBER, alertMsg2, "1136879376186203");
+    }
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Counter's version of completing an order — "Taken by Customer" instead of "Delivered".
 // Photo + payment confirmation only required above Rs 100 (checked server-side; the
 // actual amount is never shown to staff, only whether the step is needed).
