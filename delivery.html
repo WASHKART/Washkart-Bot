@@ -188,8 +188,8 @@ async function loadData() {
 }
 
 function render() {
-  const pickupList = allPickups.filter(p => p.status === 'pending');
-  const deliveryList = allPickups.filter(p => p.status === 'outfordelivery');
+  const pickupList = allPickups.filter(p => p.status === 'pending' && p.needs_delivery !== false);
+  const deliveryList = allPickups.filter(p => p.status === 'outfordelivery' && p.needs_delivery !== false);
 
   const pc = document.getElementById('count-pickup');
   const dc = document.getElementById('count-delivery');
