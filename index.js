@@ -60,7 +60,15 @@ function detectBranchFromAddress(address) {
 const TOKEN        = process.env.WHATSAPP_TOKEN;
 const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of branch
 const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // legacy combined /staff page — kept working, but not recommended going forward
-const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // set COUNTER_PASSWORD in Render env vars
+const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // legacy single counter password — kept working
+const COUNTER_BAVDHAN_PASSWORD = process.env.COUNTER_BAVDHAN_PASSWORD || "counterbav2025";
+const COUNTER_BANER_PASSWORD = process.env.COUNTER_BANER_PASSWORD || "counterban2025";
+// Which branch a given counter password creates walk-ins under
+function branchForCounterKey(key) {
+  if (key === COUNTER_BAVDHAN_PASSWORD) return "bavdhan";
+  if (key === COUNTER_BANER_PASSWORD) return "baner";
+  return "bavdhan"; // legacy COUNTER_PASSWORD / STAFF_PASSWORD default
+}
 const DELIVERY_PASSWORD = process.env.DELIVERY_PASSWORD || "delivery2025"; // set DELIVERY_PASSWORD in Render env vars
 
 // PUSH NOTIFICATIONS — real push, works even with the browser fully closed
@@ -2130,6 +2138,26 @@ async function sendDailyDigest() {
 }
 setInterval(sendDailyDigest, 60*60*1000);
 
+// Nudges admin about walk-ins sitting in Processing for a full day with no items
+// tallied yet — the "hurry mode" quick-service path can otherwise get forgotten.
+async function checkStaleTallies() {
+  const now = new Date();
+  if (now.getHours() !== 12) return; // once a day, midday
+  try {
+    const rows = await dbSelect("bookings", "status=in.(picked,inprogress)&order=created_at.asc");
+    const stale = rows.filter(b => {
+      if (Array.isArray(b.items) && b.items.length) return false; // already tallied
+      const created = new Date(b.created_at);
+      return (now - created) > 24 * 60 * 60 * 1000;
+    });
+    if (!stale.length) return;
+    const msg = `⏳ ${stale.length} order(s) still need item tally (sitting 24h+):\n\n` +
+      stale.slice(0, 10).map(b => `${b.order_id} — ${b.name}`).join("\n");
+    await sendMessage(OWNER_NUMBER, msg, "1136879376186203");
+  } catch (e) { console.error("Stale tally check error:", e.message); }
+}
+setInterval(checkStaleTallies, 60*60*1000);
+
 // WEBHOOK
 app.get("/webhook", (req, res) => {
   if (req.query["hub.mode"]==="subscribe"&&req.query["hub.verify_token"]===VERIFY_TOKEN)
@@ -2398,7 +2426,8 @@ app.post("/takeover",      async(req,res)=>{ try{ const {phone,active}=req.body;
 // each have their own, plus the legacy combined one still works during transition.
 function checkStaffAuth(req, res) {
   const key = req.headers["x-staff-key"] || req.query.key;
-  if (key !== STAFF_PASSWORD && key !== COUNTER_PASSWORD && key !== DELIVERY_PASSWORD) {
+  const valid = [STAFF_PASSWORD, COUNTER_PASSWORD, DELIVERY_PASSWORD, COUNTER_BAVDHAN_PASSWORD, COUNTER_BANER_PASSWORD];
+  if (!valid.includes(key)) {
     res.status(401).json({error:"Unauthorized"}); return false;
   }
   return true;
@@ -2437,7 +2466,13 @@ function parseHumanDate(str) {
 app.get("/pickups", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { branch } = req.query;
+    const key = req.headers["x-staff-key"] || req.query.key;
+    let { branch } = req.query;
+    // Branch-specific counter passwords automatically scope to their own branch's queue —
+    // no need for the frontend to pass a branch param explicitly.
+    if (key === COUNTER_BAVDHAN_PASSWORD) branch = "bavdhan";
+    if (key === COUNTER_BANER_PASSWORD) branch = "baner";
+
     const filters = ["status=neq.delivered", "status=neq.cancelled", "order=created_at.desc"];
     if (branch && branch !== "all") filters.push(`branch=eq.${branch}`);
     let rows = await dbSelect("bookings", filters.join("&"));
@@ -2449,15 +2484,19 @@ app.get("/pickups", async (req, res) => {
       return !d || d <= today;
     });
     const safe = rows.map(b => ({
-      order_id: b.order_id, address: b.address, date: b.date, slot: b.slot,
+      order_id: b.order_id, name: b.name, address: b.address, date: b.date, slot: b.slot,
       status: b.status, service_type: b.service_type,
       notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim(),
       branch: b.branch, society: b.society,
       amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
       items: Array.isArray(b.items) ? b.items : [],
-      // Only a genuine pickup/delivery FAILURE blocks staff actions. A missing-address
-      // note is informational only — staff can still tally/process the physical items.
-      flagged: (b.notes || "").includes("[STAFF FLAG:FAIL]"),
+      needs_delivery: b.needs_delivery !== false, // defaults true unless explicitly set false
+      // Never expose the actual amount's purpose to staff — just whether the photo+payment
+      // step is required. Threshold is Rs 100.
+      needs_photo_confirm: (b.amount || 0) > 100,
+      // Only a genuine pickup/delivery FAILURE or an "uncollected" flag blocks staff actions.
+      // A missing-address note is informational only.
+      flagged: (b.notes || "").includes("[STAFF FLAG:FAIL]") || (b.notes || "").includes("[STAFF FLAG:UNCOLLECTED]"),
     }));
     res.json(safe);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2633,6 +2672,68 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Counter's version of a "failure" — not a pickup/delivery problem, but a customer who
+// hasn't come back to collect their finished order in a long time. Separate wording,
+// same underlying mechanism (flags + alerts admin, doesn't change status).
+app.post("/pickups/:orderId/uncollected", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const orderId = req.params.orderId;
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+
+    const flagNote = `[STAFF FLAG:UNCOLLECTED] Customer hasn't collected — flagged by staff (${new Date().toLocaleString("en-IN")})`;
+    const newNotes = b.notes ? `${b.notes}\n${flagNote}` : flagNote;
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+
+    const alertMsg = `🕐 UNCOLLECTED ORDER\n\nOrder: ${orderId}\nName: ${b.name}\nPhone: +${b.phone}\n\nThis order has been ready a while and the customer hasn't picked it up. Consider following up.`;
+    await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203");
+    const brSlug = b.branch || "bavdhan";
+    const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
+    if (br.admin !== OWNER_NUMBER) await sendMessage(br.admin, alertMsg, "1136879376186203");
+
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Counter's version of completing an order — "Taken by Customer" instead of "Delivered".
+// Photo + payment confirmation only required above Rs 100 (checked server-side; the
+// actual amount is never shown to staff, only whether the step is needed).
+app.post("/pickups/:orderId/taken-by-customer", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const orderId = req.params.orderId;
+    const { photoBase64, paidMethod } = req.body; // paidMethod: 'cash' | 'upi' | undefined
+    const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
+    const b = rows[0];
+    if (!b) return res.status(404).json({ error: "Order not found" });
+
+    const updateData = { status: "delivered" };
+    if (paidMethod && b.amount > 0) {
+      updateData.payment_status = "paid";
+      updateData.payment_method = paidMethod;
+      updateData.payment_date = new Date().toISOString();
+    }
+
+    let mediaId = null;
+    if (photoBase64) {
+      const brSlug = b.branch || "bavdhan";
+      let numId = getBranchNumId(brSlug);
+      if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+      const buffer = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
+      mediaId = await uploadMediaImage(buffer, "pickup.jpg", numId);
+      await sendImageToCustomer(OWNER_NUMBER, mediaId,
+        `📸 Counter pickup proof - Order ${orderId}\nName: ${b.name}${paidMethod ? `\nPaid via: ${paidMethod}` : ""}`,
+        "1136879376186203"
+      );
+    }
+
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Staff-created walk-in order. Staff only ever enters a phone number + taps a service
 // icon — if the phone matches a saved customer, their name/address auto-fill from file.
 // If it's a brand new number, the order still gets created (address collection is
@@ -2640,43 +2741,76 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
 app.post("/pickups/walkin", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { phone, name, service_type, branch } = req.body;
-    if (!phone || !name || !service_type) return res.status(400).json({ error: "Missing name, phone, or service" });
+    const key = req.headers["x-staff-key"] || req.query.key;
+    const { phone, name, items, services, needs_delivery, branch } = req.body;
+    if (!phone || !name) return res.status(400).json({ error: "Missing name or phone" });
+    // items = [{name, qty, service}] for a full itemized intake
+    // services = ['iron'] etc for the quick "hurry mode" path (no item detail yet)
+    if ((!Array.isArray(items) || !items.length) && (!Array.isArray(services) || !services.length)) {
+      return res.status(400).json({ error: "Must provide either items or a service" });
+    }
+
     const normPhone = normalizePhone(phone);
-    const orderId = genOrderId();
     const existing = await getCustomer(normPhone);
-    // Name always comes from staff (or is topped up from the saved record if staff left it blank) —
-    // this is what prints on the tag, so it needs to be a real name, not a placeholder.
     const finalName = name.trim() || existing?.name || "Walk-in Customer";
     const address = existing?.address || "";
-    const branchSlug = existing?.branch || branch || "bavdhan";
+    const branchSlug = branchForCounterKey(key) || existing?.branch || branch || "bavdhan";
     const br = getBranchBySlug(branchSlug) || DEFAULT_BRANCH;
     const numId = getBranchNumId(branchSlug);
+    const willDeliver = needs_delivery === true; // walk-ins default to counter-collect unless explicitly toggled on
 
-    await dbInsert("bookings", {
-      order_id: orderId, name: finalName, phone: normPhone,
-      address: address || "Walk-in (address needed)",
-      date: getToday(), slot: "Walk-in",
-      status: "picked", reminder_sent: false, source: "walkin",
-      branch: branchSlug,
-      // Only the address is genuinely missing when there's no saved customer — name always comes from staff now.
-      notes: address ? "" : "[STAFF FLAG:INFO] New customer — needs delivery address confirmed",
-      society: existing?.society || "",
-      amount: 0, payment_status: "unpaid", payment_method: "",
-      service_type,
-    });
-
-    await notifyAdmin(
-      { orderId, name: finalName, phone: normPhone, address: address || "Walk-in", date: getToday(), slot: "Walk-in", source: "walkin (staff)", society: existing?.society },
-      br, numId
-    );
-    if (!address) {
-      await sendMessage(OWNER_NUMBER,
-        `🆕 New walk-in — needs address\n\nOrder: ${orderId}\nName: ${finalName}\nPhone: +${normPhone}\nService: ${service_type}\n\nNo saved delivery address on file — please follow up before this ships out.`,
-        "1136879376186203"
-      );
+    // Group itemized entries by service — mixed services become separate orders,
+    // each printing its own tag, since they have different turnaround times anyway.
+    const groups = {}; // service -> { items: [...], amount }
+    if (Array.isArray(items) && items.length) {
+      for (const it of items) {
+        const svc = it.service;
+        if (!svc || !it.name || !it.qty) continue;
+        if (!groups[svc]) groups[svc] = [];
+        const priceData = ITEM_PRICES[String(it.name).toLowerCase()];
+        const price = priceData ? (priceData[svc] || 0) : 0;
+        groups[svc].push({ name: it.name, qty: it.qty, price });
+      }
+    } else {
+      // Hurry mode — one empty-items order per selected service, to be tallied later
+      for (const svc of services) groups[svc] = [];
     }
-    res.json({ success: true, order_id: orderId, foundExisting: !!existing, name: finalName });
+
+    const createdOrders = [];
+    for (const [svc, svcItems] of Object.entries(groups)) {
+      const orderId = genOrderId();
+      const amount = svcItems.reduce((s, it) => s + (Number(it.qty)||0) * (Number(it.price)||0), 0);
+      const flagParts = [];
+      if (willDeliver && !address) flagParts.push("[STAFF FLAG:INFO] New customer — needs delivery address confirmed");
+
+      await dbInsert("bookings", {
+        order_id: orderId, name: finalName, phone: normPhone,
+        address: willDeliver ? (address || "Walk-in (address needed)") : "",
+        date: getToday(), slot: "Walk-in",
+        status: "picked", reminder_sent: false, source: "walkin",
+        branch: branchSlug,
+        notes: flagParts.join("\n"),
+        society: existing?.society || "",
+        amount, payment_status: "unpaid", payment_method: "",
+        service_type: svc,
+        items: svcItems,
+        needs_delivery: willDeliver,
+      });
+      createdOrders.push(orderId);
+
+      await notifyAdmin(
+        { orderId, name: finalName, phone: normPhone, address: willDeliver ? (address || "Walk-in") : "Counter pickup", date: getToday(), slot: "Walk-in", source: "walkin (staff)", society: existing?.society },
+        br, numId
+      );
+      if (willDeliver && !address) {
+        await sendMessage(OWNER_NUMBER,
+          `🆕 New walk-in — needs address\n\nOrder: ${orderId}\nName: ${finalName}\nPhone: +${normPhone}\nService: ${svc}\n\nNo saved delivery address on file — please follow up before this ships out.`,
+          "1136879376186203"
+        );
+      }
+    }
+
+    res.json({ success: true, order_ids: createdOrders, foundExisting: !!existing, name: finalName });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
