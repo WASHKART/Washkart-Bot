@@ -342,6 +342,7 @@ tr.overdue td{background:#fef2f2;}
     <div class="sidebar-section">
       <div class="sidebar-label">Reports</div>
       <div class="nav-item" onclick="showPage('revenue',this)" data-page="revenue"><span class="icon">💰</span><span>Revenue</span></div>
+      <div class="nav-item" onclick="showPage('cashrecon',this)" data-page="cashrecon"><span class="icon">🧾</span><span>Cash Reconciliation</span></div>
       <div class="nav-item" onclick="showPage('analytics',this)" data-page="analytics"><span class="icon">📈</span><span>Analytics</span></div>
       <div class="nav-item" onclick="showPage('ratings',this)" data-page="ratings"><span class="icon">⭐</span><span>Ratings</span></div>
     </div>
@@ -631,6 +632,28 @@ tr.overdue td{background:#fef2f2;}
         <div class="card"><div class="card-header"><div class="card-title">By Source</div></div><div class="card-body" id="rev-source"></div></div>
       </div>
 
+      <!-- ═══ CASH RECONCILIATION ═══ -->
+      <div id="page-cashrecon" class="page-section" style="display:none">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem">
+          <label style="font-size:13px;font-weight:600">Date:</label>
+          <input type="date" id="cashrecon-date" class="form-input" style="width:180px" onchange="renderCashRecon()">
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('cashrecon-date').value=new Date().toISOString().split('T')[0];renderCashRecon()">Today</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Total Cash Collected</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="cash-total">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Counter Pickups</div><div style="font-size:22px;font-weight:700" id="cash-counter">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Deliveries</div><div style="font-size:22px;font-weight:700" id="cash-delivery">Rs 0</div></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1rem">This is what should be physically in hand for the selected day — cross-check against your actual cash count. UPI payments are tracked separately and aren't included here since they don't involve physical cash.</div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Cash Orders — <span id="cash-date-label"></span></div></div>
+          <div class="card-body" style="padding:0">
+            <table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Branch</th><th>Collected By</th><th>Amount</th></tr></thead>
+            <tbody id="cash-orders-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+
       <!-- ═══ ANALYTICS ═══ -->
       <div id="page-analytics" class="page-section" style="display:none">
         <div class="grid-3" style="margin-bottom:1rem">
@@ -781,7 +804,7 @@ tr.overdue td{background:#fef2f2;}
 // Page list must be defined first — used by onclick handlers in HTML
 const ALL_PAGES = ['home','kanban','orders','payments','calendar','leads','customers','societies','chats','revenue','analytics','ratings'];
 
-const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',analytics:'Analytics',ratings:'Ratings'};
+const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',cashrecon:'Cash Reconciliation',analytics:'Analytics',ratings:'Ratings'};
 function showPage(name, el) {
   ALL_PAGES.forEach(p => {
     const e = document.getElementById('page-'+p);
@@ -800,6 +823,7 @@ function showPage(name, el) {
     if(chatRefreshInterval) { clearInterval(chatRefreshInterval); chatRefreshInterval=null; }
   }
   if(name==='calendar') renderCalendar();
+  if(name==='cashrecon') renderCashRecon();
   if(name==='analytics') renderAnalytics();
   if(name==='societies') renderSocieties();
   closeSidebar(); // no-op on desktop, closes the drawer on mobile
@@ -982,6 +1006,7 @@ async function loadData() {
       payment_method:b.payment_method||'', payment_date:b.payment_date||'',
       society:b.society||'',
       items:Array.isArray(b.items)?b.items:[],
+      needs_delivery: b.needs_delivery !== false,
     }; });
     allCustomers = cRes ? await cRes.json().catch(function(){return[];}) : [];
     allRatings   = rRes ? await rRes.json().catch(function(){return[];}) : [];
@@ -1897,6 +1922,40 @@ function barChart(items,count=false) {
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────
+function renderCashRecon() {
+  const dateInput = document.getElementById('cashrecon-date');
+  if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
+  const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
+  document.getElementById('cash-date-label').textContent = new Date(selectedDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
+  const cashOrders = allBookings.filter(b => {
+    if (b.payment_method !== 'cash' || b.payment_status !== 'paid' || !b.payment_date) return false;
+    const paidDate = new Date(b.payment_date).toISOString().split('T')[0];
+    return paidDate === selectedDate;
+  });
+
+  const total = cashOrders.reduce((s,b)=>s+(b.amount||0),0);
+  const counterTotal = cashOrders.filter(b=>!b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
+  const deliveryTotal = cashOrders.filter(b=>b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
+
+  document.getElementById('cash-total').textContent = `Rs ${total}`;
+  document.getElementById('cash-counter').textContent = `Rs ${counterTotal}`;
+  document.getElementById('cash-delivery').textContent = `Rs ${deliveryTotal}`;
+
+  const tbody = document.getElementById('cash-orders-body');
+  if (!cashOrders.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">No cash payments recorded for this day</td></tr>';
+    return;
+  }
+  tbody.innerHTML = cashOrders.map(b => `<tr>
+    <td style="font-family:monospace;font-size:12px">${b.id}</td>
+    <td>${b.name}</td>
+    <td style="text-transform:capitalize">${b.branch}</td>
+    <td>${b.needs_delivery ? '🚚 Delivery' : '🏪 Counter'}</td>
+    <td style="font-weight:600">Rs ${b.amount}</td>
+  </tr>`).join('');
+}
+
 function renderAnalytics() {
   const enquired=allLeads.length;
   const converted=allLeads.filter(l=>l.stage==='converted').length;
