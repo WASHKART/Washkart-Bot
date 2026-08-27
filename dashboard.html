@@ -351,6 +351,7 @@ tr.overdue td{background:#fef2f2;}
     <div class="sidebar-section">
       <div class="sidebar-label">Settings</div>
       <div class="nav-item" onclick="showPage('branches',this)" data-page="branches"><span class="icon">🏢</span><span>Manage Branches</span></div>
+      <div class="nav-item" onclick="showPage('vendors',this)" data-page="vendors"><span class="icon">🏭</span><span>Vendors</span></div>
     </div>
   </div>
 
@@ -733,6 +734,26 @@ tr.overdue td{background:#fef2f2;}
         <div id="branches-list" style="display:flex;flex-direction:column;gap:1rem"></div>
       </div>
 
+      <!-- ═══ VENDORS ═══ -->
+      <div id="page-vendors" class="page-section" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:1rem">
+          <button class="btn btn-outline" onclick="openNewVendorForm()">+ Add Vendor</button>
+          <button class="btn btn-primary" onclick="openNewShipmentForm()">+ New Shipment</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Currently With Vendors</div><div style="font-size:22px;font-weight:700" id="vendor-outstanding-count">0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Overdue</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="vendor-overdue-count">0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Unpaid Vendor Bills</div><div style="font-size:22px;font-weight:700" id="vendor-unpaid-total">Rs 0</div></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Shipments</div></div>
+          <div class="card-body" style="padding:0">
+            <table class="data-table"><thead><tr><th>Vendor</th><th>Description</th><th>Qty</th><th>Sent</th><th>Expected Back</th><th>Status</th><th>Bill</th><th></th></tr></thead>
+            <tbody id="vendor-shipments-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+
     </div><!-- /content -->
 
   </div><!-- /main -->
@@ -841,6 +862,58 @@ tr.overdue td{background:#fef2f2;}
   </div>
 </div>
 
+<!-- VENDOR MODAL -->
+<div class="modal-overlay" id="modal-vendor">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><div class="modal-title">Add Vendor</div><button class="modal-close" onclick="closeModal('modal-vendor')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Vendor Name *</label><input class="form-input" id="v-name" placeholder="e.g. CleanCarpet Co."></div>
+      <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="v-phone" placeholder="91XXXXXXXXXX"></div>
+      <div class="form-group"><label class="form-label">Specialty</label><input class="form-input" id="v-specialty" placeholder="e.g. Carpet cleaning, leather shoes"></div>
+      <div class="form-group"><label class="form-label">Notes</label><input class="form-input" id="v-notes" placeholder="Optional"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-vendor')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVendor()">Save Vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR SHIPMENT MODAL -->
+<div class="modal-overlay" id="modal-shipment">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header"><div class="modal-title">New Vendor Shipment</div><button class="modal-close" onclick="closeModal('modal-shipment')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Vendor *</label><select class="form-select" id="vs-vendor"></select></div>
+      <div class="form-group"><label class="form-label">Description *</label><input class="form-input" id="vs-description" placeholder="e.g. 3 carpets, 2 leather jackets"></div>
+      <div class="form-group"><label class="form-label">Quantity *</label><input class="form-input" id="vs-qty" type="number" placeholder="e.g. 5"></div>
+      <div class="form-group"><label class="form-label">Related Order ID (optional)</label><input class="form-input" id="vs-order-id" placeholder="FW-1234"></div>
+      <div class="form-group"><label class="form-label">Sent Date</label><input class="form-input" id="vs-sent-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Expected Return Date</label><input class="form-input" id="vs-expected-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Vendor Bill Amount</label><input class="form-input" id="vs-bill" type="number" placeholder="0"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-shipment')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveShipment()">Save Shipment</button>
+    </div>
+  </div>
+</div>
+
+<!-- VENDOR RETURN MODAL -->
+<div class="modal-overlay" id="modal-vendor-return">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header"><div class="modal-title">Mark Returned</div><button class="modal-close" onclick="closeModal('modal-vendor-return')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="vr-shipment-id">
+      <div class="form-group"><label class="form-label">Quantity Returned</label><input class="form-input" id="vr-qty-returned" type="number"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-vendor-return')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmVendorReturn()">Confirm</button>
+    </div>
+  </div>
+</div>
+
 <!-- EXPENSE MODAL -->
 <div class="modal-overlay" id="modal-expense">
   <div class="modal" style="max-width:420px">
@@ -914,7 +987,7 @@ tr.overdue td{background:#fef2f2;}
 // Page list must be defined first — used by onclick handlers in HTML
 const ALL_PAGES = ['home','kanban','orders','payments','calendar','leads','customers','societies','chats','revenue','analytics','ratings'];
 
-const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',cashrecon:'Payment Reconciliation',receivables:'Receivables',expenses:'Expenses',analytics:'Analytics',ratings:'Ratings',branches:'Manage Branches'};
+const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',cashrecon:'Payment Reconciliation',receivables:'Receivables',expenses:'Expenses',analytics:'Analytics',ratings:'Ratings',branches:'Manage Branches',vendors:'Vendors'};
 function showPage(name, el) {
   ALL_PAGES.forEach(p => {
     const e = document.getElementById('page-'+p);
@@ -937,6 +1010,7 @@ function showPage(name, el) {
   if(name==='analytics') renderAnalytics();
   if(name==='branches') renderBranches();
   if(name==='receivables') renderReceivables();
+  if(name==='vendors') renderVendors();
   if(name==='expenses') renderExpenses();
   if(name==='societies') renderSocieties();
   closeSidebar(); // no-op on desktop, closes the drawer on mobile
@@ -1841,6 +1915,46 @@ function printInvoice(orderId) {
   win.document.close();
 }
 
+function openCustomerEdit(phone) {
+  const c = allCustomers.find(x=>x.phone===phone);
+  const branchOptionsHtml = allBranches.length
+    ? allBranches.map(b=>`<option value="${b.slug}" ${c?.branch===b.slug?'selected':''}>${b.name}</option>`).join('')
+    : `<option value="${c?.branch||'bavdhan'}">${c?.branch||'bavdhan'}</option>`;
+  document.getElementById('profile-contact-view').innerHTML = `
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:.5rem">Edit Contact</div>
+    <div class="form-group"><label class="form-label">Name</label><input class="form-input" id="ce-name" value="${(c?.name||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label class="form-label">Address</label><input class="form-input" id="ce-address" value="${(c?.address||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label class="form-label">Society</label><input class="form-input" id="ce-society" value="${(c?.society||'').replace(/"/g,'&quot;')}"></div>
+    <div class="form-group"><label class="form-label">Branch</label>
+      <select class="form-select" id="ce-branch">${branchOptionsHtml}</select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-outline btn-sm" onclick="openCustomerProfile('${phone}')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveCustomerEdit('${phone}')">Save</button>
+    </div>
+  `;
+  if (!allBranches.length) {
+    fetch(`${BOT_URL}/branches`).then(r=>r.json()).then(rows=>{ allBranches = rows; openCustomerEdit(phone); }).catch(()=>{});
+  }
+}
+async function saveCustomerEdit(phone) {
+  const payload = {
+    name: document.getElementById('ce-name').value.trim(),
+    address: document.getElementById('ce-address').value.trim(),
+    society: document.getElementById('ce-society').value.trim(),
+    branch: document.getElementById('ce-branch').value,
+  };
+  try {
+    const res = await fetch(`${BOT_URL}/customers/${phone}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data = await res.json();
+    if (data.success) {
+      toast('Customer updated ✓');
+      const c = allCustomers.find(x=>x.phone===phone);
+      if (c) Object.assign(c, payload);
+      openCustomerProfile(phone);
+    } else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
 function openCustomerProfile(phone) {
   const c=allCustomers.find(x=>x.phone===phone);
   const orders=allBookings.filter(b=>b.phone===phone).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -1854,8 +1968,11 @@ function openCustomerProfile(phone) {
       <div style="text-align:center;padding:.8rem;background:#eff6ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--blue)">Rs ${totalSpent.toLocaleString('en-IN')}</div><div style="font-size:11px;color:var(--muted)">Total Spent</div></div>
       <div style="text-align:center;padding:.8rem;background:#f5f3ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--purple)">${c?.branch||'bavdhan'}</div><div style="font-size:11px;color:var(--muted)">Branch</div></div>
     </div>
-    <div style="margin-bottom:1rem">
-      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600;margin-bottom:.5rem">Contact</div>
+    <div style="margin-bottom:1rem" id="profile-contact-view">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">Contact</div>
+        <button class="btn btn-sm btn-outline" onclick="openCustomerEdit('${phone}')">Edit</button>
+      </div>
       <div style="font-size:13px;margin-bottom:4px">📱 +${phone}</div>
       ${c?.society?`<div style="font-size:13px;margin-bottom:4px">🏘️ ${c.society}</div>`:''}
       <div style="font-size:13px">📍 ${c?.address||'—'}</div>
@@ -2188,6 +2305,129 @@ function renderReceivables() {
 }
 
 let allExpenses = [];
+let allVendors = [];
+let allVendorShipments = [];
+async function renderVendors() {
+  try {
+    const [vRes, sRes] = await Promise.all([fetch(`${BOT_URL}/vendors`), fetch(`${BOT_URL}/vendor-shipments`)]);
+    allVendors = await vRes.json();
+    allVendorShipments = await sRes.json();
+  } catch(e) { toast('Failed to load vendors','error'); return; }
+
+  const vendorName = id => allVendors.find(v=>v.id===id)?.name || 'Unknown';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const outstanding = allVendorShipments.filter(s => s.status === 'sent' || s.status === 'resent');
+  const overdue = outstanding.filter(s => s.expected_return_date && new Date(s.expected_return_date) < today);
+  const unpaidTotal = allVendorShipments.filter(s => !s.bill_paid).reduce((sum,s)=>sum+Number(s.vendor_bill_amount||0),0);
+
+  document.getElementById('vendor-outstanding-count').textContent = outstanding.length;
+  document.getElementById('vendor-overdue-count').textContent = overdue.length;
+  document.getElementById('vendor-unpaid-total').textContent = `Rs ${unpaidTotal}`;
+
+  const STATUS_BADGES = {
+    sent: '<span class="tag" style="background:#eff6ff;color:#1e40af">Sent</span>',
+    returned: '<span class="tag" style="background:#dcfce7;color:#15803d">Returned</span>',
+    resent: '<span class="tag" style="background:#fef3c7;color:#92400e">Resent</span>',
+  };
+  const tbody = document.getElementById('vendor-shipments-body');
+  if (!allVendorShipments.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:1.5rem">No vendor shipments logged yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allVendorShipments.map(s => {
+    const isOverdue = (s.status==='sent'||s.status==='resent') && s.expected_return_date && new Date(s.expected_return_date) < today;
+    return `<tr class="${isOverdue?'overdue':''}">
+      <td>${vendorName(s.vendor_id)}</td>
+      <td>${s.description}${s.order_id?`<div style="font-size:11px;color:var(--muted);font-family:monospace">${s.order_id}</div>`:''}</td>
+      <td>${s.qty_returned||0}/${s.qty_sent}</td>
+      <td>${s.sent_date}</td>
+      <td>${s.expected_return_date||'—'}${isOverdue?' <span class="tag overdue-tag">OVERDUE</span>':''}</td>
+      <td>${STATUS_BADGES[s.status]||s.status}</td>
+      <td>Rs ${s.vendor_bill_amount||0} ${s.bill_paid?'✅':`<button class="btn btn-sm" onclick="markVendorBillPaid(${s.id})">Mark Paid</button>`}</td>
+      <td>
+        ${(s.status==='sent'||s.status==='resent') ? `
+          <button class="btn btn-sm btn-outline" onclick="openVendorReturn(${s.id})">Returned</button>
+          <button class="btn btn-sm" style="color:var(--red)" onclick="markVendorResend(${s.id})">Resend</button>
+        ` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+function openNewVendorForm() {
+  ['v-name','v-phone','v-specialty','v-notes'].forEach(id=>document.getElementById(id).value='');
+  openModal('modal-vendor');
+}
+async function saveVendor() {
+  const name = document.getElementById('v-name').value.trim();
+  if (!name) { toast('Vendor name is required','error'); return; }
+  const payload = {
+    name, phone: document.getElementById('v-phone').value.trim(),
+    specialty: document.getElementById('v-specialty').value.trim(),
+    notes: document.getElementById('v-notes').value.trim(),
+  };
+  try {
+    const res = await fetch(`${BOT_URL}/vendors`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data = await res.json();
+    if (data.success) { toast('Vendor saved ✓'); closeModal('modal-vendor'); renderVendors(); }
+    else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
+function openNewShipmentForm() {
+  if (!allVendors.length) { toast('Add a vendor first','error'); return; }
+  document.getElementById('vs-vendor').innerHTML = allVendors.map(v=>`<option value="${v.id}">${v.name}</option>`).join('');
+  document.getElementById('vs-description').value = '';
+  document.getElementById('vs-qty').value = '';
+  document.getElementById('vs-order-id').value = '';
+  document.getElementById('vs-sent-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('vs-expected-date').value = '';
+  document.getElementById('vs-bill').value = '';
+  openModal('modal-shipment');
+}
+async function saveShipment() {
+  const payload = {
+    vendor_id: parseInt(document.getElementById('vs-vendor').value),
+    description: document.getElementById('vs-description').value.trim(),
+    qty_sent: parseInt(document.getElementById('vs-qty').value),
+    order_id: document.getElementById('vs-order-id').value.trim(),
+    sent_date: document.getElementById('vs-sent-date').value,
+    expected_return_date: document.getElementById('vs-expected-date').value || null,
+    vendor_bill_amount: parseFloat(document.getElementById('vs-bill').value) || 0,
+  };
+  if (!payload.description || !payload.qty_sent) { toast('Description and quantity are required','error'); return; }
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data = await res.json();
+    if (data.success) { toast('Shipment logged ✓'); closeModal('modal-shipment'); renderVendors(); }
+    else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
+function openVendorReturn(id) {
+  document.getElementById('vr-shipment-id').value = id;
+  document.getElementById('vr-qty-returned').value = '';
+  openModal('modal-vendor-return');
+}
+async function confirmVendorReturn() {
+  const id = document.getElementById('vr-shipment-id').value;
+  const qty = parseInt(document.getElementById('vr-qty-returned').value);
+  if (!qty || qty <= 0) { toast('Enter a valid quantity','error'); return; }
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'return', qty_returned:qty})});
+    const data = await res.json();
+    if (data.success) { toast('Marked returned ✓'); closeModal('modal-vendor-return'); renderVendors(); }
+    else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
+function markVendorResend(id) {
+  fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'resend'})})
+    .then(r=>r.json()).then(d=>{ if(d.success){toast('Marked for resend');renderVendors();} else toast('Failed','error'); })
+    .catch(()=>toast('Network error','error'));
+}
+function markVendorBillPaid(id) {
+  fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({bill_paid:true})})
+    .then(r=>r.json()).then(d=>{ if(d.success){toast('Bill marked paid ✓');renderVendors();} else toast('Failed','error'); })
+    .catch(()=>toast('Network error','error'));
+}
+
 async function renderExpenses() {
   try {
     const res = await fetch(`${BOT_URL}/expenses`);
