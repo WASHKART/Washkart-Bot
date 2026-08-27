@@ -34,11 +34,33 @@ app.use((req, res, next) => {
 });
 
 // BRANCH CONFIG
-const BRANCHES = {
-  "1136879376186203": { name: "Bavdhan", slug: "bavdhan", admin: "917775066002", upi: "washkart@idfcbank", qrMediaId: null },
-  "BANER_NUMBER_ID":  { name: "Baner",   slug: "baner",   admin: "918888266265", upi: "337724609223803@cnrb", qrMediaId: null },
-};
-const DEFAULT_BRANCH = BRANCHES["1136879376186203"];
+// Branches now live in the database (see `branches` table) instead of hardcoded here —
+// this is what makes opening a new store a form submission, not a code deployment.
+// BRANCHES is reassigned on each reload; DEFAULT_BRANCH is mutated (never reassigned) so
+// any code holding an early reference to it still sees live updates.
+let BRANCHES = {
+  "1136879376186203": { name: "Bavdhan", slug: "bavdhan", admin: "917775066002", upi: "washkart@idfcbank", qrMediaId: null, counterPassword: "counterbav2025", deliveryPassword: "delivery2025" },
+  "BANER_NUMBER_ID":  { name: "Baner",   slug: "baner",   admin: "918888266265", upi: "337724609223803@cnrb", qrMediaId: null, counterPassword: "counterban2025", deliveryPassword: "delivery2025" },
+}; // hardcoded fallback — used only if the DB hasn't loaded yet or the fetch fails
+let DEFAULT_BRANCH = { ...BRANCHES["1136879376186203"] };
+
+async function loadBranchesFromDB() {
+  try {
+    const rows = await dbSelect("branches", "select=*");
+    if (!rows || !rows.length) return; // keep existing fallback if DB has nothing yet
+    const newBranches = {};
+    rows.forEach(r => {
+      newBranches[r.phone_number_id || r.slug] = {
+        name: r.name, slug: r.slug, admin: r.admin_phone, upi: r.upi_id,
+        qrMediaId: r.qr_media_id || null,
+        counterPassword: r.counter_password, deliveryPassword: r.delivery_password,
+      };
+    });
+    BRANCHES = newBranches;
+    const bavdhanEntry = Object.values(BRANCHES).find(b => b.slug === "bavdhan");
+    if (bavdhanEntry) Object.assign(DEFAULT_BRANCH, bavdhanEntry);
+  } catch (e) { console.error("[branches] load failed, using fallback:", e.message); }
+}
 function getBranch(phoneNumberId) { return BRANCHES[phoneNumberId] || DEFAULT_BRANCH; }
 function getBranchBySlug(slug) { return Object.values(BRANCHES).find(b => b.slug === slug) || null; }
 function getBranchNumId(slug) { return Object.keys(BRANCHES).find(k => BRANCHES[k].slug === slug) || "1136879376186203"; }
@@ -60,16 +82,21 @@ function detectBranchFromAddress(address) {
 const TOKEN        = process.env.WHATSAPP_TOKEN;
 const OWNER_NUMBER = "919552552167"; // Owner gets all alerts regardless of branch
 const STAFF_PASSWORD = process.env.STAFF_PASSWORD || "pickup2025"; // legacy combined /staff page — kept working, but not recommended going forward
-const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // legacy single counter password — kept working
-const COUNTER_BAVDHAN_PASSWORD = process.env.COUNTER_BAVDHAN_PASSWORD || "counterbav2025";
-const COUNTER_BANER_PASSWORD = process.env.COUNTER_BANER_PASSWORD || "counterban2025";
-// Which branch a given counter password creates walk-ins under
-function branchForCounterKey(key) {
-  if (key === COUNTER_BAVDHAN_PASSWORD) return "bavdhan";
-  if (key === COUNTER_BANER_PASSWORD) return "baner";
-  return "bavdhan"; // legacy COUNTER_PASSWORD / STAFF_PASSWORD default
+const COUNTER_PASSWORD = process.env.COUNTER_PASSWORD || "counter2025"; // legacy single counter password — kept working as a fallback
+// Which branch a given counter OR delivery password belongs to — now looked up dynamically
+// against the branches table, instead of hardcoded env vars. Legacy env-var passwords
+// still work too, as a safety net during migration.
+function branchForKey(key) {
+  const match = Object.values(BRANCHES).find(b => b.counterPassword === key || b.deliveryPassword === key);
+  return match ? match.slug : "bavdhan";
 }
-const DELIVERY_PASSWORD = process.env.DELIVERY_PASSWORD || "delivery2025"; // set DELIVERY_PASSWORD in Render env vars
+const DELIVERY_PASSWORD = process.env.DELIVERY_PASSWORD || "delivery2025"; // legacy fallback
+const QUICKBOOK_PASSWORD = process.env.QUICKBOOK_PASSWORD || "quickbook2025"; // admin-only fast pickup booking page
+function checkQuickbookAuth(req, res) {
+  const key = req.headers["x-staff-key"] || req.query.key;
+  if (key !== QUICKBOOK_PASSWORD) { res.status(401).json({ error: "Unauthorized" }); return false; }
+  return true;
+}
 
 // PUSH NOTIFICATIONS — real push, works even with the browser fully closed
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
@@ -113,6 +140,11 @@ async function dbInsert(t, d) { return (await axios.post(`${DB}/${t}`, d, { head
 async function dbSelect(t, f) { return (await axios.get(`${DB}/${t}?${f}`, { headers: SB_HEADERS })).data; }
 async function dbUpdate(t, f, d) { return (await axios.patch(`${DB}/${t}?${f}`, d, { headers: SB_HEADERS })).data; }
 async function dbDelete(t, f) { return (await axios.delete(`${DB}/${t}?${f}`, { headers: { ...SB_HEADERS, Prefer: "" } })).data; }
+
+// Load branches from DB now that dbSelect exists, then refresh every 5 min so changes
+// made via the dashboard's Manage Branches page take effect without a redeploy.
+loadBranchesFromDB();
+setInterval(loadBranchesFromDB, 5 * 60 * 1000);
 
 // Uploads a photo to Supabase Storage (order-photos bucket, must be public) and returns
 // its permanent public URL — this is what the dashboard gallery displays, independent
@@ -389,6 +421,20 @@ async function uploadMediaPDF(buffer, filename, phoneNumberId) {
   const form = new FormData();
   form.append("messaging_product", "whatsapp");
   form.append("file", buffer, { filename, contentType: "application/pdf" });
+  const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/media`, form, {
+    headers: { ...form.getHeaders(), Authorization: `Bearer ${TOKEN}` },
+    maxContentLength: Infinity, maxBodyLength: Infinity,
+  });
+  return res.data.id;
+}
+
+// Generic version — used for the weekly database backup (JSON file), or any other
+// document type beyond PDFs.
+async function uploadMediaDocument(buffer, filename, contentType, phoneNumberId) {
+  const numId = phoneNumberId || "1136879376186203";
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", buffer, { filename, contentType });
   const res = await axios.post(`https://graph.facebook.com/v25.0/${numId}/media`, form, {
     headers: { ...form.getHeaders(), Authorization: `Bearer ${TOKEN}` },
     maxContentLength: Infinity, maxBodyLength: Infinity,
@@ -1196,8 +1242,8 @@ async function handleMessage(phone, rawText, phoneNumberId) {
     if (rawText.trim().length < 3) { await send("Please type your full address."); return; }
     session.booking.address = rawText.trim();
     if (session.booking.name) await saveCustomer(phone, session.booking.name, session.booking.address, session.booking.branch || branch.slug);
-    const detected = detectBranchFromAddress(session.booking.address);
-    if (detected) session.booking.branch = detected;
+    // Branch is asked explicitly in proceedAfterAddress() if not already set — no silent
+    // guessing from address text here.
     await proceedAfterAddress(phone, session, phoneNumberId, await getCustomer(phone));
     return;
   }
@@ -1785,9 +1831,10 @@ async function handleSlotSelected(phone, session, phoneNumberId) {
     if (customer) { if(!bk.name)bk.name=customer.name; if(!bk.address)bk.address=customer.address; if(!bk.branch&&customer.branch)bk.branch=customer.branch; }
   }
   if (!bk.branch) {
-    const detected = detectBranchFromAddress(bk.address);
-    if (detected) { bk.branch=detected; }
-    else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
+    // Always ask explicitly rather than silently guessing from address text — this is
+    // what makes branch tracking reliable now that address-keyword matching alone
+    // isn't trustworthy enough for accurate reporting.
+    session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return;
   }
   if (bk.name && bk.address && bk.date && bk.slot) {
     // Ask service type if not set yet
@@ -2027,9 +2074,10 @@ async function handleBookingIntent(phone, session, rawText, t, branch, phoneNumb
     setDropoffTimer(phone,bk.name,"address step",branch,phoneNumberId); return;
   }
   if (!bk.branch) {
-    const detected = detectBranchFromAddress(bk.address);
-    if (detected) { bk.branch=detected; }
-    else { session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return; }
+    // Always ask explicitly rather than silently guessing from address text — this is
+    // what makes branch tracking reliable now that address-keyword matching alone
+    // isn't trustworthy enough for accurate reporting.
+    session.step="select_branch"; saveSession(phone,session); await askBranch(phone,phoneNumberId); return;
   }
   if (customer && customer.society && !bk.society) bk.society = customer.society;
   if (!bk.date) { await askDate(phone,phoneNumberId); session.step="select_date"; saveSession(phone,session); return; }
@@ -2178,6 +2226,31 @@ async function checkStaleTallies() {
   } catch (e) { console.error("Stale tally check error:", e.message); }
 }
 setInterval(checkStaleTallies, 60*60*1000);
+
+// Weekly database backup — exports the core tables to a JSON file and sends it directly
+// to the owner's WhatsApp as a document. Free-tier Supabase has zero automatic backups,
+// so this is the safety net: forward/save this file somewhere safe each week.
+async function sendWeeklyBackup() {
+  const now = new Date();
+  if (now.getDay() !== 0 || now.getHours() !== 3) return; // Sunday, 3 AM — low traffic time
+  try {
+    const [bookings, customers, ratings, leads] = await Promise.all([
+      dbSelect("bookings", "select=*"),
+      dbSelect("customers", "select=*"),
+      dbSelect("ratings", "select=*").catch(() => []),
+      dbSelect("leads", "select=*").catch(() => []),
+    ]);
+    const backup = { exported_at: now.toISOString(), bookings, customers, ratings, leads };
+    const buffer = Buffer.from(JSON.stringify(backup, null, 2), "utf8");
+    const filename = `washkart-backup-${now.toISOString().split("T")[0]}.json`;
+    const mediaId = await uploadMediaDocument(buffer, filename, "application/json", "1136879376186203");
+    await sendDocument(OWNER_NUMBER, mediaId, filename,
+      `📦 Weekly backup — ${bookings.length} bookings, ${customers.length} customers. Save this somewhere safe (email, Drive, etc).`,
+      "1136879376186203"
+    );
+  } catch (e) { console.error("Weekly backup error:", e.message); }
+}
+setInterval(sendWeeklyBackup, 60*60*1000);
 
 // WEBHOOK
 app.get("/webhook", (req, res) => {
@@ -2447,7 +2520,8 @@ app.post("/takeover",      async(req,res)=>{ try{ const {phone,active}=req.body;
 // each have their own, plus the legacy combined one still works during transition.
 function checkStaffAuth(req, res) {
   const key = req.headers["x-staff-key"] || req.query.key;
-  const valid = [STAFF_PASSWORD, COUNTER_PASSWORD, DELIVERY_PASSWORD, COUNTER_BAVDHAN_PASSWORD, COUNTER_BANER_PASSWORD];
+  const dynamicPasswords = Object.values(BRANCHES).flatMap(b => [b.counterPassword, b.deliveryPassword]).filter(Boolean);
+  const valid = [STAFF_PASSWORD, COUNTER_PASSWORD, DELIVERY_PASSWORD, ...dynamicPasswords];
   if (!valid.includes(key)) {
     res.status(401).json({error:"Unauthorized"}); return false;
   }
@@ -2489,10 +2563,10 @@ app.get("/pickups", async (req, res) => {
   try {
     const key = req.headers["x-staff-key"] || req.query.key;
     let { branch } = req.query;
-    // Branch-specific counter passwords automatically scope to their own branch's queue —
-    // no need for the frontend to pass a branch param explicitly.
-    if (key === COUNTER_BAVDHAN_PASSWORD) branch = "bavdhan";
-    if (key === COUNTER_BANER_PASSWORD) branch = "baner";
+    // Branch-specific counter AND delivery passwords automatically scope to their own
+    // branch's queue — this is what stops Bavdhan's delivery guy from seeing Baner orders.
+    const matchedBranch = Object.values(BRANCHES).find(b => b.counterPassword === key || b.deliveryPassword === key);
+    if (matchedBranch) branch = matchedBranch.slug;
 
     const filters = ["status=neq.delivered", "status=neq.cancelled", "order=created_at.desc"];
     if (branch && branch !== "all") filters.push(`branch=eq.${branch}`);
@@ -2828,7 +2902,7 @@ app.post("/pickups/walkin", async (req, res) => {
     const existing = await getCustomer(normPhone);
     const finalName = name.trim() || existing?.name || "Walk-in Customer";
     const address = existing?.address || "";
-    const branchSlug = branchForCounterKey(key) || existing?.branch || branch || "bavdhan";
+    const branchSlug = branchForKey(key) || existing?.branch || branch || "bavdhan";
     const br = getBranchBySlug(branchSlug) || DEFAULT_BRANCH;
     const numId = getBranchNumId(branchSlug);
     const willDeliver = needs_delivery === true; // walk-ins default to counter-collect unless explicitly toggled on
@@ -2933,6 +3007,110 @@ a{display:block;width:100%;max-width:280px;padding:20px;border-radius:14px;font-
 <a href="/delivery" style="background:#dc2626">🚚 Delivery</a>
 </body></html>`));
 app.get("/counter", (req, res) => res.sendFile(path.join(__dirname, "counter.html")));
+app.get("/quickbook", (req, res) => res.sendFile(path.join(__dirname, "quickbook.html")));
+
+// Branch management — this is what makes opening a new store a form submission instead
+// of a code deployment. Admin-only, unauthenticated to match the rest of the admin API.
+app.get("/branches", async (req, res) => {
+  try {
+    const rows = await dbSelect("branches", "select=*&order=name.asc");
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/branches", async (req, res) => {
+  try {
+    const { slug, name, admin_phone, upi_id, phone_number_id, counter_password, delivery_password } = req.body;
+    if (!slug || !name || !admin_phone) return res.status(400).json({ error: "Missing slug, name, or admin phone" });
+    await dbInsert("branches", {
+      slug: slug.toLowerCase().trim(), name, admin_phone,
+      upi_id: upi_id || "", phone_number_id: phone_number_id || slug,
+      counter_password: counter_password || `counter${slug}2025`,
+      delivery_password: delivery_password || `delivery${slug}2025`,
+    });
+    await loadBranchesFromDB();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.patch("/branches/:slug", async (req, res) => {
+  try {
+    const updateData = {};
+    ["name","admin_phone","upi_id","phone_number_id","qr_media_id","counter_password","delivery_password"].forEach(f => {
+      if (req.body[f] !== undefined) updateData[f] = req.body[f];
+    });
+    await dbUpdate("branches", `slug=eq.${req.params.slug}`, updateData);
+    await loadBranchesFromDB();
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// EXPENSE TRACKING — gives real profit visibility, not just revenue-side numbers.
+app.get("/expenses", async (req, res) => {
+  try {
+    const rows = await dbSelect("expenses", "select=*&order=date.desc");
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/expenses", async (req, res) => {
+  try {
+    const { date, category, amount, description, branch } = req.body;
+    if (!category || !amount) return res.status(400).json({ error: "Missing category or amount" });
+    await dbInsert("expenses", { date: date || new Date().toISOString().split("T")[0], category, amount, description: description || "", branch: branch || "" });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete("/expenses/:id", async (req, res) => {
+  try {
+    await dbDelete("expenses", `id=eq.${req.params.id}`);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/quickbook/lookup", async (req, res) => {
+  if (!checkQuickbookAuth(req, res)) return;
+  try {
+    const phone = normalizePhone(req.query.phone || "");
+    if (!phone) return res.status(400).json({ error: "Missing phone" });
+    const customer = await getCustomer(phone);
+    if (!customer) return res.json({ found: false });
+    res.json({ found: true, name: customer.name, address: customer.address, branch: customer.branch, society: customer.society });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/quickbook/create", async (req, res) => {
+  if (!checkQuickbookAuth(req, res)) return;
+  try {
+    const { name, phone, address, dateSlot, branch: branchInput } = req.body;
+    if (!name || !phone || !address || !dateSlot || !branchInput) return res.status(400).json({ error: "Missing required fields" });
+    const normPhone = normalizePhone(phone);
+
+    const now = new Date();
+    const isTomorrow = dateSlot.startsWith("tomorrow");
+    const targetDate = new Date(now);
+    if (isTomorrow) targetDate.setDate(targetDate.getDate() + 1);
+    const date = formatDate(targetDate);
+    const slot = dateSlot.endsWith("morning") ? "Morning (10 AM - 1 PM)" : "Evening (5 PM - 8 PM)";
+
+    const branchSlug = branchInput;
+    const br = getBranchBySlug(branchSlug) || DEFAULT_BRANCH;
+    const numId = getBranchNumId(branchSlug);
+    const orderId = genOrderId();
+
+    await dbInsert("bookings", {
+      order_id: orderId, name, phone: normPhone, address, date, slot,
+      status: "pending", reminder_sent: false, source: "phone",
+      branch: branchSlug, notes: "", society: "",
+      amount: 0, payment_status: "unpaid", payment_method: "",
+      needs_delivery: true,
+    });
+    await saveCustomer(normPhone, name, address, branchSlug);
+
+    await notifyAdmin({ orderId, name, phone: normPhone, address, date, slot, source: "phone (quickbook)" }, br, numId);
+    sendPushToRole("delivery", "🧺⬆️ New Pickup", `${name} — ${address}`).catch(()=>{});
+
+    res.json({ success: true, order_id: orderId });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/delivery", (req, res) => res.sendFile(path.join(__dirname, "delivery.html")));
 app.get("/sw.js", (req, res) => res.sendFile(path.join(__dirname, "sw.js")));
 
