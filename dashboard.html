@@ -342,9 +342,15 @@ tr.overdue td{background:#fef2f2;}
     <div class="sidebar-section">
       <div class="sidebar-label">Reports</div>
       <div class="nav-item" onclick="showPage('revenue',this)" data-page="revenue"><span class="icon">💰</span><span>Revenue</span></div>
-      <div class="nav-item" onclick="showPage('cashrecon',this)" data-page="cashrecon"><span class="icon">🧾</span><span>Cash Reconciliation</span></div>
+      <div class="nav-item" onclick="showPage('cashrecon',this)" data-page="cashrecon"><span class="icon">🧾</span><span>Payment Reconciliation</span></div>
+      <div class="nav-item" onclick="showPage('receivables',this)" data-page="receivables"><span class="icon">📥</span><span>Receivables</span></div>
+      <div class="nav-item" onclick="showPage('expenses',this)" data-page="expenses"><span class="icon">💸</span><span>Expenses</span></div>
       <div class="nav-item" onclick="showPage('analytics',this)" data-page="analytics"><span class="icon">📈</span><span>Analytics</span></div>
       <div class="nav-item" onclick="showPage('ratings',this)" data-page="ratings"><span class="icon">⭐</span><span>Ratings</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Settings</div>
+      <div class="nav-item" onclick="showPage('branches',this)" data-page="branches"><span class="icon">🏢</span><span>Manage Branches</span></div>
     </div>
   </div>
 
@@ -617,6 +623,7 @@ tr.overdue td{background:#fef2f2;}
 
       <!-- ═══ REVENUE ═══ -->
       <div id="page-revenue" class="page-section" style="display:none">
+        <div style="margin-bottom:1rem"><button class="btn btn-outline btn-sm" onclick="exportAccountingCSV()">⬇ Export Accounting CSV (paid orders)</button></div>
         <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1rem;margin-bottom:1rem">
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Week</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-week">Rs 0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Month</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="rev-month">Rs 0</div></div></div>
@@ -634,22 +641,59 @@ tr.overdue td{background:#fef2f2;}
 
       <!-- ═══ CASH RECONCILIATION ═══ -->
       <div id="page-cashrecon" class="page-section" style="display:none">
-        <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem">
+        <div style="display:flex;gap:10px;align-items:center;margin-bottom:1rem;flex-wrap:wrap">
           <label style="font-size:13px;font-weight:600">Date:</label>
           <input type="date" id="cashrecon-date" class="form-input" style="width:180px" onchange="renderCashRecon()">
           <button class="btn btn-outline btn-sm" onclick="document.getElementById('cashrecon-date').value=new Date().toISOString().split('T')[0];renderCashRecon()">Today</button>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn btn-sm btn-primary" id="recon-tab-cash" onclick="switchReconTab('cash')">💵 Cash</button>
+            <button class="btn btn-sm btn-outline" id="recon-tab-upi" onclick="switchReconTab('upi')">📱 UPI</button>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
-          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Total Cash Collected</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="cash-total">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px" id="recon-total-label">Total Cash Collected</div><div style="font-size:26px;font-weight:700;color:var(--green)" id="cash-total">Rs 0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Counter Pickups</div><div style="font-size:22px;font-weight:700" id="cash-counter">Rs 0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Deliveries</div><div style="font-size:22px;font-weight:700" id="cash-delivery">Rs 0</div></div></div>
         </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:1rem">This is what should be physically in hand for the selected day — cross-check against your actual cash count. UPI payments are tracked separately and aren't included here since they don't involve physical cash.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1rem" id="recon-hint">This is what should be physically in hand for the selected day — cross-check against your actual cash count.</div>
         <div class="card">
-          <div class="card-header"><div class="card-title">Cash Orders — <span id="cash-date-label"></span></div></div>
+          <div class="card-header"><div class="card-title" id="recon-orders-title">Cash Orders — <span id="cash-date-label"></span></div></div>
           <div class="card-body" style="padding:0">
             <table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Branch</th><th>Collected By</th><th>Amount</th></tr></thead>
             <tbody id="cash-orders-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RECEIVABLES ═══ -->
+      <div id="page-receivables" class="page-section" style="display:none">
+        <div class="card" style="margin-bottom:1rem"><div class="card-body">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Total Owed To You</div>
+          <div style="font-size:32px;font-weight:700;color:var(--red)" id="receivables-total">Rs 0</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px">Orders delivered but not yet paid — money you're genuinely owed right now.</div>
+        </div></div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Outstanding Orders</div></div>
+          <div class="card-body" style="padding:0">
+            <table class="data-table"><thead><tr><th>Order</th><th>Customer</th><th>Phone</th><th>Delivered</th><th>Days Outstanding</th><th>Amount</th><th></th></tr></thead>
+            <tbody id="receivables-body"></tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ EXPENSES ═══ -->
+      <div id="page-expenses" class="page-section" style="display:none">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Month — Revenue</div><div style="font-size:22px;font-weight:700;color:var(--green)" id="exp-revenue">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">This Month — Expenses</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="exp-total">Rs 0</div></div></div>
+          <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Net Profit (Estimate)</div><div style="font-size:22px;font-weight:700" id="exp-profit">Rs 0</div></div></div>
+        </div>
+        <div style="margin-bottom:1rem"><button class="btn btn-primary" onclick="openExpenseForm()">+ Add Expense</button></div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">All Expenses</div></div>
+          <div class="card-body" style="padding:0">
+            <table class="data-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Branch</th><th>Amount</th><th></th></tr></thead>
+            <tbody id="expenses-body"></tbody></table>
           </div>
         </div>
       </div>
@@ -683,7 +727,14 @@ tr.overdue td{background:#fef2f2;}
         </div>
       </div>
 
+      <!-- ═══ MANAGE BRANCHES ═══ -->
+      <div id="page-branches" class="page-section" style="display:none">
+        <div style="margin-bottom:1rem"><button class="btn btn-primary" onclick="openNewBranchForm()">+ Add New Branch</button></div>
+        <div id="branches-list" style="display:flex;flex-direction:column;gap:1rem"></div>
+      </div>
+
     </div><!-- /content -->
+
   </div><!-- /main -->
 </div><!-- /layout -->
 
@@ -790,6 +841,57 @@ tr.overdue td{background:#fef2f2;}
   </div>
 </div>
 
+<!-- EXPENSE MODAL -->
+<div class="modal-overlay" id="modal-expense">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><div class="modal-title">Add Expense</div><button class="modal-close" onclick="closeModal('modal-expense')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Date</label><input class="form-input" id="exp-date" type="date"></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-select" id="exp-category">
+          <option value="rent">Rent</option>
+          <option value="wages">Wages</option>
+          <option value="consumables">Consumables (detergent, bags, tags)</option>
+          <option value="utilities">Utilities</option>
+          <option value="vendor">Vendor Payment</option>
+          <option value="equipment">Equipment/Maintenance</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Amount</label><input class="form-input" id="exp-amount" type="number"></div>
+      <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="exp-description" placeholder="Optional note"></div>
+      <div class="form-group"><label class="form-label">Branch</label>
+        <select class="form-select" id="exp-branch"><option value="">All / Not branch-specific</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-expense')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Save Expense</button>
+    </div>
+  </div>
+</div>
+
+<!-- BRANCH MODAL -->
+<div class="modal-overlay" id="modal-branch">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header"><div class="modal-title" id="branch-modal-title">Add Branch</div><button class="modal-close" onclick="closeModal('modal-branch')">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="branch-slug-original">
+      <div class="form-group"><label class="form-label">Branch Slug (lowercase, no spaces) *</label><input class="form-input" id="branch-slug" placeholder="e.g. kothrud"></div>
+      <div class="form-group"><label class="form-label">Display Name *</label><input class="form-input" id="branch-name" placeholder="e.g. Kothrud"></div>
+      <div class="form-group"><label class="form-label">Admin Phone (91XXXXXXXXXX) *</label><input class="form-input" id="branch-admin-phone" placeholder="919999999999"></div>
+      <div class="form-group"><label class="form-label">UPI ID</label><input class="form-input" id="branch-upi" placeholder="branch@bank"></div>
+      <div class="form-group"><label class="form-label">WhatsApp Phone Number ID</label><input class="form-input" id="branch-phone-number-id" placeholder="Leave blank if sharing the main bot number"></div>
+      <div class="form-group"><label class="form-label">Counter Password</label><input class="form-input" id="branch-counter-password" placeholder="Leave blank to auto-generate"></div>
+      <div class="form-group"><label class="form-label">Delivery Password</label><input class="form-input" id="branch-delivery-password" placeholder="Leave blank to auto-generate"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-branch')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveBranch()">Save Branch</button>
+    </div>
+  </div>
+</div>
+
 <!-- ORDER PHOTOS MODAL -->
 <div class="modal-overlay" id="modal-photos">
   <div class="modal" style="max-width:600px">
@@ -812,7 +914,7 @@ tr.overdue td{background:#fef2f2;}
 // Page list must be defined first — used by onclick handlers in HTML
 const ALL_PAGES = ['home','kanban','orders','payments','calendar','leads','customers','societies','chats','revenue','analytics','ratings'];
 
-const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',cashrecon:'Cash Reconciliation',analytics:'Analytics',ratings:'Ratings'};
+const PAGE_TITLES = {home:'Home',kanban:'Order Pipeline',orders:'All Orders',payments:'Payments',calendar:'Calendar',leads:'Leads',customers:'Customers',societies:'Societies',chats:'Chats',revenue:'Revenue',cashrecon:'Payment Reconciliation',receivables:'Receivables',expenses:'Expenses',analytics:'Analytics',ratings:'Ratings',branches:'Manage Branches'};
 function showPage(name, el) {
   ALL_PAGES.forEach(p => {
     const e = document.getElementById('page-'+p);
@@ -833,6 +935,9 @@ function showPage(name, el) {
   if(name==='calendar') renderCalendar();
   if(name==='cashrecon') renderCashRecon();
   if(name==='analytics') renderAnalytics();
+  if(name==='branches') renderBranches();
+  if(name==='receivables') renderReceivables();
+  if(name==='expenses') renderExpenses();
   if(name==='societies') renderSocieties();
   closeSidebar(); // no-op on desktop, closes the drawer on mobile
 }
@@ -1945,38 +2050,224 @@ function barChart(items,count=false) {
 }
 
 // ── ANALYTICS ─────────────────────────────────────────────────────
+let allBranches = [];
+async function renderBranches() {
+  try {
+    const res = await fetch(`${BOT_URL}/branches`);
+    allBranches = await res.json();
+  } catch (e) { toast('Failed to load branches','error'); return; }
+  const el = document.getElementById('branches-list');
+  if (!allBranches.length) { el.innerHTML = '<div class="empty">No branches yet</div>'; return; }
+  el.innerHTML = allBranches.map(b => `
+    <div class="card">
+      <div class="card-body" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div>
+          <div style="font-size:16px;font-weight:700">${b.name} <span style="font-size:12px;color:var(--muted);font-weight:400">(${b.slug})</span></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px">Admin: +${b.admin_phone} · UPI: ${b.upi_id||'—'}</div>
+          <div style="font-size:12px;color:var(--muted)">Counter password: <code>${b.counter_password||'—'}</code> · Delivery password: <code>${b.delivery_password||'—'}</code></div>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="openEditBranchForm('${b.slug}')">Edit</button>
+      </div>
+    </div>
+  `).join('');
+}
+function openNewBranchForm() {
+  document.getElementById('branch-modal-title').textContent = 'Add Branch';
+  document.getElementById('branch-slug-original').value = '';
+  ['branch-slug','branch-name','branch-admin-phone','branch-upi','branch-phone-number-id','branch-counter-password','branch-delivery-password'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('branch-slug').disabled = false;
+  openModal('modal-branch');
+}
+function openEditBranchForm(slug) {
+  const b = allBranches.find(x=>x.slug===slug);
+  if (!b) return;
+  document.getElementById('branch-modal-title').textContent = 'Edit Branch';
+  document.getElementById('branch-slug-original').value = b.slug;
+  document.getElementById('branch-slug').value = b.slug;
+  document.getElementById('branch-slug').disabled = true; // slug is the primary key, don't allow changing it after creation
+  document.getElementById('branch-name').value = b.name || '';
+  document.getElementById('branch-admin-phone').value = b.admin_phone || '';
+  document.getElementById('branch-upi').value = b.upi_id || '';
+  document.getElementById('branch-phone-number-id').value = b.phone_number_id || '';
+  document.getElementById('branch-counter-password').value = b.counter_password || '';
+  document.getElementById('branch-delivery-password').value = b.delivery_password || '';
+  openModal('modal-branch');
+}
+async function saveBranch() {
+  const originalSlug = document.getElementById('branch-slug-original').value;
+  const isEdit = !!originalSlug;
+  const payload = {
+    slug: document.getElementById('branch-slug').value.trim().toLowerCase(),
+    name: document.getElementById('branch-name').value.trim(),
+    admin_phone: document.getElementById('branch-admin-phone').value.trim(),
+    upi_id: document.getElementById('branch-upi').value.trim(),
+    phone_number_id: document.getElementById('branch-phone-number-id').value.trim(),
+    counter_password: document.getElementById('branch-counter-password').value.trim(),
+    delivery_password: document.getElementById('branch-delivery-password').value.trim(),
+  };
+  if (!payload.slug || !payload.name || !payload.admin_phone) { toast('Slug, name, and admin phone are required','error'); return; }
+  try {
+    const url = isEdit ? `${BOT_URL}/branches/${originalSlug}` : `${BOT_URL}/branches`;
+    const res = await fetch(url, { method: isEdit?'PATCH':'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    const data = await res.json();
+    if (data.success) { toast('Branch saved ✓'); closeModal('modal-branch'); renderBranches(); }
+    else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
+
+let activeReconMethod = 'cash';
+function switchReconTab(method) {
+  activeReconMethod = method;
+  document.getElementById('recon-tab-cash').className = 'btn btn-sm' + (method==='cash' ? ' btn-primary' : ' btn-outline');
+  document.getElementById('recon-tab-upi').className = 'btn btn-sm' + (method==='upi' ? ' btn-primary' : ' btn-outline');
+  document.getElementById('recon-total-label').textContent = method==='cash' ? 'Total Cash Collected' : 'Total UPI Collected';
+  document.getElementById('recon-orders-title').innerHTML = (method==='cash' ? 'Cash Orders' : 'UPI Orders') + ' — <span id="cash-date-label"></span>';
+  document.getElementById('recon-hint').textContent = method==='cash'
+    ? 'This is what should be physically in hand for the selected day — cross-check against your actual cash count.'
+    : 'UPI payments collected via staff-submitted proof photos — cross-check against your actual UPI/bank app if needed.';
+  renderCashRecon();
+}
 function renderCashRecon() {
   const dateInput = document.getElementById('cashrecon-date');
   if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().split('T')[0];
   const selectedDate = dateInput ? dateInput.value : new Date().toISOString().split('T')[0];
   document.getElementById('cash-date-label').textContent = new Date(selectedDate).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
-  const cashOrders = allBookings.filter(b => {
-    if (b.payment_method !== 'cash' || b.payment_status !== 'paid' || !b.payment_date) return false;
+  const method = activeReconMethod;
+  const matchingOrders = allBookings.filter(b => {
+    if (b.payment_method !== method || b.payment_status !== 'paid' || !b.payment_date) return false;
     const paidDate = new Date(b.payment_date).toISOString().split('T')[0];
     return paidDate === selectedDate;
   });
 
-  const total = cashOrders.reduce((s,b)=>s+(b.amount||0),0);
-  const counterTotal = cashOrders.filter(b=>!b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
-  const deliveryTotal = cashOrders.filter(b=>b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
+  const total = matchingOrders.reduce((s,b)=>s+(b.amount||0),0);
+  const counterTotal = matchingOrders.filter(b=>!b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
+  const deliveryTotal = matchingOrders.filter(b=>b.needs_delivery).reduce((s,b)=>s+(b.amount||0),0);
 
   document.getElementById('cash-total').textContent = `Rs ${total}`;
   document.getElementById('cash-counter').textContent = `Rs ${counterTotal}`;
   document.getElementById('cash-delivery').textContent = `Rs ${deliveryTotal}`;
 
   const tbody = document.getElementById('cash-orders-body');
-  if (!cashOrders.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">No cash payments recorded for this day</td></tr>';
+  if (!matchingOrders.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:1.5rem">No ${method} payments recorded for this day</td></tr>`;
     return;
   }
-  tbody.innerHTML = cashOrders.map(b => `<tr>
+  tbody.innerHTML = matchingOrders.map(b => `<tr>
     <td style="font-family:monospace;font-size:12px">${b.id}</td>
     <td>${b.name}</td>
     <td style="text-transform:capitalize">${b.branch}</td>
     <td>${b.needs_delivery ? '🚚 Delivery' : '🏪 Counter'}</td>
     <td style="font-weight:600">Rs ${b.amount}</td>
   </tr>`).join('');
+}
+
+function renderReceivables() {
+  const outstanding = allBookings.filter(b => b.status === 'delivered' && b.payment_status !== 'paid' && b.amount > 0);
+  const total = outstanding.reduce((s,b)=>s+(b.amount||0),0);
+  document.getElementById('receivables-total').textContent = `Rs ${total}`;
+  const tbody = document.getElementById('receivables-body');
+  if (!outstanding.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1.5rem">Nothing outstanding — all delivered orders are paid ✓</td></tr>';
+    return;
+  }
+  const now = new Date();
+  tbody.innerHTML = outstanding.map(b => {
+    const deliveredDate = b.delivery_date ? new Date(b.delivery_date) : null;
+    const daysOut = deliveredDate && !isNaN(deliveredDate) ? Math.max(0, Math.floor((now-deliveredDate)/(1000*60*60*24))) : '—';
+    return `<tr>
+      <td style="font-family:monospace;font-size:12px">${b.id}</td>
+      <td>${b.name}</td>
+      <td style="font-family:monospace;font-size:12px">${b.phone}</td>
+      <td>${b.delivery_date||'—'}</td>
+      <td>${daysOut}</td>
+      <td style="font-weight:600;color:var(--red)">Rs ${b.amount}</td>
+      <td><button class="btn btn-sm btn-outline" onclick="openSendMsg('${b.phone}','${b.name}')">Remind</button></td>
+    </tr>`;
+  }).join('');
+}
+
+let allExpenses = [];
+async function renderExpenses() {
+  try {
+    const res = await fetch(`${BOT_URL}/expenses`);
+    allExpenses = await res.json();
+  } catch(e) { toast('Failed to load expenses','error'); return; }
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthExpenses = allExpenses.filter(e => new Date(e.date) >= monthStart);
+  const expTotal = monthExpenses.reduce((s,e)=>s+Number(e.amount||0),0);
+  const monthRevenue = allBookings.filter(b => b.payment_status==='paid' && b.payment_date && new Date(b.payment_date) >= monthStart).reduce((s,b)=>s+(b.amount||0),0);
+  const profit = monthRevenue - expTotal;
+
+  document.getElementById('exp-revenue').textContent = `Rs ${monthRevenue}`;
+  document.getElementById('exp-total').textContent = `Rs ${expTotal}`;
+  const profitEl = document.getElementById('exp-profit');
+  profitEl.textContent = `Rs ${profit}`;
+  profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
+
+  const tbody = document.getElementById('expenses-body');
+  if (!allExpenses.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem">No expenses logged yet</td></tr>';
+    return;
+  }
+  const CATEGORY_LABELS = {rent:'Rent',wages:'Wages',consumables:'Consumables',utilities:'Utilities',vendor:'Vendor Payment',equipment:'Equipment/Maintenance',other:'Other'};
+  tbody.innerHTML = allExpenses.map(e => `<tr>
+    <td>${e.date}</td>
+    <td>${CATEGORY_LABELS[e.category]||e.category}</td>
+    <td>${e.description||'—'}</td>
+    <td style="text-transform:capitalize">${e.branch||'All'}</td>
+    <td style="font-weight:600">Rs ${e.amount}</td>
+    <td><button class="btn btn-sm" style="color:var(--red)" onclick="deleteExpense(${e.id})">Delete</button></td>
+  </tr>`).join('');
+}
+async function openExpenseForm() {
+  document.getElementById('exp-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('exp-category').value = 'rent';
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-description').value = '';
+  const branchSelect = document.getElementById('exp-branch');
+  if (!allBranches.length) {
+    try { const res = await fetch(`${BOT_URL}/branches`); allBranches = await res.json(); } catch(e) {}
+  }
+  branchSelect.innerHTML = '<option value="">All / Not branch-specific</option>' + allBranches.map(b=>`<option value="${b.slug}">${b.name}</option>`).join('');
+  openModal('modal-expense');
+}
+async function saveExpense() {
+  const date = document.getElementById('exp-date').value;
+  const category = document.getElementById('exp-category').value;
+  const amount = parseFloat(document.getElementById('exp-amount').value);
+  const description = document.getElementById('exp-description').value.trim();
+  const branch = document.getElementById('exp-branch').value;
+  if (!amount || amount <= 0) { toast('Enter a valid amount','error'); return; }
+  try {
+    const res = await fetch(`${BOT_URL}/expenses`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date,category,amount,description,branch})});
+    const data = await res.json();
+    if (data.success) { toast('Expense saved ✓'); closeModal('modal-expense'); renderExpenses(); }
+    else toast(data.error||'Failed','error');
+  } catch(e) { toast('Network error','error'); }
+}
+function deleteExpense(id) {
+  fetch(`${BOT_URL}/expenses/${id}`, {method:'DELETE'}).then(r=>r.json()).then(d=>{
+    if (d.success) { toast('Deleted'); renderExpenses(); }
+    else toast('Failed','error');
+  }).catch(()=>toast('Network error','error'));
+}
+
+// GST/accounting export — paid orders only, accounting-focused columns
+function exportAccountingCSV() {
+  const paidOrders = allBookings.filter(b => b.payment_status === 'paid' && b.payment_date);
+  const h = ['Date','Order ID','Customer Name','Phone','Amount','Payment Method','Branch'];
+  const rows = paidOrders.map(b => [
+    new Date(b.payment_date).toLocaleDateString('en-IN'), b.id, b.name, b.phone, b.amount, b.payment_method||'', b.branch
+  ].map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`));
+  const csv = [h.join(','), ...rows.map(r=>r.join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download = `washkart-accounting-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  toast(`Exported ${paidOrders.length} paid orders`);
 }
 
 function renderAnalytics() {
