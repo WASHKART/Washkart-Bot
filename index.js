@@ -2192,14 +2192,49 @@ async function sendDailyDigest() {
   if (now.getHours() !== 8) return; // 8 AM once per day
   try {
     const today = getToday();
+    const todayDate = new Date(); todayDate.setHours(0,0,0,0);
     const all = await dbSelect("bookings", "status=neq.cancelled&order=created_at.desc");
+
     const pickupsToday = all.filter(b => b.date === today && !["delivered","cancelled"].includes(b.status));
     const deliveriesToday = all.filter(b => b.delivery_date === today && !["delivered","cancelled"].includes(b.status));
+
+    // Overdue = delivery_date already passed and still not delivered — a broken commitment,
+    // not just "due today". Express ones are called out separately since they're a stronger promise.
+    const notDelivered = all.filter(b => !["delivered","cancelled"].includes(b.status));
+    const overdue = notDelivered.filter(b => {
+      const d = parseHumanDate(b.delivery_date);
+      return d && d < todayDate;
+    });
+    const overdueExpress = overdue.filter(b => b.express);
+    const overdueNormal = overdue.filter(b => !b.express);
+
     const unpaid = all.filter(b => b.status === "delivered" && b.payment_status !== "paid" && b.amount > 0);
     const unpaidTotal = unpaid.reduce((s,b) => s + (b.amount||0), 0);
-    const flagged = all.filter(b => (b.notes||"").includes("[STAFF FLAG:FAIL]"));
-    let msg = `Washkart - Today, ${today}\n\nPickups: ${pickupsToday.length}\nDeliveries due: ${deliveriesToday.length}\nUnpaid: ${unpaid.length} orders (Rs ${unpaidTotal})`;
-    if (flagged.length) msg += `\n\n🚩 ${flagged.length} order(s) flagged by staff — needs your attention`;
+
+    // Unresolved flags, with how long each has been open — reappears in this digest every
+    // day until cleared, so nothing silently falls through the cracks.
+    const flagged = all.filter(b => (b.notes||"").includes("[STAFF FLAG:FAIL]") || (b.notes||"").includes("[STAFF FLAG:UNCOLLECTED]"));
+
+    let msg = `Washkart — Morning Brief, ${today}\n\n`;
+    msg += `Pickups today: ${pickupsToday.length}\nDeliveries due today: ${deliveriesToday.length}\n`;
+
+    if (overdueExpress.length) {
+      msg += `\n🔴 ${overdueExpress.length} EXPRESS order(s) overdue — these were promised fast:\n`;
+      msg += overdueExpress.slice(0,5).map(b=>`  ${b.order_id} — ${b.name}`).join("\n");
+    }
+    if (overdueNormal.length) {
+      msg += `\n\n⚠️ ${overdueNormal.length} order(s) overdue (past promised delivery date):\n`;
+      msg += overdueNormal.slice(0,5).map(b=>`  ${b.order_id} — ${b.name}`).join("\n");
+    }
+    if (flagged.length) {
+      msg += `\n\n🚩 ${flagged.length} unresolved staff flag(s):\n`;
+      msg += flagged.slice(0,5).map(b => {
+        const hrs = b.flagged_at ? Math.floor((now - new Date(b.flagged_at)) / (1000*60*60)) : null;
+        return `  ${b.order_id} — ${b.name}${hrs!==null?` (open ${hrs}h)`:''}`;
+      }).join("\n");
+    }
+    msg += `\n\nUnpaid: ${unpaid.length} orders (Rs ${unpaidTotal})`;
+
     for (const br of Object.values(BRANCHES)) {
       if (br.admin) await sendMessage(br.admin, msg, getBranchNumId(br.slug));
     }
@@ -2226,6 +2261,43 @@ async function checkStaleTallies() {
   } catch (e) { console.error("Stale tally check error:", e.message); }
 }
 setInterval(checkStaleTallies, 60*60*1000);
+
+// Customer churn early-warning — finds customers who've gone quiet and nudges them via
+// the approved reengagement_reminder template. Won't re-send too often to the same
+// person (60-day cooldown) so genuinely lost customers don't get spammed weekly.
+async function sendChurnReengagement() {
+  const now = new Date();
+  if (now.getDay() !== 3 || now.getHours() !== 10) return; // Wednesday, 10 AM, once a week
+  try {
+    const bookings = await dbSelect("bookings", "select=phone,name,created_at&order=created_at.desc");
+    const lastOrderByPhone = {};
+    bookings.forEach(b => {
+      if (!lastOrderByPhone[b.phone] || new Date(b.created_at) > new Date(lastOrderByPhone[b.phone].created_at)) {
+        lastOrderByPhone[b.phone] = b;
+      }
+    });
+    const customers = await dbSelect("customers", "select=*");
+    const CUTOFF_DAYS = 21, COOLDOWN_DAYS = 60;
+    for (const cust of customers) {
+      const last = lastOrderByPhone[cust.phone];
+      if (!last) continue;
+      const daysSince = (now - new Date(last.created_at)) / (1000*60*60*24);
+      if (daysSince < CUTOFF_DAYS) continue;
+      if (cust.last_reengagement_sent) {
+        const daysSinceReeng = (now - new Date(cust.last_reengagement_sent)) / (1000*60*60*24);
+        if (daysSinceReeng < COOLDOWN_DAYS) continue;
+      }
+      const branchSlug = cust.branch || "bavdhan";
+      let numId = getBranchNumId(branchSlug);
+      if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
+      try {
+        await sendTemplateMessage(cust.phone, "reengagement_reminder", "en", [cust.name || "there", formatDate(new Date(last.created_at))], null, numId);
+        await dbUpdate("customers", `phone=eq.${cust.phone}`, { last_reengagement_sent: now.toISOString() });
+      } catch (e) { console.error(`[churn] send failed for ${cust.phone}:`, e?.response?.data || e.message); }
+    }
+  } catch (e) { console.error("Churn reengagement error:", e.message); }
+}
+setInterval(sendChurnReengagement, 60*60*1000);
 
 // Weekly database backup — exports the core tables to a JSON file and sends it directly
 // to the owner's WhatsApp as a document. Free-tier Supabase has zero automatic backups,
@@ -2767,7 +2839,7 @@ app.post("/pickups/:orderId/flag", async (req, res) => {
 
     const flagNote = `[STAFF FLAG:FAIL] ${stage === "delivery" ? "Delivery" : "Pickup"} failed — needs attention (${new Date().toLocaleString("en-IN")})`;
     const newNotes = b.notes ? `${b.notes}\n${flagNote}` : flagNote;
-    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes, flagged_at: new Date().toISOString() });
 
     const alertMsg = `🚩 STAFF ALERT — ${stage === "delivery" ? "Delivery" : "Pickup"} failed\n\nOrder: ${orderId}\nName: ${b.name}\nPhone: +${b.phone}\nAddress: ${b.address || "-"}\n\nStaff could not complete this ${stage === "delivery" ? "delivery" : "pickup"}. Please follow up.`;
     await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203");
@@ -2792,7 +2864,7 @@ app.post("/pickups/:orderId/uncollected", async (req, res) => {
 
     const flagNote = `[STAFF FLAG:UNCOLLECTED] Customer hasn't collected — flagged by staff (${new Date().toLocaleString("en-IN")})`;
     const newNotes = b.notes ? `${b.notes}\n${flagNote}` : flagNote;
-    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes, flagged_at: new Date().toISOString() });
 
     const alertMsg = `🕐 UNCOLLECTED ORDER\n\nOrder: ${orderId}\nName: ${b.name}\nPhone: +${b.phone}\n\nThis order has been ready a while and the customer hasn't picked it up. Consider following up.`;
     await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203");
@@ -2992,7 +3064,7 @@ app.post("/bookings/:orderId/clear-flag", async (req, res) => {
     const b = rows[0];
     if (!b) return res.status(404).json({ error: "Order not found" });
     const newNotes = (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim();
-    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes });
+    await dbUpdate("bookings", `order_id=eq.${orderId}`, { notes: newNotes, flagged_at: null });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
