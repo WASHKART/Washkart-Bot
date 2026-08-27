@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Washkart Quick Pickup</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827;}
+
+.login-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100vh;height:100dvh;gap:24px;padding:2rem;background:#16a34a;}
+.login-logo{font-size:64px;}
+.login-input{width:100%;max-width:260px;padding:18px;border:none;border-radius:14px;font-size:24px;text-align:center;letter-spacing:4px;}
+.login-btn{width:100%;max-width:260px;padding:18px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:32px;cursor:pointer;}
+.login-error{font-size:40px;}
+
+.app{display:none;flex-direction:column;min-height:100vh;min-height:100dvh;}
+.topbar{padding:16px;background:#111827;color:#fff;font-size:18px;font-weight:800;text-align:center;}
+.topbar span{color:#4ade80;}
+.form{flex:1;padding:1.2rem;max-width:480px;margin:0 auto;width:100%;}
+
+.field-label{font-size:12px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;}
+.field-input{width:100%;padding:16px;border:2px solid #e5e7eb;border-radius:14px;font-size:18px;}
+.field-input:focus{border-color:#16a34a;outline:none;}
+.lookup-hint{font-size:13px;color:#16a34a;font-weight:600;margin-top:6px;min-height:18px;}
+
+.slot-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}
+.slot-btn{padding:20px 8px;border:2px solid #e5e7eb;border-radius:16px;background:#fff;font-size:16px;font-weight:700;color:#374151;text-align:center;}
+.slot-btn .slot-icon{display:block;font-size:26px;margin-bottom:4px;}
+.slot-btn.selected{background:#dcfce7;border-color:#16a34a;color:#15803d;}
+
+.submit-btn{width:100%;padding:20px 0;margin-top:24px;background:#16a34a;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:800;}
+.submit-btn:disabled{background:#d1d5db;}
+
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:24px 34px;border-radius:20px;font-size:18px;font-weight:700;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;max-width:80%;text-align:center;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <div class="login-logo">⚡</div>
+  <input class="login-input" id="login-pass" type="password" inputmode="numeric" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="login-btn" onclick="doLogin()">➡️</button>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar">⚡ WASH<span>KART</span> QUICK PICKUP</div>
+  <div class="form">
+    <div class="field-label">Phone Number</div>
+    <input class="field-input" id="qb-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit number" onblur="lookupPhone()">
+    <div class="lookup-hint" id="lookup-hint"></div>
+
+    <div class="field-label">Name</div>
+    <input class="field-input" id="qb-name" type="text" placeholder="Customer name">
+
+    <div class="field-label">Address</div>
+    <input class="field-input" id="qb-address" type="text" placeholder="Pickup address">
+
+    <div class="field-label">Branch</div>
+    <div class="slot-grid" id="branch-grid"></div>
+
+    <div class="field-label">When?</div>
+    <div class="slot-grid">
+      <button class="slot-btn" data-val="today_morning" onclick="selectSlot(this)"><span class="slot-icon">🌅</span>Today Morning</button>
+      <button class="slot-btn" data-val="today_evening" onclick="selectSlot(this)"><span class="slot-icon">🌆</span>Today Evening</button>
+      <button class="slot-btn" data-val="tomorrow_morning" onclick="selectSlot(this)"><span class="slot-icon">🌅</span>Tomorrow Morning</button>
+      <button class="slot-btn" data-val="tomorrow_evening" onclick="selectSlot(this)"><span class="slot-icon">🌆</span>Tomorrow Evening</button>
+    </div>
+
+    <button class="submit-btn" id="submit-btn" onclick="submitPickup()">✅ Book Pickup</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const BOT_URL = 'https://washkart-bot.onrender.com';
+let staffKey = sessionStorage.getItem('wk_quickbook_key') || '';
+let selectedSlot = null;
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!pass) return;
+  const res = await fetch(`${BOT_URL}/quickbook/lookup?phone=0000000000&key=${encodeURIComponent(pass)}`);
+  if (res.status === 401) { document.getElementById('login-error').textContent = '❌'; return; }
+  staffKey = pass;
+  sessionStorage.setItem('wk_quickbook_key', pass);
+  showApp();
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadBranches();
+}
+
+async function lookupPhone() {
+  const phone = document.getElementById('qb-phone').value.trim();
+  const hint = document.getElementById('lookup-hint');
+  if (phone.length < 10) { hint.textContent = ''; return; }
+  try {
+    const res = await fetch(`${BOT_URL}/quickbook/lookup?phone=${phone}&key=${encodeURIComponent(staffKey)}`);
+    if (res.status === 401) { sessionStorage.removeItem('wk_quickbook_key'); location.reload(); return; }
+    const data = await res.json();
+    if (data.found) {
+      document.getElementById('qb-name').value = data.name || '';
+      document.getElementById('qb-address').value = data.address || '';
+      hint.textContent = `👤 Found: ${data.name}`;
+    } else {
+      hint.textContent = '🆕 New customer';
+    }
+  } catch (e) { hint.textContent = ''; }
+}
+
+function selectSlot(btn) {
+  document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedSlot = btn.dataset.val;
+}
+
+let selectedBranch = null;
+async function loadBranches() {
+  try {
+    const res = await fetch(`${BOT_URL}/branches`);
+    const branches = await res.json();
+    const grid = document.getElementById('branch-grid');
+    grid.innerHTML = branches.map(b => `<button class="slot-btn" data-val="${b.slug}" onclick="selectBranch(this)"><span class="slot-icon">🏢</span>${b.name}</button>`).join('');
+  } catch (e) { showToast('Could not load branches'); }
+}
+function selectBranch(btn) {
+  document.querySelectorAll('#branch-grid .slot-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  selectedBranch = btn.dataset.val;
+}
+
+async function submitPickup() {
+  const name = document.getElementById('qb-name').value.trim();
+  const phone = document.getElementById('qb-phone').value.trim();
+  const address = document.getElementById('qb-address').value.trim();
+  if (!name) { showToast('Enter a name'); return; }
+  if (phone.length < 10) { showToast('Enter a valid phone number'); return; }
+  if (!address) { showToast('Enter an address'); return; }
+  if (!selectedSlot) { showToast('Pick a time slot'); return; }
+  if (!selectedBranch) { showToast('Pick a branch'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Booking...';
+  try {
+    const res = await fetch(`${BOT_URL}/quickbook/create?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, phone, address, dateSlot: selectedSlot, branch: selectedBranch })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`✅ Booked! ${data.order_id}`);
+      document.getElementById('qb-phone').value = '';
+      document.getElementById('qb-name').value = '';
+      document.getElementById('qb-address').value = '';
+      document.getElementById('lookup-hint').textContent = '';
+      document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+      selectedSlot = null;
+      selectedBranch = null;
+    } else {
+      showToast(data.error || 'Failed');
+    }
+  } catch (e) { showToast('Network error'); }
+  btn.disabled = false; btn.textContent = '✅ Book Pickup';
+}
+
+if (staffKey) {
+  fetch(`${BOT_URL}/quickbook/lookup?phone=0000000000&key=${encodeURIComponent(staffKey)}`).then(res => {
+    if (res.status === 401) { sessionStorage.removeItem('wk_quickbook_key'); document.getElementById('login-screen').style.display = 'flex'; }
+    else showApp();
+  });
+} else {
+  document.getElementById('login-screen').style.display = 'flex';
+}
+</script>
+</body>
+</html>
