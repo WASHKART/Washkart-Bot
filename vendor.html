@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Washkart Vendor</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827;}
+
+.login-screen{display:none;flex-direction:column;align-items:center;justify-content:center;height:100vh;height:100dvh;gap:24px;padding:2rem;background:#12a4da;}
+.login-logo{width:200px;max-width:70vw;}
+.login-role-emoji{font-size:36px;margin-top:-8px;}
+.login-input{width:100%;max-width:260px;padding:18px;border:none;border-radius:14px;font-size:24px;text-align:center;letter-spacing:4px;}
+.login-btn{width:100%;max-width:260px;padding:18px;background:#111827;color:#fff;border:none;border-radius:14px;font-size:32px;cursor:pointer;}
+.login-error{font-size:40px;}
+
+.app{display:none;flex-direction:column;height:100vh;height:100dvh;}
+.topbar{padding:12px 16px;background:#111827;color:#fff;font-size:14px;font-weight:700;text-align:center;display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;}
+.topbar-logo{height:22px;}
+.topbar span{color:#7dd3fc;}
+.list{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:1rem;-webkit-overflow-scrolling:touch;}
+.empty{text-align:center;padding:4rem 1rem;color:#9ca3af;font-size:60px;}
+
+.card{background:#fff;border-radius:20px;box-shadow:0 2px 10px rgba(0,0,0,.08);overflow:hidden;flex-shrink:0;}
+.card.aging{border:2px solid #f59e0b;}
+.card.overdue{border:2px solid #dc2626;}
+.card-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;background:#f9fafb;border-bottom:1px solid #f0f0f0;}
+.vendor-name{font-size:17px;font-weight:700;}
+.days-badge{font-size:12px;font-weight:700;padding:3px 10px;border-radius:12px;background:#f3f4f6;color:#6b7280;}
+.days-badge.aging{background:#fef3c7;color:#92400e;}
+.days-badge.overdue{background:#fee2e2;color:#991b1b;}
+.card-body{padding:16px;}
+.items-summary{font-size:14px;color:#374151;background:#f9fafb;padding:10px 12px;border-radius:8px;}
+.notes-text{font-size:13px;color:#92400e;background:#fffbeb;padding:8px 10px;border-radius:8px;margin-top:8px;}
+.card-actions{padding:0 16px 16px;display:flex;flex-direction:column;gap:8px;}
+.act-btn{width:100%;padding:16px 0;border:none;border-radius:16px;font-size:16px;font-weight:800;cursor:pointer;background:#12a4da;color:#fff;}
+.act-btn-secondary{background:none;border:2px dashed #d1d5db;color:#6b7280;font-size:13px;padding:10px 0;}
+.act-btn-issue{background:none;border:2px dashed #fecaca;color:#dc2626;font-size:13px;padding:10px 0;}
+
+.bottom-bar{display:flex;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e5e7eb;flex-shrink:0;}
+.bottom-btn{width:100%;padding:18px 0;border-radius:14px;font-size:20px;font-weight:800;border:none;background:#12a4da;color:#fff;}
+
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;align-items:center;justify-content:center;padding:1.5rem;}
+.overlay.show{display:flex;}
+.confirm-box{background:#fff;border-radius:24px;padding:1.8rem 1.5rem;width:100%;max-width:380px;text-align:center;max-height:88vh;overflow-y:auto;}
+.confirm-icon{font-size:50px;margin-bottom:.6rem;}
+.confirm-actions{display:flex;gap:12px;}
+.confirm-btn{flex:1;padding:20px 0;border:none;border-radius:16px;font-size:18px;font-weight:800;}
+.confirm-yes{background:#12a4da;color:#fff;}
+.confirm-cancel{background:#f3f4f6;color:#374151;}
+.confirm-back-link{display:block;width:100%;margin-top:14px;padding:10px 0;background:none;border:none;color:#6b7280;font-size:14px;font-weight:600;text-decoration:underline;}
+
+.select-input{width:100%;padding:16px;border:2px solid #e5e7eb;border-radius:14px;font-size:17px;margin-bottom:10px;}
+.catalog-tabs{display:flex;gap:8px;justify-content:center;margin:10px 0;flex-wrap:wrap;}
+.catalog-tab{width:44px;height:44px;border-radius:12px;border:2px solid #e5e7eb;background:#f9fafb;font-size:22px;}
+.catalog-tab.active{background:#e0f2fe;border-color:#12a4da;}
+.catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:220px;overflow-y:auto;margin-bottom:8px;}
+.catalog-item{position:relative;padding:12px 4px;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.catalog-item:active{background:#e0f2fe;border-color:#12a4da;}
+.catalog-icon{font-size:26px;}
+.catalog-name{font-size:10px;font-weight:700;color:#374151;}
+.qty-badge{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#12a4da;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+
+.review-row{display:flex;align-items:center;justify-content:space-between;padding:12px;border:2px solid #e5e7eb;border-radius:12px;margin-bottom:8px;}
+.review-name{font-weight:700;font-size:15px;}
+.delicate-toggle{padding:8px 14px;border-radius:10px;border:2px solid #e5e7eb;background:#f9fafb;font-size:13px;font-weight:700;}
+.delicate-toggle.active{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+
+.reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}
+.reason-btn{padding:16px 8px;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;font-size:14px;font-weight:700;}
+
+.photo-preview{width:100%;border-radius:14px;margin-bottom:12px;max-height:180px;object-fit:cover;}
+.camera-overlay{display:none;position:fixed;inset:0;background:#000;z-index:300;flex-direction:column;}
+.camera-overlay video{flex:1;width:100%;object-fit:cover;}
+.camera-controls{display:flex;align-items:center;justify-content:center;gap:40px;padding:24px;padding-bottom:calc(24px + env(safe-area-inset-bottom));background:#000;}
+.camera-btn{border:none;border-radius:50%;font-size:28px;cursor:pointer;}
+.camera-shutter{width:76px;height:76px;background:#fff;}
+.camera-cancel{width:52px;height:52px;background:#374151;color:#fff;font-size:20px;}
+
+.toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:26px 36px;border-radius:20px;font-size:40px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
+.toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="login-screen">
+  <img class="login-logo" src="/assets/washkart-logo-white.png" alt="Washkart">
+  <div class="login-role-emoji">🏭</div>
+  <input class="login-input" id="login-pass" type="password" inputmode="numeric" placeholder="••••" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="login-btn" onclick="doLogin()">➡️</button>
+  <div class="login-error" id="login-error"></div>
+</div>
+
+<div class="app" id="app">
+  <div class="topbar"><img class="topbar-logo" src="/assets/washkart-logo-white.png" alt="Washkart"> VENDOR</div>
+  <div class="list" id="list"></div>
+  <div class="bottom-bar">
+    <button class="bottom-btn" onclick="openNewHandover()">➕ NEW HANDOVER</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay"><div class="confirm-box" id="confirm-content"></div></div>
+<div class="camera-overlay" id="camera-overlay">
+  <video id="camera-video" autoplay playsinline muted></video>
+  <div class="camera-controls">
+    <button class="camera-btn camera-cancel" onclick="cancelCamera()">✕</button>
+    <button class="camera-btn camera-shutter" onclick="captureFrame()">📸</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const BOT_URL = 'https://washkart-bot.onrender.com';
+let staffKey = sessionStorage.getItem('wk_vendor_key') || '';
+let allVendorsList = [];
+let allShipments = [];
+
+const RAW_ITEM_PRICES = {
+  shirt:{},pant:{},trouser:{},jeans:{},tshirt:{},top:{},kurta:{},kurti:{},blouse:{},salwar:{},
+  saree:{},lehenga:{},blazer:{},jacket:{},overcoat:{},sweater:{},dupatta:{},shawl:{},
+  anarkali:{},suit:{},dress:{},gown:{},sherwani:{},towel:{},sneaker:{},shoe:{},canvas:{},
+  bedsheet:{},blanket:{},curtain:{},bag:{},helmet:{},carpet:{},toy:{},
+};
+const ITEM_ICONS = {
+  shirt:'👔',pant:'👖',trouser:'👖',jeans:'👖',tshirt:'👕',top:'👚',kurta:'👘',kurti:'👘',
+  blouse:'👚',salwar:'👗',saree:'🥻',lehenga:'👗',blazer:'🧥',jacket:'🧥',overcoat:'🧥',
+  sweater:'🧶',dupatta:'🧣',shawl:'🧣',anarkali:'👗',suit:'🤵',dress:'👗',gown:'👗',
+  sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
+  curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
+};
+const ITEM_LIST = Object.keys(RAW_ITEM_PRICES).map(name => ({ name: name.charAt(0).toUpperCase()+name.slice(1), icon: ITEM_ICONS[name] }));
+let activeTallyIdx = 0;
+const TABS_PER_PAGE = 10;
+
+function showToast(icon) {
+  const el = document.getElementById('toast');
+  el.textContent = icon;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1200);
+}
+
+async function doLogin() {
+  const pass = document.getElementById('login-pass').value.trim();
+  if (!pass) return;
+  const res = await fetch(`${BOT_URL}/vendors`, { headers: { 'x-staff-key': pass } });
+  // /vendors has no auth currently, so just proceed — real gate is on POST/PATCH actions
+  staffKey = pass;
+  sessionStorage.setItem('wk_vendor_key', pass);
+  showApp();
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  loadData();
+  setInterval(loadData, 30000);
+}
+
+async function loadData() {
+  try {
+    const [vRes, sRes] = await Promise.all([fetch(`${BOT_URL}/vendors`), fetch(`${BOT_URL}/vendor-shipments`)]);
+    allVendorsList = await vRes.json();
+    allShipments = await sRes.json();
+    render();
+  } catch (e) { console.error(e); }
+}
+
+function vendorName(id) { return allVendorsList.find(v=>v.id===id)?.name || 'Vendor'; }
+
+function render() {
+  const pending = allShipments.filter(s => s.status === 'sent' || s.status === 'resent');
+  const list = document.getElementById('list');
+  if (!pending.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+  const today = new Date(); today.setHours(0,0,0,0);
+  list.innerHTML = pending.map(s => {
+    const sentDate = new Date(s.sent_date);
+    const daysPending = Math.floor((today - sentDate) / (1000*60*60*24));
+    const isOverdue = s.expected_return_date && new Date(s.expected_return_date) < today;
+    const isAging = !isOverdue && daysPending >= 3;
+    const cardClass = isOverdue ? 'overdue' : (isAging ? 'aging' : '');
+    const badgeClass = isOverdue ? 'overdue' : (isAging ? 'aging' : '');
+    const badgeText = isOverdue ? 'OVERDUE' : `${daysPending}d pending`;
+    return `<div class="card ${cardClass}">
+      <div class="card-head">
+        <span class="vendor-name">${vendorName(s.vendor_id)}</span>
+        <span class="days-badge ${badgeClass}">${badgeText}</span>
+      </div>
+      <div class="card-body">
+        <div class="items-summary">📦 ${s.description}</div>
+        ${s.notes ? `<div class="notes-text">📝 ${s.notes}</div>` : ''}
+      </div>
+      <div class="card-actions">
+        <button class="act-btn" onclick="openMarkReturned(${s.id})">✅ MARK RETURNED</button>
+        <button class="act-btn act-btn-secondary" onclick="markResend(${s.id})">🔁 Still There</button>
+        <button class="act-btn act-btn-issue" onclick="openReportIssue(${s.id})">⚠️ Report Issue</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showOverlay(html) { document.getElementById('confirm-content').innerHTML = html; document.getElementById('overlay').classList.add('show'); }
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); }
+
+// ── ITEM PICKER (shared by New Handover + Mark Returned) ──────────
+let tallyItems = [];
+function renderPicker(containerPrefix) {
+  const tabsEl = document.getElementById(containerPrefix+'-tabs');
+  const gridEl = document.getElementById(containerPrefix+'-grid');
+  const pageItems = ITEM_LIST.slice(activeTallyIdx, activeTallyIdx+TABS_PER_PAGE);
+  gridEl.innerHTML = ITEM_LIST.map(it => {
+    const existing = tallyItems.find(ti=>ti.name===it.name);
+    const qty = existing ? existing.qty : 0;
+    return `<button class="catalog-item" data-name="${it.name}">
+      <span class="catalog-icon">${it.icon}</span>
+      <span class="catalog-name">${it.name}</span>
+      ${qty>0?`<span class="qty-badge">${qty}</span>`:''}
+    </button>`;
+  }).join('');
+  [...gridEl.children].forEach(btn => {
+    btn.onclick = () => {
+      const name = btn.dataset.name;
+      const existing = tallyItems.find(ti=>ti.name===name);
+      if (existing) {
+        const typed = prompt(`Quantity for ${name}:`, existing.qty);
+        const n = parseInt(typed);
+        if (!isNaN(n) && n >= 0) { if (n===0) tallyItems.splice(tallyItems.indexOf(existing),1); else existing.qty = n; }
+      } else {
+        tallyItems.push({ name, qty: 1, delicate: false });
+      }
+      renderPicker(containerPrefix);
+      updateTallyCount(containerPrefix);
+    };
+  });
+  if (tabsEl) tabsEl.innerHTML = '';
+}
+function updateTallyCount(prefix) {
+  const el = document.getElementById(prefix+'-count');
+  if (!el) return;
+  const total = tallyItems.reduce((s,it)=>s+it.qty,0);
+  el.textContent = total ? `${total} item(s)` : 'No items yet';
+}
+
+// ── NEW HANDOVER ────────────────────────────────────────────────
+function openNewHandover() {
+  if (!allVendorsList.length) { showToast('⚠️ No vendors — add one on the dashboard first'); return; }
+  tallyItems = [];
+  showOverlay(`
+    <div class="confirm-icon">🏭➕</div>
+    <select class="select-input" id="nh-vendor">${allVendorsList.map(v=>`<option value="${v.id}">${v.name}</option>`).join('')}</select>
+    <div id="nh-count" style="font-size:13px;color:#6b7280;margin-bottom:8px">No items yet</div>
+    <div class="catalog-grid" id="nh-grid"></div>
+    <div class="confirm-actions" style="margin-top:14px">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ CANCEL</button>
+      <button class="confirm-btn confirm-yes" onclick="goToDelicateReview()">NEXT ➡️</button>
+    </div>
+  `);
+  renderPicker('nh');
+}
+let selectedVendorId = null;
+function goToDelicateReview() {
+  if (!tallyItems.length) { showToast('⚠️ Add at least one item'); return; }
+  selectedVendorId = parseInt(document.getElementById('nh-vendor').value);
+  showOverlay(`
+    <div class="confirm-icon">⚠️🧺</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:12px">Mark any delicate items</div>
+    <div id="delicate-list"></div>
+    <div class="confirm-actions" style="margin-top:14px">
+      <button class="confirm-btn confirm-cancel" onclick="openNewHandover()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="submitHandover()">✅ SEND</button>
+    </div>
+  `);
+  const listEl = document.getElementById('delicate-list');
+  listEl.innerHTML = tallyItems.map((it,i) => `
+    <div class="review-row">
+      <span class="review-name">${it.qty}x ${it.name}</span>
+      <button class="delicate-toggle ${it.delicate?'active':''}" data-idx="${i}">⚠️ Delicate</button>
+    </div>
+  `).join('');
+  [...listEl.children].forEach((row, i) => {
+    row.querySelector('.delicate-toggle').onclick = (e) => {
+      tallyItems[i].delicate = !tallyItems[i].delicate;
+      e.target.className = 'delicate-toggle' + (tallyItems[i].delicate ? ' active' : '');
+    };
+  });
+}
+async function submitHandover() {
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
+      body: JSON.stringify({ vendor_id: selectedVendorId, items: tallyItems })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+// ── MARK RETURNED (itemized, pre-filled from what was sent) ───────
+let returnShipmentId = null;
+function openMarkReturned(id) {
+  const s = allShipments.find(x=>x.id===id);
+  returnShipmentId = id;
+  tallyItems = (s.items_sent || []).map(it => ({...it}));
+  showOverlay(`
+    <div class="confirm-icon">✅📦</div>
+    <div id="mr-count" style="font-size:13px;color:#6b7280;margin-bottom:8px"></div>
+    <div class="catalog-grid" id="mr-grid"></div>
+    <div class="confirm-actions" style="margin-top:14px">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ CANCEL</button>
+      <button class="confirm-btn confirm-yes" onclick="submitReturn()">✅ CONFIRM</button>
+    </div>
+  `);
+  renderPicker('mr');
+  updateTallyCount('mr');
+}
+async function submitReturn() {
+  const id = returnShipmentId;
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}?key=${encodeURIComponent(staffKey)}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
+      body: JSON.stringify({ action: 'return', items_returned: tallyItems })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+function markResend(id) {
+  fetch(`${BOT_URL}/vendor-shipments/${id}?key=${encodeURIComponent(staffKey)}`, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
+    body: JSON.stringify({ action: 'resend' })
+  }).then(r=>r.json()).then(d=>{ if(d.success){showToast('🔁');loadData();} else showToast('⚠️'); }).catch(()=>showToast('⚠️'));
+}
+
+// ── ISSUE REPORTING ────────────────────────────────────────────
+let issueShipmentId = null;
+let issueReason = null;
+function openReportIssue(id) {
+  issueShipmentId = id;
+  showOverlay(`
+    <div class="confirm-icon">⚠️</div>
+    <div class="reason-grid">
+      <button class="reason-btn" onclick="pickIssueReason('damaged')">🩹 Damaged</button>
+      <button class="reason-btn" onclick="pickIssueReason('not_cleaned')">🧼 Not Cleaned</button>
+      <button class="reason-btn" onclick="pickIssueReason('lost')">❓ Lost Item</button>
+      <button class="reason-btn" onclick="pickIssueReason('wrong_item')">🔀 Wrong Item</button>
+      <button class="reason-btn" onclick="pickIssueReason('other')">💬 Other</button>
+    </div>
+    <button class="confirm-back-link" onclick="closeOverlay()">↩️ CANCEL</button>
+  `);
+}
+function pickIssueReason(reason) {
+  issueReason = reason;
+  closeOverlay();
+  openCamera((dataUrl) => {
+    window._pendingPhotoData = dataUrl;
+    showOverlay(`
+      <img class="photo-preview" src="${dataUrl}">
+      <div class="confirm-actions">
+        <button class="confirm-btn confirm-cancel" onclick="pickIssueReason('${reason}')">↩️ RETAKE</button>
+        <button class="confirm-btn confirm-yes" onclick="submitIssueReport()">✅ SEND</button>
+      </div>
+    `);
+  });
+}
+async function submitIssueReport() {
+  const id = issueShipmentId, reason = issueReason, photoBase64 = window._pendingPhotoData;
+  closeOverlay();
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}/report-issue?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
+      body: JSON.stringify({ reason, photoBase64 })
+    });
+    const data = await res.json();
+    if (data.success) { showToast('⚠️✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+
+// ── CAMERA ────────────────────────────────────────────────────
+let cameraStream = null;
+async function openCamera(onCapture) {
+  try { cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } }); }
+  catch (e) { try { cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); } catch (e2) { showToast('⚠️'); return; } }
+  const video = document.getElementById('camera-video');
+  video.srcObject = cameraStream;
+  document.getElementById('camera-overlay').style.display = 'flex';
+  window._cameraCaptureCallback = onCapture;
+}
+function cancelCamera() {
+  if (cameraStream) { cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+  document.getElementById('camera-overlay').style.display = 'none';
+}
+function captureFrame() {
+  const video = document.getElementById('camera-video');
+  let w = video.videoWidth, h = video.videoHeight;
+  const maxDim = 1000;
+  if (w > h && w > maxDim) { h = h*maxDim/w; w = maxDim; } else if (h > maxDim) { w = w*maxDim/h; h = maxDim; }
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  canvas.getContext('2d').drawImage(video, 0, 0, w, h);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
+  cancelCamera();
+  if (window._cameraCaptureCallback) window._cameraCaptureCallback(dataUrl);
+}
+
+if (staffKey) { showApp(); } else { document.getElementById('login-screen').style.display = 'flex'; }
+</script>
+</body>
+</html>
