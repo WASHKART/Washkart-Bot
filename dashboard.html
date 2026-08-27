@@ -8,7 +8,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --green:#16a34a;--green-light:#f0fdf4;--green-mid:#bbf7d0;--green-dark:#14532d;
+  --green:#12a4da;--green-light:#f0f9ff;--green-mid:#bae6fd;--green-dark:#0c4a6e;
   --blue:#2563eb;--blue-light:#eff6ff;--orange:#ea580c;--orange-light:#fff7ed;
   --red:#dc2626;--red-light:#fef2f2;--purple:#7c3aed;--purple-light:#f5f3ff;
   --text:#111827;--muted:#6b7280;--border:#e5e7eb;--bg:#f9fafb;--white:#fff;
@@ -25,14 +25,14 @@ body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--text);font-
 
 /* SIDEBAR */
 .sidebar-logo{padding:1.2rem 1rem;border-bottom:1px solid #1f2937;}
-.logo-text{font-size:16px;font-weight:700;color:#fff;letter-spacing:.05em;}
-.logo-text span{color:#4ade80;}
-.logo-badge{font-size:10px;background:#4ade80;color:#111;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:600;}
+.logo-img{height:28px;}
+
+.logo-badge{font-size:10px;background:#7dd3fc;color:#111;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:600;}
 .sidebar-section{padding:.5rem 0;}
 .sidebar-label{font-size:10px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .3rem;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:.6rem 1rem;color:#9ca3af;cursor:pointer;transition:all .15s;font-size:13px;font-weight:500;}
 .nav-item:hover{background:#1f2937;color:#fff;}
-.nav-item.active{background:#1f2937;color:#4ade80;}
+.nav-item.active{background:#1f2937;color:#7dd3fc;}
 .nav-item .icon{font-size:16px;width:20px;text-align:center;}
 .nav-badge{margin-left:auto;background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;}
 
@@ -45,7 +45,7 @@ body{font-family:"Inter",sans-serif;background:var(--bg);color:var(--text);font-
 /* BUTTONS */
 .btn{padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:none;font-family:"Inter",sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:6px;}
 .btn-primary{background:var(--green);color:#fff;}
-.btn-primary:hover{background:#15803d;}
+.btn-primary:hover{background:#0d7ba8;}
 .btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
 .btn-outline:hover{background:var(--bg);}
 .btn-ghost{background:var(--green-light);color:var(--green);border:1px solid var(--green-mid);}
@@ -90,17 +90,17 @@ tr.overdue td{background:#fef2f2;}
 .b-picked{background:#dbeafe;color:#1e40af;}
 .b-inprogress{background:#ede9fe;color:#5b21b6;}
 .b-outfordelivery{background:#fed7aa;color:#9a3412;}
-.b-delivered{background:#dcfce7;color:#166534;}
+.b-delivered{background:#e0f2fe;color:#0c4a6e;}
 .b-cancelled{background:#fee2e2;color:#991b1b;}
-.b-paid{background:#dcfce7;color:#166534;}
+.b-paid{background:#e0f2fe;color:#0c4a6e;}
 .b-unpaid{background:#fee2e2;color:#991b1b;}
 .b-partial{background:#fef3c7;color:#92400e;}
 .b-walkin{background:#f0f9ff;color:#0369a1;}
-.b-whatsapp{background:#f0fdf4;color:#166534;}
+.b-whatsapp{background:#f0f9ff;color:#0c4a6e;}
 .b-enquired{background:#eff6ff;color:#1d4ed8;}
 .b-booking_started{background:#fef3c7;color:#92400e;}
 .b-dropped{background:#fee2e2;color:#991b1b;}
-.b-converted{background:#dcfce7;color:#166534;}
+.b-converted{background:#e0f2fe;color:#0c4a6e;}
 
 /* KANBAN */
 .kanban{display:flex;gap:1rem;overflow-x:auto;padding-bottom:1rem;}
@@ -140,7 +140,7 @@ tr.overdue td{background:#fef2f2;}
 .chat-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.5rem;background:#f0f0f0;}
 .msg-bubble{max-width:70%;padding:.6rem .9rem;border-radius:12px;font-size:13px;line-height:1.5;word-break:break-word;}
 .msg-customer{background:var(--white);border-radius:0 12px 12px 12px;align-self:flex-start;box-shadow:var(--shadow);}
-.msg-bot{background:#dcfce7;border-radius:12px 0 12px 12px;align-self:flex-end;}
+.msg-bot{background:#e0f2fe;border-radius:12px 0 12px 12px;align-self:flex-end;}
 .msg-time{font-size:10px;color:var(--muted);margin-top:2px;}
 .chat-reply{padding:.8rem;border-top:1px solid var(--border);display:flex;gap:.5rem;}
 .chat-reply-input{flex:1;border:1px solid var(--border);border-radius:8px;padding:.5rem .8rem;font-size:13px;font-family:"Inter",sans-serif;resize:none;max-height:100px;}
@@ -253,7 +253,7 @@ tr.overdue td{background:#fef2f2;}
   .sidebar{width:60px;}
   .nav-item span{display:none;}
   .sidebar-label{display:none;}
-  .sidebar-logo .logo-text{display:none;}
+  .sidebar-logo .logo-img{display:none;}
 }
 @media(max-width:768px){
   .stats-grid{grid-template-columns:1fr 1fr;}
@@ -275,7 +275,7 @@ tr.overdue td{background:#fef2f2;}
   .sidebar.open{transform:translateX(0);}
   .sidebar .nav-item span{display:inline;}
   .sidebar .sidebar-label{display:block;}
-  .sidebar .sidebar-logo .logo-text{display:block;}
+  .sidebar .sidebar-logo .logo-img{display:block;}
 
   /* Topbar: stack and wrap instead of overflowing */
   .topbar{height:auto;min-height:52px;padding:.5rem .8rem;flex-wrap:wrap;gap:6px;}
@@ -319,7 +319,7 @@ tr.overdue td{background:#fef2f2;}
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-text">WASH<span>KART</span><span class="logo-badge">LIVE</span></div>
+      <img class="logo-img" src="/assets/washkart-logo-white.png" alt="Washkart"><span class="logo-badge">LIVE</span>
     </div>
     <div class="sidebar-section">
       <div class="sidebar-label">Overview</div>
@@ -738,8 +738,8 @@ tr.overdue td{background:#fef2f2;}
       <div id="page-vendors" class="page-section" style="display:none">
         <div style="display:flex;gap:8px;margin-bottom:1rem">
           <button class="btn btn-outline" onclick="openNewVendorForm()">+ Add Vendor</button>
-          <button class="btn btn-primary" onclick="openNewShipmentForm()">+ New Shipment</button>
         </div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:1rem">Handovers and returns are logged by staff via the Vendor app — this page is for pricing and payment tracking.</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1rem">
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Currently With Vendors</div><div style="font-size:22px;font-weight:700" id="vendor-outstanding-count">0</div></div></div>
           <div class="card"><div class="card-body"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Overdue</div><div style="font-size:22px;font-weight:700;color:var(--red)" id="vendor-overdue-count">0</div></div></div>
@@ -748,7 +748,7 @@ tr.overdue td{background:#fef2f2;}
         <div class="card">
           <div class="card-header"><div class="card-title">Shipments</div></div>
           <div class="card-body" style="padding:0">
-            <table class="data-table"><thead><tr><th>Vendor</th><th>Description</th><th>Qty</th><th>Sent</th><th>Expected Back</th><th>Status</th><th>Bill</th><th></th></tr></thead>
+            <table class="data-table"><thead><tr><th>Vendor</th><th>Items</th><th>Qty</th><th>Sent</th><th>Expected Back</th><th>Status</th><th>Bill</th></tr></thead>
             <tbody id="vendor-shipments-body"></tbody></table>
           </div>
         </div>
@@ -830,7 +830,7 @@ tr.overdue td{background:#fef2f2;}
           <button class="tpl-btn" onclick="useTemplate('festive')">🎊 Festive / Seasonal offer</button>
           <button class="tpl-btn" onclick="useTemplate('intro')">🧺 Brand intro — first time</button>
         </div>
-        <div id="tpl-preview" style="display:none;margin-top:8px;padding:10px;background:#f0fdf4;border:1px solid var(--green-mid);border-radius:8px;font-size:12px;line-height:1.6;white-space:pre-wrap"></div>
+        <div id="tpl-preview" style="display:none;margin-top:8px;padding:10px;background:#f0f9ff;border:1px solid var(--green-mid);border-radius:8px;font-size:12px;line-height:1.6;white-space:pre-wrap"></div>
       </div>
     </div>
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-message')">Cancel</button><button class="btn btn-primary" onclick="sendManualMessage()">Send</button></div>
@@ -875,41 +875,6 @@ tr.overdue td{background:#fef2f2;}
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modal-vendor')">Cancel</button>
       <button class="btn btn-primary" onclick="saveVendor()">Save Vendor</button>
-    </div>
-  </div>
-</div>
-
-<!-- VENDOR SHIPMENT MODAL -->
-<div class="modal-overlay" id="modal-shipment">
-  <div class="modal" style="max-width:460px">
-    <div class="modal-header"><div class="modal-title">New Vendor Shipment</div><button class="modal-close" onclick="closeModal('modal-shipment')">✕</button></div>
-    <div class="modal-body">
-      <div class="form-group"><label class="form-label">Vendor *</label><select class="form-select" id="vs-vendor"></select></div>
-      <div class="form-group"><label class="form-label">Description *</label><input class="form-input" id="vs-description" placeholder="e.g. 3 carpets, 2 leather jackets"></div>
-      <div class="form-group"><label class="form-label">Quantity *</label><input class="form-input" id="vs-qty" type="number" placeholder="e.g. 5"></div>
-      <div class="form-group"><label class="form-label">Related Order ID (optional)</label><input class="form-input" id="vs-order-id" placeholder="FW-1234"></div>
-      <div class="form-group"><label class="form-label">Sent Date</label><input class="form-input" id="vs-sent-date" type="date"></div>
-      <div class="form-group"><label class="form-label">Expected Return Date</label><input class="form-input" id="vs-expected-date" type="date"></div>
-      <div class="form-group"><label class="form-label">Vendor Bill Amount</label><input class="form-input" id="vs-bill" type="number" placeholder="0"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('modal-shipment')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveShipment()">Save Shipment</button>
-    </div>
-  </div>
-</div>
-
-<!-- VENDOR RETURN MODAL -->
-<div class="modal-overlay" id="modal-vendor-return">
-  <div class="modal" style="max-width:360px">
-    <div class="modal-header"><div class="modal-title">Mark Returned</div><button class="modal-close" onclick="closeModal('modal-vendor-return')">✕</button></div>
-    <div class="modal-body">
-      <input type="hidden" id="vr-shipment-id">
-      <div class="form-group"><label class="form-label">Quantity Returned</label><input class="form-input" id="vr-qty-returned" type="number"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-outline" onclick="closeModal('modal-vendor-return')">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmVendorReturn()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1049,14 +1014,14 @@ function checkAuth() {
   const pwd = prompt('Washkart Admin Password:');
   if (pwd === null) {
     // User cancelled prompt — show login screen, don't crash
-    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:24px;font-weight:700">WASHKART Admin</div><button onclick="location.reload()" style="padding:10px 24px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Login</button></div>';
+    document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:24px;font-weight:700">WASHKART Admin</div><button onclick="location.reload()" style="padding:10px 24px;background:#12a4da;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Login</button></div>';
     return false;
   }
   if (pwd === DASHBOARD_PASSWORD) {
     sessionStorage.setItem('wk_auth', pwd);
     return true;
   }
-  document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:18px;color:#dc2626">Wrong password.</div><button onclick="location.reload()" style="padding:10px 24px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Try Again</button></div>';
+  document.body.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;gap:16px"><div style="font-size:18px;color:#dc2626">Wrong password.</div><button onclick="location.reload()" style="padding:10px 24px;background:#12a4da;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Try Again</button></div>';
   return false;
 }
 if (!checkAuth()) { /* Auth failed — page already replaced */ }
@@ -1329,7 +1294,7 @@ const KANBAN_COLS = [
   {key:'picked',label:'Picked Up',color:'#dbeafe',hdr:'#1e40af'},
   {key:'inprogress',label:'Cleaning',color:'#ede9fe',hdr:'#5b21b6'},
   {key:'outfordelivery',label:'Out for Delivery',color:'#fed7aa',hdr:'#9a3412'},
-  {key:'delivered',label:'Delivered',color:'#dcfce7',hdr:'#166534'},
+  {key:'delivered',label:'Delivered',color:'#e0f2fe',hdr:'#0c4a6e'},
 ];
 function renderKanban() {
   const q = (document.getElementById('kanban-search')?.value||'').toLowerCase();
@@ -1643,8 +1608,8 @@ function renderCalendar() {
 let leadFilter='all';
 function renderLeads() {
   const stages=['enquired','booking_started','dropped','converted'];
-  const colors={enquired:'#1d4ed8',booking_started:'#92400e',dropped:'#991b1b',converted:'#166534'};
-  const bgs={enquired:'#eff6ff',booking_started:'#fef3c7',dropped:'#fef2f2',converted:'#f0fdf4'};
+  const colors={enquired:'#1d4ed8',booking_started:'#92400e',dropped:'#991b1b',converted:'#0c4a6e'};
+  const bgs={enquired:'#eff6ff',booking_started:'#fef3c7',dropped:'#fef2f2',converted:'#f0f9ff'};
   document.getElementById('leads-funnel').innerHTML=
     [{key:'all',label:'All',count:allLeads.length,bg:'#f3f4f6',color:'#374151'},...stages.map(s=>({key:s,label:s.replace('_',' '),count:allLeads.filter(l=>l.stage===s).length,bg:bgs[s],color:colors[s]}))].map(s=>`
     <div class="funnel-stage" style="background:${s.bg};color:${s.color}" onclick="leadFilter='${s.key}';renderLeads()">
@@ -1888,8 +1853,8 @@ function printInvoice(orderId) {
   win.document.write(`<!DOCTYPE html><html><head><title>Invoice ${b.id}</title>
   <style>
     body{font-family:Arial,sans-serif;margin:32px;font-size:14px;color:#111}
-    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16a34a;padding-bottom:16px;margin-bottom:20px}
-    .brand{font-size:22px;font-weight:800}.brand span{color:#16a34a}
+    .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #12a4da;padding-bottom:16px;margin-bottom:20px}
+    .brand{font-size:22px;font-weight:800}.brand span{color:#12a4da}
     .meta{font-size:12px;color:#555;margin-top:4px}
     table{width:100%;border-collapse:collapse;margin:20px 0}
     th,td{border-bottom:1px solid #e5e7eb;padding:8px 10px;text-align:left}
@@ -2102,7 +2067,7 @@ async function sendChatReply() {
       const msgEl = document.getElementById('chat-messages');
       const bubble = document.createElement('div');
       bubble.style.cssText='display:flex;justify-content:flex-end';
-      bubble.innerHTML=`<div class="msg-bubble msg-bot" style="background:#dcfce7">${text.replace(/\n/g,'<br>')}</div>`;
+      bubble.innerHTML=`<div class="msg-bubble msg-bot" style="background:#e0f2fe">${text.replace(/\n/g,'<br>')}</div>`;
       msgEl.appendChild(bubble);
       msgEl.scrollTop = msgEl.scrollHeight;
       // Reload conversations in background
@@ -2326,7 +2291,7 @@ async function renderVendors() {
 
   const STATUS_BADGES = {
     sent: '<span class="tag" style="background:#eff6ff;color:#1e40af">Sent</span>',
-    returned: '<span class="tag" style="background:#dcfce7;color:#15803d">Returned</span>',
+    returned: '<span class="tag" style="background:#e0f2fe;color:#0d7ba8">Returned</span>',
     resent: '<span class="tag" style="background:#fef3c7;color:#92400e">Resent</span>',
   };
   const tbody = document.getElementById('vendor-shipments-body');
@@ -2336,19 +2301,17 @@ async function renderVendors() {
   }
   tbody.innerHTML = allVendorShipments.map(s => {
     const isOverdue = (s.status==='sent'||s.status==='resent') && s.expected_return_date && new Date(s.expected_return_date) < today;
+    const hasPhotos = Array.isArray(s.photos) && s.photos.length;
     return `<tr class="${isOverdue?'overdue':''}">
       <td>${vendorName(s.vendor_id)}</td>
-      <td>${s.description}${s.order_id?`<div style="font-size:11px;color:var(--muted);font-family:monospace">${s.order_id}</div>`:''}</td>
+      <td>${s.description}${s.order_id?`<div style="font-size:11px;color:var(--muted);font-family:monospace">${s.order_id}</div>`:''}${s.notes?`<div style="font-size:11px;color:#92400e;margin-top:2px">📝 ${s.notes.replace(/\n/g,' · ')}</div>`:''}${hasPhotos?`<div style="margin-top:2px;cursor:pointer;font-size:11px;color:#2563eb" onclick="viewVendorPhotos(${s.id})">📷 ${s.photos.length} photo${s.photos.length>1?'s':''}</div>`:''}</td>
       <td>${s.qty_returned||0}/${s.qty_sent}</td>
       <td>${s.sent_date}</td>
       <td>${s.expected_return_date||'—'}${isOverdue?' <span class="tag overdue-tag">OVERDUE</span>':''}</td>
       <td>${STATUS_BADGES[s.status]||s.status}</td>
-      <td>Rs ${s.vendor_bill_amount||0} ${s.bill_paid?'✅':`<button class="btn btn-sm" onclick="markVendorBillPaid(${s.id})">Mark Paid</button>`}</td>
       <td>
-        ${(s.status==='sent'||s.status==='resent') ? `
-          <button class="btn btn-sm btn-outline" onclick="openVendorReturn(${s.id})">Returned</button>
-          <button class="btn btn-sm" style="color:var(--red)" onclick="markVendorResend(${s.id})">Resend</button>
-        ` : ''}
+        <input type="number" value="${s.vendor_bill_amount||0}" style="width:70px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px" onchange="updateVendorBill(${s.id},this.value)">
+        ${s.bill_paid?' ✅':` <button class="btn btn-sm" onclick="markVendorBillPaid(${s.id})">Mark Paid</button>`}
       </td>
     </tr>`;
   }).join('');
@@ -2372,60 +2335,28 @@ async function saveVendor() {
     else toast(data.error||'Failed','error');
   } catch(e) { toast('Network error','error'); }
 }
-function openNewShipmentForm() {
-  if (!allVendors.length) { toast('Add a vendor first','error'); return; }
-  document.getElementById('vs-vendor').innerHTML = allVendors.map(v=>`<option value="${v.id}">${v.name}</option>`).join('');
-  document.getElementById('vs-description').value = '';
-  document.getElementById('vs-qty').value = '';
-  document.getElementById('vs-order-id').value = '';
-  document.getElementById('vs-sent-date').value = new Date().toISOString().split('T')[0];
-  document.getElementById('vs-expected-date').value = '';
-  document.getElementById('vs-bill').value = '';
-  openModal('modal-shipment');
-}
-async function saveShipment() {
-  const payload = {
-    vendor_id: parseInt(document.getElementById('vs-vendor').value),
-    description: document.getElementById('vs-description').value.trim(),
-    qty_sent: parseInt(document.getElementById('vs-qty').value),
-    order_id: document.getElementById('vs-order-id').value.trim(),
-    sent_date: document.getElementById('vs-sent-date').value,
-    expected_return_date: document.getElementById('vs-expected-date').value || null,
-    vendor_bill_amount: parseFloat(document.getElementById('vs-bill').value) || 0,
-  };
-  if (!payload.description || !payload.qty_sent) { toast('Description and quantity are required','error'); return; }
-  try {
-    const res = await fetch(`${BOT_URL}/vendor-shipments`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const data = await res.json();
-    if (data.success) { toast('Shipment logged ✓'); closeModal('modal-shipment'); renderVendors(); }
-    else toast(data.error||'Failed','error');
-  } catch(e) { toast('Network error','error'); }
-}
-function openVendorReturn(id) {
-  document.getElementById('vr-shipment-id').value = id;
-  document.getElementById('vr-qty-returned').value = '';
-  openModal('modal-vendor-return');
-}
-async function confirmVendorReturn() {
-  const id = document.getElementById('vr-shipment-id').value;
-  const qty = parseInt(document.getElementById('vr-qty-returned').value);
-  if (!qty || qty <= 0) { toast('Enter a valid quantity','error'); return; }
-  try {
-    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'return', qty_returned:qty})});
-    const data = await res.json();
-    if (data.success) { toast('Marked returned ✓'); closeModal('modal-vendor-return'); renderVendors(); }
-    else toast(data.error||'Failed','error');
-  } catch(e) { toast('Network error','error'); }
-}
-function markVendorResend(id) {
-  fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'resend'})})
-    .then(r=>r.json()).then(d=>{ if(d.success){toast('Marked for resend');renderVendors();} else toast('Failed','error'); })
+function updateVendorBill(id, value) {
+  const amount = parseFloat(value) || 0;
+  fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({vendor_bill_amount:amount})})
+    .then(r=>r.json()).then(d=>{ if(d.success){toast('Bill updated ✓');renderVendors();} else toast('Failed','error'); })
     .catch(()=>toast('Network error','error'));
 }
 function markVendorBillPaid(id) {
   fetch(`${BOT_URL}/vendor-shipments/${id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({bill_paid:true})})
     .then(r=>r.json()).then(d=>{ if(d.success){toast('Bill marked paid ✓');renderVendors();} else toast('Failed','error'); })
     .catch(()=>toast('Network error','error'));
+}
+function viewVendorPhotos(id) {
+  const s = allVendorShipments.find(x=>x.id===id);
+  if (!s || !s.photos || !s.photos.length) { toast('No photos','error'); return; }
+  document.getElementById('photos-order-id').textContent = `Vendor Shipment #${id}`;
+  document.getElementById('photos-modal-body').innerHTML = s.photos.map(p => `
+    <div>
+      <div style="font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px">${p.caption||p.kind} <span style="float:right">${new Date(p.at).toLocaleString('en-IN')}</span></div>
+      <img src="${p.url}" style="width:100%;border-radius:8px;display:block" onclick="window.open('${p.url}','_blank')">
+    </div>
+  `).join('');
+  openModal('modal-photos');
 }
 
 async function renderExpenses() {
@@ -2847,7 +2778,7 @@ function printTag(orderId) {
     .large { font-size:11px; }
     .line { border-top:1px dashed #000; margin:2px 0; }
     .field { text-align:left; }
-    .print-btn { font-family:sans-serif; width:100%; padding:8px; margin-bottom:10px; cursor:pointer; background:#16a34a; color:#fff; border:none; border-radius:6px; font-size:12px; }
+    .print-btn { font-family:sans-serif; width:100%; padding:8px; margin-bottom:10px; cursor:pointer; background:#12a4da; color:#fff; border:none; border-radius:6px; font-size:12px; }
     @media print { .print-btn { display:none; } }
   </style></head><body>
   <button class="print-btn" onclick="window.print()">🖨 Print Tag</button>
