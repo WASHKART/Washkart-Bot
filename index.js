@@ -215,6 +215,29 @@ function saveSession(phone, session) {
 
 // MESSAGE QUEUE
 const messageQueues = {};
+// Chat history in the dashboard should show what the customer actually saw and tapped,
+// not the internal button ID/payload — this only affects display, never the bot's own
+// logic, which still matches against the raw, unmodified id everywhere else.
+const BUTTON_LABELS = {
+  btn_book: "Book Pickup", btn_price: "Rates", btn_track: "Track Order",
+  branch_bavdhan: "Bavdhan", branch_baner: "Baner",
+  date_today: "Today", date_tomorrow: "Book for Tomorrow", date_custom: "Choose a different date",
+  slot_morning: "Morning 10 AM - 1 PM", slot_evening: "Evening 5 PM - 8 PM",
+  slot_morning_tomorrow: "Morning tomorrow", slot_evening_tomorrow: "Evening tomorrow",
+  confirm_direct: "Confirm", update_details: "Update details", use_saved: "Yes, use saved address",
+  pay_cash: "Cash", pay_upi: "UPI",
+  price_iron: "Steam Iron rates", price_dc: "Dry Clean rates", price_wash: "Laundry rates",
+  price_shoe: "Shoe Cleaning rates", price_specialty: "Specialty rates",
+  express_yes: "Yes, Express", express_no: "Standard is fine", no_cancel: "No, don't cancel",
+  __audio__: "🎤 [voice message]", __image__: "📷 [image]", __video__: "🎥 [video]",
+  __document__: "📄 [document]", __sticker__: "[sticker]",
+};
+function humanizeForHistory(rawText) {
+  if (BUTTON_LABELS[rawText]) return BUTTON_LABELS[rawText];
+  if (typeof rawText === "string" && rawText.startsWith("cc_")) return "Confirm cancel order";
+  return rawText; // free-typed customer text, or anything not in the list — left as-is
+}
+
 function enqueueMessage(phone, rawText, phoneNumberId) {
   if (!messageQueues[phone]) messageQueues[phone] = Promise.resolve();
   messageQueues[phone] = messageQueues[phone]
@@ -1200,7 +1223,7 @@ async function handleMessage(phone, rawText, phoneNumberId) {
   if (session.takeoverActive) return; // bot paused for this customer
   const t = norm(rawText);
   if (!session.history) session.history = [];
-  session.history.push({ role: "customer", text: rawText });
+  session.history.push({ role: "customer", text: humanizeForHistory(rawText) });
   if (session.history.length > 12) session.history = session.history.slice(-12);
   saveSession(phone, session);
 
@@ -2583,6 +2606,15 @@ app.post("/send-message", async (req,res) => {
 });
 
 app.get("/customers",      async(req,res)=>{ try{ const {branch}=req.query; const f=branch&&branch!=="all"?`branch=eq.${branch}&order=created_at.desc`:"order=created_at.desc"; res.json(await dbSelect("customers",f)); }catch(e){res.status(500).json({error:e.message});} });
+app.patch("/customers/:phone", async (req, res) => {
+  try {
+    const updateData = {};
+    ["name","address","society","branch"].forEach(f => { if (req.body[f] !== undefined) updateData[f] = req.body[f]; });
+    if (!Object.keys(updateData).length) return res.status(400).json({ error: "No fields to update" });
+    await dbUpdate("customers", `phone=eq.${req.params.phone}`, updateData);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.get("/ratings",        async(req,res)=>{ try{ const {branch}=req.query; const f=branch&&branch!=="all"?`branch=eq.${branch}&order=created_at.desc`:"order=created_at.desc"; res.json(await dbSelect("ratings",f)); }catch(e){res.status(500).json({error:e.message});} });
 app.get("/leads",          async(req,res)=>{ try{ const {branch}=req.query; const f=branch&&branch!=="all"?`branch=eq.${branch}&order=updated_at.desc`:"order=updated_at.desc"; res.json(await dbSelect("leads",f)); }catch(e){res.status(500).json({error:e.message});} });
 app.get("/conversations",  async(req,res)=>{ try{ const {phone}=req.query; if(phone){const rows=await dbSelect("sessions",`phone=eq.${normalizePhone(phone)}`);res.json(rows[0]||{});}else{const rows=await dbSelect("sessions","order=updated_at.desc&limit=100");res.json(rows);} }catch(e){res.status(500).json({error:e.message});} });
@@ -3137,6 +3169,60 @@ app.delete("/expenses/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// VENDOR TRACKING — items outsourced for processing (carpets, shoes, specialty items).
+app.get("/vendors", async (req, res) => {
+  try { res.json(await dbSelect("vendors", "select=*&order=name.asc")); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/vendors", async (req, res) => {
+  try {
+    const { name, phone, specialty, notes } = req.body;
+    if (!name) return res.status(400).json({ error: "Missing vendor name" });
+    await dbInsert("vendors", { name, phone: phone||"", specialty: specialty||"", notes: notes||"" });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get("/vendor-shipments", async (req, res) => {
+  try { res.json(await dbSelect("vendor_shipments", "select=*&order=sent_date.desc")); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/vendor-shipments", async (req, res) => {
+  try {
+    const { vendor_id, order_id, description, qty_sent, sent_date, expected_return_date, vendor_bill_amount, branch } = req.body;
+    if (!vendor_id || !description || !qty_sent) return res.status(400).json({ error: "Missing vendor, description, or quantity" });
+    await dbInsert("vendor_shipments", {
+      vendor_id, order_id: order_id||"", description, qty_sent,
+      sent_date: sent_date || new Date().toISOString().split("T")[0],
+      expected_return_date: expected_return_date || null,
+      vendor_bill_amount: vendor_bill_amount || 0, branch: branch || "",
+      status: "sent", qty_returned: 0,
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.patch("/vendor-shipments/:id", async (req, res) => {
+  try {
+    const updateData = {};
+    const { action, qty_returned, resend_reason } = req.body;
+    if (action === "return") {
+      updateData.qty_returned = qty_returned;
+      updateData.actual_return_date = new Date().toISOString().split("T")[0];
+      updateData.status = "returned";
+    } else if (action === "resend") {
+      updateData.status = "resent";
+      const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
+      updateData.resent_count = (rows[0]?.resent_count || 0) + 1;
+    } else {
+      ["vendor_bill_amount","bill_paid","description","qty_sent","expected_return_date"].forEach(f => {
+        if (req.body[f] !== undefined) updateData[f] = req.body[f];
+      });
+    }
+    await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, updateData);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get("/quickbook/lookup", async (req, res) => {
   if (!checkQuickbookAuth(req, res)) return;
   try {
@@ -3145,6 +3231,17 @@ app.get("/quickbook/lookup", async (req, res) => {
     const customer = await getCustomer(phone);
     if (!customer) return res.json({ found: false });
     res.json({ found: true, name: customer.name, address: customer.address, branch: customer.branch, society: customer.society });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Name-based search — useful since admin usually remembers customers by name, not by number.
+app.get("/quickbook/search", async (req, res) => {
+  if (!checkQuickbookAuth(req, res)) return;
+  try {
+    const q = (req.query.name || "").trim();
+    if (q.length < 3) return res.json([]);
+    const rows = await dbSelect("customers", `name=ilike.*${encodeURIComponent(q)}*&limit=8`);
+    res.json(rows.map(c => ({ name: c.name, phone: c.phone, address: c.address, branch: c.branch, society: c.society })));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
