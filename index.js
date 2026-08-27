@@ -6,6 +6,7 @@ const FormData = require("form-data");
 const webpush = require("web-push");
 const app     = express();
 app.use(express.json({ limit: "10mb" })); // raised from the 100kb default — delivery photos need the headroom
+app.use("/assets", express.static(path.join(__dirname, "assets"))); // serves the logo files
 
 // CORS
 const ALLOWED_ORIGINS = [
@@ -95,6 +96,12 @@ const QUICKBOOK_PASSWORD = process.env.QUICKBOOK_PASSWORD || "quickbook2025"; //
 function checkQuickbookAuth(req, res) {
   const key = req.headers["x-staff-key"] || req.query.key;
   if (key !== QUICKBOOK_PASSWORD) { res.status(401).json({ error: "Unauthorized" }); return false; }
+  return true;
+}
+const VENDOR_PASSWORD = process.env.VENDOR_PASSWORD || "vendor2025"; // separate credential — vendor handovers involve goods + money, deliberately not bundled into Counter/Delivery access
+function checkVendorAuth(req, res) {
+  const key = req.headers["x-staff-key"] || req.query.key;
+  if (key !== VENDOR_PASSWORD) { res.status(401).json({ error: "Unauthorized" }); return false; }
   return true;
 }
 
@@ -3112,6 +3119,7 @@ a{display:block;width:100%;max-width:280px;padding:20px;border-radius:14px;font-
 </body></html>`));
 app.get("/counter", (req, res) => res.sendFile(path.join(__dirname, "counter.html")));
 app.get("/quickbook", (req, res) => res.sendFile(path.join(__dirname, "quickbook.html")));
+app.get("/vendor", (req, res) => res.sendFile(path.join(__dirname, "vendor.html")));
 
 // Branch management — this is what makes opening a new store a form submission instead
 // of a code deployment. Admin-only, unauthenticated to match the rest of the admin API.
@@ -3187,28 +3195,53 @@ app.get("/vendor-shipments", async (req, res) => {
   try { res.json(await dbSelect("vendor_shipments", "select=*&order=sent_date.desc")); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Staff-side handover — itemized (name, qty, delicate flag per item), same tally pattern
+// as customer orders. Auto-computes a readable description + total qty for the admin view.
 app.post("/vendor-shipments", async (req, res) => {
+  if (!checkVendorAuth(req, res)) return;
   try {
-    const { vendor_id, order_id, description, qty_sent, sent_date, expected_return_date, vendor_bill_amount, branch } = req.body;
-    if (!vendor_id || !description || !qty_sent) return res.status(400).json({ error: "Missing vendor, description, or quantity" });
+    const { vendor_id, order_id, items, sent_date, expected_return_date, branch } = req.body;
+    if (!vendor_id || !Array.isArray(items) || !items.length) return res.status(400).json({ error: "Missing vendor or items" });
+    const description = items.map(it => `${it.qty}x ${it.name}${it.delicate ? " ⚠️" : ""}`).join(", ");
+    const qtySent = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
     await dbInsert("vendor_shipments", {
-      vendor_id, order_id: order_id||"", description, qty_sent,
+      vendor_id, order_id: order_id || "", description, qty_sent: qtySent,
+      items_sent: items, items_returned: [],
       sent_date: sent_date || new Date().toISOString().split("T")[0],
       expected_return_date: expected_return_date || null,
-      vendor_bill_amount: vendor_bill_amount || 0, branch: branch || "",
+      vendor_bill_amount: 0, branch: branch || "",
       status: "sent", qty_returned: 0,
     });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
 app.patch("/vendor-shipments/:id", async (req, res) => {
   try {
     const updateData = {};
-    const { action, qty_returned, resend_reason } = req.body;
+    const { action, items_returned, resend_reason } = req.body;
     if (action === "return") {
-      updateData.qty_returned = qty_returned;
+      // Itemized return — computes discrepancy against what was originally sent automatically.
+      const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
+      const shipment = rows[0];
+      const sentMap = {}; (shipment?.items_sent || []).forEach(it => { sentMap[it.name] = (sentMap[it.name]||0) + Number(it.qty||0); });
+      const returnedMap = {}; (items_returned || []).forEach(it => { returnedMap[it.name] = (returnedMap[it.name]||0) + Number(it.qty||0); });
+      const discrepancies = [];
+      Object.keys(sentMap).forEach(name => {
+        const sent = sentMap[name], returned = returnedMap[name] || 0;
+        if (returned < sent) discrepancies.push(`${name}: sent ${sent}, only ${returned} back`);
+      });
+      updateData.items_returned = items_returned || [];
+      updateData.qty_returned = Object.values(returnedMap).reduce((s,n)=>s+n,0);
       updateData.actual_return_date = new Date().toISOString().split("T")[0];
       updateData.status = "returned";
+      if (discrepancies.length) {
+        updateData.notes = (shipment?.notes ? shipment.notes + "\n" : "") + `[DISCREPANCY] ${discrepancies.join("; ")}`;
+        const vendorRows = await dbSelect("vendors", `id=eq.${shipment.vendor_id}`).catch(()=>[]);
+        const vendorName = vendorRows[0]?.name || "Vendor";
+        await sendMessage(OWNER_NUMBER, `⚠️ VENDOR DISCREPANCY — ${vendorName}\n\n${discrepancies.join("\n")}`, "1136879376186203").catch(()=>{});
+      }
     } else if (action === "resend") {
       updateData.status = "resent";
       const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
@@ -3219,6 +3252,42 @@ app.patch("/vendor-shipments/:id", async (req, res) => {
       });
     }
     await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, updateData);
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Vendor mistake reporting — same photo pipeline as order-level issue reports.
+app.post("/vendor-shipments/:id/report-issue", async (req, res) => {
+  if (!checkVendorAuth(req, res)) return;
+  try {
+    const { reason, photoBase64 } = req.body;
+    const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
+    const shipment = rows[0];
+    if (!shipment) return res.status(404).json({ error: "Shipment not found" });
+    const vendorRows = await dbSelect("vendors", `id=eq.${shipment.vendor_id}`).catch(()=>[]);
+    const vendorName = vendorRows[0]?.name || "Vendor";
+
+    const reasonLabels = { damaged: "Damaged", not_cleaned: "Not cleaned properly", lost: "Item lost", wrong_item: "Wrong item returned", other: "Other issue" };
+    const label = reasonLabels[reason] || "Issue reported";
+    const noteLine = `[VENDOR ISSUE] ${label} (${new Date().toLocaleString("en-IN")})`;
+    await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, { notes: (shipment.notes ? shipment.notes + "\n" : "") + noteLine });
+
+    let photoUrl = null;
+    if (photoBase64) {
+      const buffer = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
+      photoUrl = await uploadPhotoToStorage(buffer, `vendor-${req.params.id}`, "issue");
+      const photos = Array.isArray(shipment.photos) ? shipment.photos : [];
+      photos.push({ url: photoUrl, kind: "issue", caption: label, at: new Date().toISOString() });
+      await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, { photos });
+    }
+    const alertMsg = `⚠️ VENDOR ISSUE — ${vendorName}\n\nShipment: ${shipment.description}\nIssue: ${label}`;
+    if (photoUrl) {
+      const buffer2 = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
+      const mediaId = await uploadMediaImage(buffer2, "vendor-issue.jpg", "1136879376186203");
+      await sendImageToCustomer(OWNER_NUMBER, mediaId, alertMsg, "1136879376186203");
+    } else {
+      await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203");
+    }
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
