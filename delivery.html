@@ -227,7 +227,7 @@ function render() {
     } else {
       actionsHtml = `<div class="card-actions">
         <button class="act-btn act-no" onclick="askFail('${p.order_id}','${activeTab}')">❌ FAILED</button>
-        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}')">✅ DONE</button>
+        <button class="act-btn act-yes" onclick="askSuccess('${p.order_id}','${activeTab}',${p.amount || 0},'${p.payment_status || 'unpaid'}',${p.amount_paid || 0})">✅ DONE</button>
       </div>`;
       if (activeTab === 'delivery') {
         actionsHtml += `<button class="left-outside-link" onclick="startLeftOutsidePhoto('${p.order_id}')">📸 Left outside — nobody home</button>`;
@@ -284,7 +284,9 @@ async function doFail(orderId, stage) {
   } catch (e) { showToast('⚠️'); }
 }
 
-function askSuccess(orderId, stage, amount, paymentStatus) {
+let pendingPieceCount = null;
+function askSuccess(orderId, stage, amount, paymentStatus, amountPaid) {
+  amountPaid = amountPaid || 0;
   if (stage === 'pickup') {
     showOverlay(`
       <div class="confirm-icon">🧺⬆️</div>
@@ -295,14 +297,37 @@ function askSuccess(orderId, stage, amount, paymentStatus) {
     `);
     return;
   }
-  // Delivery — if unpaid with an amount on file, ask HOW they paid (or if not paid)
+  // Delivery — ask piece count first, purely for your own internal tally reference,
+  // before continuing into the existing payment flow.
+  askPieceCount(orderId, amount, paymentStatus, amountPaid);
+}
+function askPieceCount(orderId, amount, paymentStatus, amountPaid) {
+  showOverlay(`
+    <div class="confirm-icon">🔢🧺</div>
+    <div style="font-size:14px;color:#6b7280;margin-bottom:10px">How many pieces are you delivering?</div>
+    <input class="select-input" id="piece-count-input" type="number" inputmode="numeric" placeholder="e.g. 18" autofocus>
+    <div class="confirm-actions" style="margin-top:10px">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="confirmPieceCount('${orderId}',${amount},'${paymentStatus}',${amountPaid})">NEXT ➡️</button>
+    </div>
+  `);
+}
+function confirmPieceCount(orderId, amount, paymentStatus, amountPaid) {
+  const val = parseInt(document.getElementById('piece-count-input').value);
+  pendingPieceCount = (!isNaN(val) && val > 0) ? val : null;
+  continueDeliveryFlow(orderId, amount, paymentStatus, amountPaid);
+}
+function continueDeliveryFlow(orderId, amount, paymentStatus, amountPaid) {
   if (amount > 0 && paymentStatus !== 'paid') {
+    const remaining = amount - amountPaid;
     showOverlay(`
       <div class="confirm-icon">💰</div>
-      <div class="confirm-sub" style="font-size:32px;font-weight:700;color:#111827">₹${amount}</div>
+      ${amountPaid > 0 ? `<div style="font-size:14px;color:#6b7280;margin-bottom:4px">₹${amountPaid} already paid</div>` : ''}
+      <div class="confirm-sub" style="font-size:32px;font-weight:700;color:#111827">₹${remaining} due</div>
       <div class="pay-method-grid">
-        <button class="pay-method-btn cash" onclick="doStatus('${orderId}','delivered',true)">💵 CASH</button>
-        <button class="pay-method-btn upi" onclick="startUpiPhoto('${orderId}')">📱 UPI</button>
+        <button class="pay-method-btn cash" onclick="doStatus('${orderId}','delivered',true)">💵 CASH (full ₹${remaining})</button>
+        <button class="pay-method-btn upi" onclick="startUpiPhoto('${orderId}')">📱 UPI (full ₹${remaining})</button>
+        <button class="pay-method-btn" style="color:#d97706" onclick="askPartialAmount('${orderId}', ${remaining})">🔢 PARTIAL AMOUNT</button>
         <button class="pay-method-btn" onclick="doStatus('${orderId}','delivered',false)">❌ NOT PAID</button>
       </div>
       <button class="confirm-back-link" onclick="closeOverlay()">↩️ BACK — didn't mean to tap this</button>
@@ -318,12 +343,15 @@ function askSuccess(orderId, stage, amount, paymentStatus) {
   }
 }
 
-async function doStatus(orderId, status, paid) {
+async function doStatus(orderId, status, paid, amountReceived) {
   closeOverlay();
   try {
+    const body = { status, paid };
+    if (amountReceived !== undefined) body.amountReceived = amountReceived;
+    if (status === 'delivered' && pendingPieceCount !== null) { body.pieceCount = pendingPieceCount; pendingPieceCount = null; }
     const res = await fetch(`${BOT_URL}/pickups/${orderId}/status?key=${encodeURIComponent(staffKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, paid })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (data.success) {
@@ -332,6 +360,24 @@ async function doStatus(orderId, status, paid) {
       if (status === 'delivered' && paid === false) setTimeout(() => askRemindNow(orderId), 700);
     } else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
+}
+
+function askPartialAmount(orderId, remaining) {
+  showOverlay(`
+    <div class="confirm-icon">🔢</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:10px">₹${remaining} is due — enter what was actually received</div>
+    <input type="number" id="partial-amount-input" class="field-input" placeholder="Amount received" style="width:100%;padding:16px;border:2px solid #e5e7eb;border-radius:14px;font-size:20px;text-align:center;margin-bottom:14px">
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="submitPartialAmount('${orderId}', ${remaining})">✅ CONFIRM</button>
+    </div>
+  `);
+}
+function submitPartialAmount(orderId, remaining) {
+  const val = parseFloat(document.getElementById('partial-amount-input').value);
+  if (!val || val <= 0) { showToast('⚠️ Enter a valid amount'); return; }
+  if (val > remaining) { showToast('⚠️ More than due'); return; }
+  doStatus(orderId, 'delivered', val >= remaining, val);
 }
 
 function askRemindNow(orderId) {
@@ -358,11 +404,37 @@ function startLeftOutsidePhoto(orderId) {
   photoOrderId = orderId;
   photoMode = 'left_outside';
   closeOverlay();
+  showOverlay(`
+    <div class="confirm-icon">🔢🧺</div>
+    <div style="font-size:14px;color:#6b7280;margin-bottom:10px">How many pieces are you leaving?</div>
+    <input class="select-input" id="piece-count-input" type="number" inputmode="numeric" placeholder="e.g. 18" autofocus>
+    <div class="confirm-actions" style="margin-top:10px">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="confirmPieceCountThenPhoto()">NEXT ➡️</button>
+    </div>
+  `);
+}
+function confirmPieceCountThenPhoto() {
+  const val = parseInt(document.getElementById('piece-count-input').value);
+  pendingPieceCount = (!isNaN(val) && val > 0) ? val : null;
+  closeOverlay();
   openCameraWithPreview(() => submitPhoto());
 }
 function startUpiPhoto(orderId) {
   photoOrderId = orderId;
   photoMode = 'upi_proof';
+  closeOverlay();
+  showOverlay(`
+    <div class="confirm-icon">📱💳</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:10px">Show this to the customer — amount is already filled in</div>
+    <img src="${BOT_URL}/pickups/${orderId}/upi-qr?key=${encodeURIComponent(staffKey)}" style="width:100%;max-width:280px;border-radius:14px;border:2px solid #e5e7eb;display:block;margin:0 auto 14px">
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ CANCEL</button>
+      <button class="confirm-btn confirm-yes" onclick="proceedToUpiProof('${orderId}')">✅ THEY PAID</button>
+    </div>
+  `);
+}
+function proceedToUpiProof(orderId) {
   closeOverlay();
   openCameraWithPreview(() => submitPhoto());
 }
@@ -420,12 +492,15 @@ async function submitPhoto() {
   const photoBase64 = window._pendingPhotoData;
   const orderId = photoOrderId;
   const mode = photoMode;
+  const pieceCount = pendingPieceCount; pendingPieceCount = null;
   closeOverlay();
   if (!photoBase64 || !orderId) return;
   try {
+    const body = { photoBase64, mode, paid: mode === 'upi_proof' };
+    if (pieceCount !== null) body.pieceCount = pieceCount;
     const res = await fetch(`${BOT_URL}/pickups/${orderId}/delivery-photo?key=${encodeURIComponent(staffKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ photoBase64, mode, paid: mode === 'upi_proof' })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (data.success) { showToast('✅📤'); loadData(); }
