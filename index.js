@@ -3,6 +3,7 @@ const axios   = require("axios");
 const path    = require("path");
 const PDFDocument = require("pdfkit");
 const FormData = require("form-data");
+const QRCode = require("qrcode");
 const webpush = require("web-push");
 const app     = express();
 app.use(express.json({ limit: "10mb" })); // raised from the 100kb default — delivery photos need the headroom
@@ -163,6 +164,15 @@ async function uploadPhotoToStorage(buffer, orderId, kind) {
   });
   return `${SUPABASE_URL}/storage/v1/object/public/order-photos/${path}`;
 }
+
+// Generates a UPI QR with the exact amount pre-filled, so the customer's UPI app opens
+// with nothing left to type — just confirm and pay. This does NOT confirm payment
+// automatically (that needs a real payment gateway); staff still taps Confirm after.
+async function generateUpiQrBuffer(upiId, payeeName, amount, note) {
+  const upiUri = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${amount}&cu=INR&tn=${encodeURIComponent(note)}`;
+  return await QRCode.toBuffer(upiUri, { width: 500, margin: 2 });
+}
+
 async function appendOrderPhoto(orderId, url, kind, caption) {
   try {
     const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
@@ -792,6 +802,10 @@ const ITEM_PRICES = {
   bedsheet:{laundry:150,iron:60},blanket:{laundry:350},curtain:{dryclean:15},
   bag:{specialty:200},helmet:{specialty:150},carpet:{specialty:40},toy:{specialty:200},
 };
+
+// Single source of truth for item pricing — Dashboard and Counter fetch this on load
+// instead of keeping their own hardcoded copies, so a price only ever needs updating here.
+app.get("/item-prices", (req, res) => res.json(ITEM_PRICES));
 
 function detectServiceNear(fullText, matchIndex, matchLength) {
   const w = fullText.toLowerCase().substring(Math.max(0, matchIndex - 30), matchIndex + matchLength + 30);
@@ -2265,6 +2279,19 @@ async function sendDailyDigest() {
     }
     msg += `\n\nUnpaid: ${unpaid.length} orders (Rs ${unpaidTotal})`;
 
+    // Vendor SLA — items sitting with a vendor 3+ days, using the exact same aggregated
+    // outstanding-balance logic the Vendor page and its API endpoint use.
+    try {
+      const balances = await getVendorOutstandingBalances();
+      const agingVendors = balances
+        .map(v => ({ name: v.vendor_name, days: Math.floor((todayDate - new Date(v.oldest_date)) / (1000*60*60*24)) }))
+        .filter(v => v.days >= 3);
+      if (agingVendors.length) {
+        msg += `\n\n🏭 Vendor items aging 3+ days:\n`;
+        msg += agingVendors.map(v=>`  ${v.name} — ${v.days}d`).join("\n");
+      }
+    } catch (e) { console.error("Vendor SLA check in digest failed:", e.message); }
+
     for (const br of Object.values(BRANCHES)) {
       if (br.admin) await sendMessage(br.admin, msg, getBranchNumId(br.slug));
     }
@@ -2437,7 +2464,7 @@ app.post("/bookings", async (req,res) => {
 
 app.patch("/bookings/:orderId", async (req,res) => {
   try {
-    const {status,service_type,express,delivery_date,notes,amount,payment_status,payment_method,send_payment_reminder,items,address} = req.body;
+    const {status,service_type,express,delivery_date,notes,amount,amount_paid,payment_status,payment_method,send_payment_reminder,items,address} = req.body;
     const orderId = req.params.orderId;
 
     // Fetch current order BEFORE update to detect status change
@@ -2451,9 +2478,20 @@ app.patch("/bookings/:orderId", async (req,res) => {
     if (express        !==undefined) updateData.express        = express;
     if (delivery_date)               updateData.delivery_date  = delivery_date;
     if (notes          !==undefined) updateData.notes          = notes;
-    if (payment_status !==undefined) updateData.payment_status = payment_status;
     if (payment_method !==undefined) updateData.payment_method = payment_method;
-    if (payment_status==="paid")     updateData.payment_date   = new Date().toISOString();
+    // amount_paid drives payment_status automatically (unpaid/partial/paid) rather than
+    // trusting a manually-set status that could drift out of sync with the actual figure.
+    if (amount_paid !== undefined) {
+      const totalAmount = amount !== undefined ? amount : (prevOrder?.amount || 0);
+      updateData.amount_paid = amount_paid;
+      updateData.payment_status = amount_paid <= 0 ? "unpaid" : (amount_paid >= totalAmount ? "paid" : "partial");
+      updateData.payment_date = new Date().toISOString();
+    } else if (payment_status !== undefined) {
+      // Direct status set (e.g. staff apps' simple paid/unpaid toggle) — keep amount_paid consistent with it.
+      updateData.payment_status = payment_status;
+      if (payment_status === "paid") { updateData.amount_paid = amount !== undefined ? amount : (prevOrder?.amount || 0); updateData.payment_date = new Date().toISOString(); }
+      else if (payment_status === "unpaid") { updateData.amount_paid = 0; }
+    }
     if (address        !==undefined && address.trim()) {
       updateData.address = address.trim();
       // Filling in the address resolves exactly what the "needs address" flag was waiting
@@ -2527,15 +2565,25 @@ app.patch("/bookings/:orderId", async (req,res) => {
         },2000);
       }
     }
-    // Send QR on out for delivery
-    if (finalStatus==="outfordelivery"&&br.qrMediaId&&b?.phone) {
-      await delay(600);
-      await sendImage(b.phone,br.qrMediaId,`Scan to pay - Washkart ${br.name}`,numId);
+    // Send a dynamic QR on out for delivery — amount pre-filled, generated fresh per
+    // order rather than a static shop QR the customer has to type the amount into.
+    if (finalStatus==="outfordelivery"&&b?.phone&&b?.amount>0) {
+      try {
+        await delay(600);
+        const qrBuffer = await generateUpiQrBuffer(br.upi, "Washkart", b.amount - (Number(b.amount_paid)||0), orderId);
+        const qrMediaId = await uploadMediaImage(qrBuffer, "payment-qr.png", numId);
+        await sendImage(b.phone, qrMediaId, `Scan to pay Rs ${b.amount - (Number(b.amount_paid)||0)} - Washkart ${br.name}`, numId);
+      } catch (e) { console.error("[QR] out-for-delivery send failed:", e.message); }
     }
     // Manual payment reminder
     if (send_payment_reminder&&b?.phone&&b?.amount) {
       await sendMessage(b.phone,`Payment reminder - Washkart ${br.name}\n\nHi ${b.name}, payment of Rs ${b.amount} for order ${orderId} is pending.\n\nOur delivery agent carries a QR code. You can also pay cash.\n\nAlready paid? Reply paid.`,numId);
-      if (br.qrMediaId) { await delay(500); await sendImage(b.phone,br.qrMediaId,`Scan to pay - Rs ${b.amount}`,numId); }
+      try {
+        await delay(500);
+        const qrBuffer = await generateUpiQrBuffer(br.upi, "Washkart", b.amount - (Number(b.amount_paid)||0), orderId);
+        const qrMediaId = await uploadMediaImage(qrBuffer, "payment-qr.png", numId);
+        await sendImage(b.phone, qrMediaId, `Scan to pay Rs ${b.amount - (Number(b.amount_paid)||0)}`, numId);
+      } catch (e) { console.error("[QR] payment reminder send failed:", e.message); }
     }
     res.json({success:true,delivery_date:updateData.delivery_date,status:finalStatus,customerNotified});
   } catch (e) { res.status(500).json({error:e.message}); }
@@ -2694,7 +2742,7 @@ app.get("/pickups", async (req, res) => {
       status: b.status, service_type: b.service_type,
       notes: (b.notes || "").split("\n").filter(line => !line.startsWith("[STAFF FLAG")).join("\n").trim(),
       branch: b.branch, society: b.society,
-      amount: b.amount || 0, payment_status: b.payment_status || "unpaid",
+      amount: b.amount || 0, payment_status: b.payment_status || "unpaid", amount_paid: b.amount_paid || 0,
       items: Array.isArray(b.items) ? b.items : [],
       needs_delivery: b.needs_delivery !== false, // defaults true unless explicitly set false
       // Never expose the actual amount's purpose to staff — just whether the photo+payment
@@ -2711,7 +2759,7 @@ app.get("/pickups", async (req, res) => {
 app.post("/pickups/:orderId/status", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { status, paid } = req.body;
+    const { status, paid, amountReceived, pieceCount } = req.body;
     const allowed = ["picked", "inprogress", "outfordelivery", "delivered"];
     if (!allowed.includes(status)) return res.status(400).json({ error: "Invalid status" });
     const orderId = req.params.orderId;
@@ -2721,14 +2769,25 @@ app.post("/pickups/:orderId/status", async (req, res) => {
     if (!prevOrder) return res.status(404).json({ error: "Order not found" });
 
     const updateData = { status };
+    if (typeof pieceCount === "number" && pieceCount > 0) updateData.delivery_piece_count = pieceCount;
     if (prevOrder.service_type && !prevOrder.delivery_date) {
       updateData.delivery_date = calcDeliveryDate(prevOrder.service_type, prevOrder.express || false);
     }
-    // Payment confirmation — staff can only confirm/deny the EXISTING amount, never enter a new one
-    if (status === "delivered" && paid === true && prevOrder.amount > 0) {
-      updateData.payment_status = "paid";
-      updateData.payment_method = "cash";
-      updateData.payment_date = new Date().toISOString();
+    // Payment confirmation — full payment (paid=true), a specific partial amount
+    // (amountReceived), or nothing recorded at all.
+    if (status === "delivered" && prevOrder.amount > 0) {
+      if (typeof amountReceived === "number" && amountReceived > 0) {
+        const newAmountPaid = (Number(prevOrder.amount_paid) || 0) + amountReceived;
+        updateData.amount_paid = newAmountPaid;
+        updateData.payment_status = newAmountPaid >= prevOrder.amount ? "paid" : "partial";
+        updateData.payment_method = "cash";
+        updateData.payment_date = new Date().toISOString();
+      } else if (paid === true) {
+        updateData.payment_status = "paid";
+        updateData.amount_paid = prevOrder.amount;
+        updateData.payment_method = "cash";
+        updateData.payment_date = new Date().toISOString();
+      }
     }
     await dbUpdate("bookings", `order_id=eq.${orderId}`, updateData);
 
@@ -2810,10 +2869,25 @@ app.post("/pickups/:orderId/remind-payment", async (req, res) => {
 // Delivery completed with a photo — either "left outside" proof (no payment collected,
 // nobody was home) or a photo of a UPI payment confirmation screen. Sends the photo
 // directly to the customer as proof/receipt, updates status and payment in one step.
+// Returns a QR image directly — used as a plain <img src> in Delivery's UPI flow, so the
+// customer can scan it on the delivery guy's screen with the exact amount pre-filled.
+app.get("/pickups/:orderId/upi-qr", async (req, res) => {
+  if (!checkStaffAuth(req, res)) return;
+  try {
+    const rows = await dbSelect("bookings", `order_id=eq.${req.params.orderId}`);
+    const b = rows[0];
+    if (!b) return res.status(404).send("Order not found");
+    const br = getBranchBySlug(b.branch || "bavdhan") || DEFAULT_BRANCH;
+    const amount = b.amount - (Number(b.amount_paid) || 0);
+    const buffer = await generateUpiQrBuffer(br.upi, "Washkart", amount, req.params.orderId);
+    res.type("png").send(buffer);
+  } catch (e) { res.status(500).send("QR generation failed"); }
+});
+
 app.post("/pickups/:orderId/delivery-photo", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { photoBase64, mode, paid } = req.body; // mode: 'left_outside' | 'upi_proof'
+    const { photoBase64, mode, paid, pieceCount } = req.body; // mode: 'left_outside' | 'upi_proof'
     if (!photoBase64) return res.status(400).json({ error: "No photo provided" });
     const orderId = req.params.orderId;
     const rows = await dbSelect("bookings", `order_id=eq.${orderId}`).catch(() => []);
@@ -2832,8 +2906,10 @@ app.post("/pickups/:orderId/delivery-photo", async (req, res) => {
     ).catch(e => console.error("[storage] delivery photo upload failed:", e.message));
 
     const updateData = { status: "delivered" };
+    if (typeof pieceCount === "number" && pieceCount > 0) updateData.delivery_piece_count = pieceCount;
     if (paid === true && b.amount > 0) {
       updateData.payment_status = "paid";
+      updateData.amount_paid = b.amount;
       updateData.payment_method = mode === "upi_proof" ? "upi" : "cash";
       updateData.payment_date = new Date().toISOString();
     }
@@ -2968,6 +3044,7 @@ app.post("/pickups/:orderId/taken-by-customer", async (req, res) => {
     const updateData = { status: "delivered" };
     if (paidMethod && b.amount > 0) {
       updateData.payment_status = "paid";
+      updateData.amount_paid = b.amount;
       updateData.payment_method = paidMethod;
       updateData.payment_date = new Date().toISOString();
     }
@@ -3177,6 +3254,20 @@ app.delete("/expenses/:id", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// REFUNDS — a proper audit record, not just editing an order's amount down after the fact.
+app.get("/refunds", async (req, res) => {
+  try { res.json(await dbSelect("refunds", "select=*&order=refunded_at.desc")); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/refunds", async (req, res) => {
+  try {
+    const { order_id, amount, reason } = req.body;
+    if (!order_id || !amount || amount <= 0) return res.status(400).json({ error: "Missing order ID or amount" });
+    await dbInsert("refunds", { order_id, amount, reason: reason || "" });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // VENDOR TRACKING — items outsourced for processing (carpets, shoes, specialty items).
 app.get("/vendors", async (req, res) => {
   try { res.json(await dbSelect("vendors", "select=*&order=name.asc")); }
@@ -3196,17 +3287,154 @@ app.get("/vendor-shipments", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Aggregated view — one running balance per vendor, not individual batches. This is what
+// staff actually sees: "18 outstanding with Vendor X", regardless of how many separate
+// handovers built up to that number. Batches remain in the DB for audit trail underneath.
+async function getVendorOutstandingBalances() {
+  // Only the bulk lane — order-linked (individual) items are tracked separately
+  // via /vendor-shipments/individual, never folded into an anonymous count.
+  const shipments = (await dbSelect("vendor_shipments", "status=neq.returned&order=sent_date.asc")).filter(s => !s.order_id);
+  const vendors = await dbSelect("vendors", "select=*");
+  const grouped = {};
+  for (const s of shipments) {
+    const itemsSent = s.items_sent || [];
+    const itemsReturned = s.items_returned || [];
+    let hasOutstanding = false;
+    for (const it of itemsSent) {
+      const returnedQty = itemsReturned.find(r => r.name === it.name)?.qty || 0;
+      const outstandingQty = it.qty - returnedQty;
+      if (outstandingQty <= 0) continue;
+      hasOutstanding = true;
+      if (!grouped[s.vendor_id]) grouped[s.vendor_id] = { vendor_id: s.vendor_id, items: {}, oldest_date: s.sent_date, batch_ids: [] };
+      if (s.sent_date < grouped[s.vendor_id].oldest_date) grouped[s.vendor_id].oldest_date = s.sent_date;
+      if (!grouped[s.vendor_id].items[it.name]) grouped[s.vendor_id].items[it.name] = { qty: 0, delicate: false };
+      grouped[s.vendor_id].items[it.name].qty += outstandingQty;
+      if (it.delicate) grouped[s.vendor_id].items[it.name].delicate = true;
+    }
+    if (hasOutstanding && grouped[s.vendor_id]) grouped[s.vendor_id].batch_ids.push(s.id);
+  }
+  return Object.values(grouped).map(g => ({
+    vendor_id: g.vendor_id,
+    vendor_name: vendors.find(v => v.id === g.vendor_id)?.name || "Vendor",
+    items: Object.entries(g.items).map(([name, data]) => ({ name, qty: data.qty, delicate: data.delicate })),
+    oldest_date: g.oldest_date,
+  }));
+}
+app.get("/vendor-shipments/outstanding", async (req, res) => {
+  try { res.json(await getVendorOutstandingBalances()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Individual lane — items tied to a specific customer order. Shown as their own cards,
+// never folded into the anonymous bulk count, since the physical item that comes back
+// matters (it has to actually be that customer's garment).
+app.get("/vendor-shipments/individual", async (req, res) => {
+  try {
+    const shipments = (await dbSelect("vendor_shipments", "status=neq.returned&order=sent_date.asc")).filter(s => s.order_id);
+    const vendors = await dbSelect("vendors", "select=*");
+    res.json(shipments.map(s => ({
+      id: s.id, vendor_id: s.vendor_id, vendor_name: vendors.find(v=>v.id===s.vendor_id)?.name || "Vendor",
+      order_id: s.order_id, customer_name: s.customer_name || "",
+      items_sent: s.items_sent || [], sent_date: s.sent_date,
+      recall_requested_at: s.recall_requested_at || null,
+    })));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/vendor-shipments/:id/recall", async (req, res) => {
+  if (!checkVendorAuth(req, res)) return;
+  try {
+    const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
+    const shipment = rows[0];
+    if (!shipment) return res.status(404).json({ error: "Not found" });
+    await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, { recall_requested_at: new Date().toISOString() });
+    const vendorRows = await dbSelect("vendors", `id=eq.${shipment.vendor_id}`).catch(()=>[]);
+    const vendorName = vendorRows[0]?.name || "Vendor";
+    const alertMsg = `📞 RECALL REQUESTED — ${vendorName}\n\nOrder: ${shipment.order_id}${shipment.customer_name ? `\nCustomer: ${shipment.customer_name}` : ""}\nItems: ${shipment.description}\n\nCustomer needs this back — please call the vendor and arrange retrieval.`;
+    await sendMessage(OWNER_NUMBER, alertMsg, "1136879376186203").catch(()=>{});
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/vendor-shipments/:id/mark-returned-individual", async (req, res) => {
+  if (!checkVendorAuth(req, res)) return;
+  try {
+    await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, {
+      status: "returned", actual_return_date: new Date().toISOString().split("T")[0], recall_requested_at: null,
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Allocates a return against a vendor's open batches, oldest first (FIFO) — the correct
+// way to handle "some items come back, some don't" without losing track of what's left.
+async function allocateVendorReturn(vendorId, returnedItems) {
+  const shipments = await dbSelect("vendor_shipments", `vendor_id=eq.${vendorId}&status=neq.returned&order=sent_date.asc`);
+  const remaining = returnedItems.map(it => ({ ...it }));
+
+  for (const shipment of shipments) {
+    const itemsSent = shipment.items_sent || [];
+    const itemsReturnedSoFar = shipment.items_returned || [];
+    let changed = false;
+    const newItemsReturned = itemsReturnedSoFar.map(r => ({ ...r }));
+
+    for (const sentItem of itemsSent) {
+      const alreadyReturned = itemsReturnedSoFar.find(r => r.name === sentItem.name)?.qty || 0;
+      const outstandingForThisItem = sentItem.qty - alreadyReturned;
+      if (outstandingForThisItem <= 0) continue;
+      const matchingReturn = remaining.find(r => r.name === sentItem.name && r.qty > 0);
+      if (!matchingReturn) continue;
+
+      const toAllocate = Math.min(outstandingForThisItem, matchingReturn.qty);
+      matchingReturn.qty -= toAllocate;
+      changed = true;
+      const existingEntry = newItemsReturned.find(r => r.name === sentItem.name);
+      if (existingEntry) existingEntry.qty += toAllocate;
+      else newItemsReturned.push({ name: sentItem.name, qty: toAllocate });
+    }
+
+    if (changed) {
+      const fullyReturned = itemsSent.every(sentItem => {
+        const returnedQty = newItemsReturned.find(r => r.name === sentItem.name)?.qty || 0;
+        return returnedQty >= sentItem.qty;
+      });
+      await dbUpdate("vendor_shipments", `id=eq.${shipment.id}`, {
+        items_returned: newItemsReturned,
+        status: fullyReturned ? "returned" : "sent",
+        actual_return_date: fullyReturned ? new Date().toISOString().split("T")[0] : shipment.actual_return_date,
+      });
+    }
+  }
+  return { excess: remaining.filter(r => r.qty > 0) }; // more claimed returned than was actually outstanding
+}
+
+app.post("/vendor-shipments/return", async (req, res) => {
+  if (!checkVendorAuth(req, res)) return;
+  try {
+    const { vendor_id, items_returned } = req.body;
+    if (!vendor_id || !Array.isArray(items_returned) || !items_returned.length) return res.status(400).json({ error: "Missing vendor or items" });
+    const { excess } = await allocateVendorReturn(vendor_id, items_returned);
+    if (excess.length) {
+      const vendorRows = await dbSelect("vendors", `id=eq.${vendor_id}`);
+      const vendorName = vendorRows[0]?.name || "Vendor";
+      await sendMessage(OWNER_NUMBER, `⚠️ VENDOR RETURN MISMATCH — ${vendorName}\n\nMore claimed returned than was actually outstanding: ${excess.map(e => `${e.qty}x ${e.name}`).join(", ")}`, "1136879376186203").catch(() => {});
+    }
+    res.json({ success: true, excess });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Staff-side handover — itemized (name, qty, delicate flag per item), same tally pattern
 // as customer orders. Auto-computes a readable description + total qty for the admin view.
+const MARKING_LABELS = { delicate: "⚠️ Delicate", rush: "⏰ Rush", customer_specific: "📌 Don't Mix", fragile: "📦 Fragile" };
 app.post("/vendor-shipments", async (req, res) => {
   if (!checkVendorAuth(req, res)) return;
   try {
-    const { vendor_id, order_id, items, sent_date, expected_return_date, branch } = req.body;
+    const { vendor_id, order_id, customer_name, items, sent_date, expected_return_date, branch } = req.body;
     if (!vendor_id || !Array.isArray(items) || !items.length) return res.status(400).json({ error: "Missing vendor or items" });
-    const description = items.map(it => `${it.qty}x ${it.name}${it.delicate ? " ⚠️" : ""}`).join(", ");
+    const description = items.map(it => `${it.qty}x ${it.name}${it.marking ? " " + (MARKING_LABELS[it.marking]||"") : ""}`).join(", ");
     const qtySent = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
     await dbInsert("vendor_shipments", {
-      vendor_id, order_id: order_id || "", description, qty_sent: qtySent,
+      vendor_id, order_id: order_id || "", customer_name: customer_name || "", description, qty_sent: qtySent,
       items_sent: items, items_returned: [],
       sent_date: sent_date || new Date().toISOString().split("T")[0],
       expected_return_date: expected_return_date || null,
@@ -3220,67 +3448,40 @@ app.post("/vendor-shipments", async (req, res) => {
 app.patch("/vendor-shipments/:id", async (req, res) => {
   try {
     const updateData = {};
-    const { action, items_returned, resend_reason } = req.body;
-    if (action === "return") {
-      // Itemized return — computes discrepancy against what was originally sent automatically.
-      const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
-      const shipment = rows[0];
-      const sentMap = {}; (shipment?.items_sent || []).forEach(it => { sentMap[it.name] = (sentMap[it.name]||0) + Number(it.qty||0); });
-      const returnedMap = {}; (items_returned || []).forEach(it => { returnedMap[it.name] = (returnedMap[it.name]||0) + Number(it.qty||0); });
-      const discrepancies = [];
-      Object.keys(sentMap).forEach(name => {
-        const sent = sentMap[name], returned = returnedMap[name] || 0;
-        if (returned < sent) discrepancies.push(`${name}: sent ${sent}, only ${returned} back`);
-      });
-      updateData.items_returned = items_returned || [];
-      updateData.qty_returned = Object.values(returnedMap).reduce((s,n)=>s+n,0);
-      updateData.actual_return_date = new Date().toISOString().split("T")[0];
-      updateData.status = "returned";
-      if (discrepancies.length) {
-        updateData.notes = (shipment?.notes ? shipment.notes + "\n" : "") + `[DISCREPANCY] ${discrepancies.join("; ")}`;
-        const vendorRows = await dbSelect("vendors", `id=eq.${shipment.vendor_id}`).catch(()=>[]);
-        const vendorName = vendorRows[0]?.name || "Vendor";
-        await sendMessage(OWNER_NUMBER, `⚠️ VENDOR DISCREPANCY — ${vendorName}\n\n${discrepancies.join("\n")}`, "1136879376186203").catch(()=>{});
-      }
-    } else if (action === "resend") {
-      updateData.status = "resent";
-      const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
-      updateData.resent_count = (rows[0]?.resent_count || 0) + 1;
-    } else {
-      ["vendor_bill_amount","bill_paid","description","qty_sent","expected_return_date"].forEach(f => {
-        if (req.body[f] !== undefined) updateData[f] = req.body[f];
-      });
-    }
+    ["vendor_bill_amount","bill_paid","expected_return_date"].forEach(f => {
+      if (req.body[f] !== undefined) updateData[f] = req.body[f];
+    });
     await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, updateData);
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // Vendor mistake reporting — same photo pipeline as order-level issue reports.
-app.post("/vendor-shipments/:id/report-issue", async (req, res) => {
+app.post("/vendors/:id/report-issue", async (req, res) => {
   if (!checkVendorAuth(req, res)) return;
   try {
     const { reason, photoBase64 } = req.body;
-    const rows = await dbSelect("vendor_shipments", `id=eq.${req.params.id}`);
-    const shipment = rows[0];
-    if (!shipment) return res.status(404).json({ error: "Shipment not found" });
-    const vendorRows = await dbSelect("vendors", `id=eq.${shipment.vendor_id}`).catch(()=>[]);
-    const vendorName = vendorRows[0]?.name || "Vendor";
+    const rows = await dbSelect("vendors", `id=eq.${req.params.id}`);
+    const vendor = rows[0];
+    if (!vendor) return res.status(404).json({ error: "Vendor not found" });
 
     const reasonLabels = { damaged: "Damaged", not_cleaned: "Not cleaned properly", lost: "Item lost", wrong_item: "Wrong item returned", other: "Other issue" };
     const label = reasonLabels[reason] || "Issue reported";
     const noteLine = `[VENDOR ISSUE] ${label} (${new Date().toLocaleString("en-IN")})`;
-    await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, { notes: (shipment.notes ? shipment.notes + "\n" : "") + noteLine });
+    const newNotes = (vendor.notes ? vendor.notes + "\n" : "") + noteLine;
 
     let photoUrl = null;
     if (photoBase64) {
       const buffer = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
       photoUrl = await uploadPhotoToStorage(buffer, `vendor-${req.params.id}`, "issue");
-      const photos = Array.isArray(shipment.photos) ? shipment.photos : [];
+      const photos = Array.isArray(vendor.photos) ? vendor.photos : [];
       photos.push({ url: photoUrl, kind: "issue", caption: label, at: new Date().toISOString() });
-      await dbUpdate("vendor_shipments", `id=eq.${req.params.id}`, { photos });
+      await dbUpdate("vendors", `id=eq.${req.params.id}`, { notes: newNotes, photos });
+    } else {
+      await dbUpdate("vendors", `id=eq.${req.params.id}`, { notes: newNotes });
     }
-    const alertMsg = `⚠️ VENDOR ISSUE — ${vendorName}\n\nShipment: ${shipment.description}\nIssue: ${label}`;
+
+    const alertMsg = `⚠️ VENDOR ISSUE — ${vendor.name}\n\nIssue: ${label}`;
     if (photoUrl) {
       const buffer2 = Buffer.from(String(photoBase64).replace(/^data:image\/\w+;base64,/, ""), "base64");
       const mediaId = await uploadMediaImage(buffer2, "vendor-issue.jpg", "1136879376186203");
@@ -3291,6 +3492,7 @@ app.post("/vendor-shipments/:id/report-issue", async (req, res) => {
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
 
 app.get("/quickbook/lookup", async (req, res) => {
   if (!checkQuickbookAuth(req, res)) return;
