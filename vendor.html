@@ -115,7 +115,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 const BOT_URL = 'https://washkart-bot.onrender.com';
 let staffKey = sessionStorage.getItem('wk_vendor_key') || '';
 let allVendorsList = [];
-let allShipments = [];
 
 const RAW_ITEM_PRICES = {
   shirt:{},pant:{},trouser:{},jeans:{},tshirt:{},top:{},kurta:{},kurti:{},blouse:{},salwar:{},
@@ -159,44 +158,92 @@ function showApp() {
 
 async function loadData() {
   try {
-    const [vRes, sRes] = await Promise.all([fetch(`${BOT_URL}/vendors`), fetch(`${BOT_URL}/vendor-shipments`)]);
+    const [vRes, oRes, iRes] = await Promise.all([
+      fetch(`${BOT_URL}/vendors`),
+      fetch(`${BOT_URL}/vendor-shipments/outstanding`),
+      fetch(`${BOT_URL}/vendor-shipments/individual`),
+    ]);
     allVendorsList = await vRes.json();
-    allShipments = await sRes.json();
+    outstandingBalances = await oRes.json();
+    individualItems = await iRes.json();
     render();
   } catch (e) { console.error(e); }
 }
 
-function vendorName(id) { return allVendorsList.find(v=>v.id===id)?.name || 'Vendor'; }
+let outstandingBalances = [];
+let individualItems = [];
+const MARKING_DISPLAY = { delicate: '⚠️ Delicate', rush: '⏰ Rush', customer_specific: "📌 Don't Mix", fragile: '📦 Fragile' };
 
 function render() {
-  const pending = allShipments.filter(s => s.status === 'sent' || s.status === 'resent');
   const list = document.getElementById('list');
-  if (!pending.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+  if (!outstandingBalances.length && !individualItems.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
   const today = new Date(); today.setHours(0,0,0,0);
-  list.innerHTML = pending.map(s => {
+
+  const individualHtml = individualItems.map(s => {
     const sentDate = new Date(s.sent_date);
     const daysPending = Math.floor((today - sentDate) / (1000*60*60*24));
-    const isOverdue = s.expected_return_date && new Date(s.expected_return_date) < today;
-    const isAging = !isOverdue && daysPending >= 3;
-    const cardClass = isOverdue ? 'overdue' : (isAging ? 'aging' : '');
-    const badgeClass = isOverdue ? 'overdue' : (isAging ? 'aging' : '');
-    const badgeText = isOverdue ? 'OVERDUE' : `${daysPending}d pending`;
-    return `<div class="card ${cardClass}">
+    const isAging = daysPending >= 3;
+    const summary = s.items_sent.map(it => `${it.qty}x ${it.name}${it.marking ? ' ' + (MARKING_DISPLAY[it.marking]||'') : ''}`).join(', ');
+    const isRecalled = !!s.recall_requested_at;
+    return `<div class="card ${isAging?'aging':''}" style="border-left:4px solid #12a4da">
       <div class="card-head">
-        <span class="vendor-name">${vendorName(s.vendor_id)}</span>
-        <span class="days-badge ${badgeClass}">${badgeText}</span>
+        <span class="vendor-name">${s.vendor_name}${s.customer_name ? ' — '+s.customer_name : ''}</span>
+        <span class="days-badge ${isAging?'aging':''}">${daysPending}d</span>
       </div>
       <div class="card-body">
-        <div class="items-summary">📦 ${s.description}</div>
-        ${s.notes ? `<div class="notes-text">📝 ${s.notes}</div>` : ''}
+        <div class="items-summary">📦 ${summary}</div>
+        <div style="font-size:11px;color:#6b7280;margin-top:4px;font-family:monospace">Order: ${s.order_id}</div>
+        ${isRecalled ? `<div class="notes-text">🚩 RECALL REQUESTED — waiting to be physically retrieved</div>` : ''}
       </div>
       <div class="card-actions">
-        <button class="act-btn" onclick="openMarkReturned(${s.id})">✅ MARK RETURNED</button>
-        <button class="act-btn act-btn-secondary" onclick="markResend(${s.id})">🔁 Still There</button>
-        <button class="act-btn act-btn-issue" onclick="openReportIssue(${s.id})">⚠️ Report Issue</button>
+        <button class="act-btn" onclick="markReturnedIndividual(${s.id})">✅ RETURNED</button>
+        ${!isRecalled ? `<button class="act-btn act-btn-secondary" onclick="requestRecall(${s.id})">📞 RECALL</button>` : ''}
       </div>
     </div>`;
   }).join('');
+
+  const bulkHtml = outstandingBalances.map(v => {
+    const oldestDate = new Date(v.oldest_date);
+    const daysPending = Math.floor((today - oldestDate) / (1000*60*60*24));
+    const isAging = daysPending >= 3;
+    const summary = v.items.map(it => `${it.qty}x ${it.name}${it.delicate ? ' ⚠️' : ''}`).join(', ');
+    return `<div class="card ${isAging?'aging':''}">
+      <div class="card-head">
+        <span class="vendor-name">${v.vendor_name}</span>
+        <span class="days-badge ${isAging?'aging':''}">${daysPending}d pending</span>
+      </div>
+      <div class="card-body">
+        <div class="items-summary">📦 ${summary}</div>
+      </div>
+      <div class="card-actions">
+        <button class="act-btn" onclick="openMarkReturned(${v.vendor_id})">✅ MARK RETURNED</button>
+        <button class="act-btn act-btn-issue" onclick="openReportIssue(${v.vendor_id})">⚠️ Report Issue</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  list.innerHTML = individualHtml + bulkHtml;
+}
+
+async function requestRecall(id) {
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}/recall?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'x-staff-key': staffKey }
+    });
+    const data = await res.json();
+    if (data.success) { showToast('📞✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
+}
+async function markReturnedIndividual(id) {
+  try {
+    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}/mark-returned-individual?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'x-staff-key': staffKey }
+    });
+    const data = await res.json();
+    if (data.success) { showToast('✅'); loadData(); }
+    else showToast('⚠️');
+  } catch (e) { showToast('⚠️'); }
 }
 
 function showOverlay(html) { document.getElementById('confirm-content').innerHTML = html; document.getElementById('overlay').classList.add('show'); }
@@ -248,48 +295,75 @@ function openNewHandover() {
   showOverlay(`
     <div class="confirm-icon">🏭➕</div>
     <select class="select-input" id="nh-vendor">${allVendorsList.map(v=>`<option value="${v.id}">${v.name}</option>`).join('')}</select>
+    <input class="select-input" id="nh-order-id" placeholder="Order ID (only if for one specific customer)">
+    <input class="select-input" id="nh-customer-name" placeholder="Customer name (optional)">
     <div id="nh-count" style="font-size:13px;color:#6b7280;margin-bottom:8px">No items yet</div>
     <div class="catalog-grid" id="nh-grid"></div>
     <div class="confirm-actions" style="margin-top:14px">
       <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ CANCEL</button>
-      <button class="confirm-btn confirm-yes" onclick="goToDelicateReview()">NEXT ➡️</button>
+      <button class="confirm-btn confirm-yes" onclick="goToMarkingReview()">NEXT ➡️</button>
     </div>
   `);
   renderPicker('nh');
 }
 let selectedVendorId = null;
-function goToDelicateReview() {
+let selectedOrderId = null;
+let selectedCustomerName = null;
+const MARKING_OPTIONS = [
+  { key: '', label: 'None', icon: '➖' },
+  { key: 'delicate', label: 'Delicate', icon: '⚠️' },
+  { key: 'rush', label: 'Rush', icon: '⏰' },
+  { key: 'customer_specific', label: "Don't Mix", icon: '📌' },
+  { key: 'fragile', label: 'Fragile', icon: '📦' },
+];
+function goToMarkingReview() {
   if (!tallyItems.length) { showToast('⚠️ Add at least one item'); return; }
   selectedVendorId = parseInt(document.getElementById('nh-vendor').value);
+  selectedOrderId = document.getElementById('nh-order-id').value.trim();
+  selectedCustomerName = document.getElementById('nh-customer-name').value.trim();
+  tallyItems.forEach(it => { if (!it.marking) it.marking = ''; });
   showOverlay(`
-    <div class="confirm-icon">⚠️🧺</div>
-    <div style="font-size:13px;color:#6b7280;margin-bottom:12px">Mark any delicate items</div>
-    <div id="delicate-list"></div>
+    <div class="confirm-icon">🏷️🧺</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:12px">Tap to mark any special handling</div>
+    <div id="marking-list"></div>
     <div class="confirm-actions" style="margin-top:14px">
       <button class="confirm-btn confirm-cancel" onclick="openNewHandover()">↩️ BACK</button>
       <button class="confirm-btn confirm-yes" onclick="submitHandover()">✅ SEND</button>
     </div>
   `);
-  const listEl = document.getElementById('delicate-list');
-  listEl.innerHTML = tallyItems.map((it,i) => `
-    <div class="review-row">
+  renderMarkingList();
+}
+function renderMarkingList() {
+  const listEl = document.getElementById('marking-list');
+  listEl.innerHTML = tallyItems.map((it,i) => {
+    const current = MARKING_OPTIONS.find(m => m.key === it.marking) || MARKING_OPTIONS[0];
+    return `<div class="review-row">
       <span class="review-name">${it.qty}x ${it.name}</span>
-      <button class="delicate-toggle ${it.delicate?'active':''}" data-idx="${i}">⚠️ Delicate</button>
-    </div>
-  `).join('');
-  [...listEl.children].forEach((row, i) => {
-    row.querySelector('.delicate-toggle').onclick = (e) => {
-      tallyItems[i].delicate = !tallyItems[i].delicate;
-      e.target.className = 'delicate-toggle' + (tallyItems[i].delicate ? ' active' : '');
-    };
+      <button class="delicate-toggle ${it.marking?'active':''}" data-idx="${i}">${current.icon} ${current.label}</button>
+    </div>`;
+  }).join('');
+  [...listEl.querySelectorAll('.delicate-toggle')].forEach((btn, i) => {
+    btn.onclick = () => openMarkingPicker(i);
   });
+}
+function openMarkingPicker(itemIdx) {
+  showOverlay(`
+    <div class="confirm-icon">🏷️</div>
+    <div class="reason-grid">
+      ${MARKING_OPTIONS.map(m => `<button class="reason-btn" onclick="setMarking(${itemIdx},'${m.key}')">${m.icon} ${m.label}</button>`).join('')}
+    </div>
+  `);
+}
+function setMarking(itemIdx, marking) {
+  tallyItems[itemIdx].marking = marking;
+  goToMarkingReview();
 }
 async function submitHandover() {
   closeOverlay();
   try {
     const res = await fetch(`${BOT_URL}/vendor-shipments?key=${encodeURIComponent(staffKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
-      body: JSON.stringify({ vendor_id: selectedVendorId, items: tallyItems })
+      body: JSON.stringify({ vendor_id: selectedVendorId, order_id: selectedOrderId, customer_name: selectedCustomerName, items: tallyItems })
     });
     const data = await res.json();
     if (data.success) { showToast('✅'); loadData(); }
@@ -298,13 +372,13 @@ async function submitHandover() {
 }
 
 // ── MARK RETURNED (itemized, pre-filled from what was sent) ───────
-let returnShipmentId = null;
-function openMarkReturned(id) {
-  const s = allShipments.find(x=>x.id===id);
-  returnShipmentId = id;
-  tallyItems = (s.items_sent || []).map(it => ({...it}));
+let returnVendorId = null;
+function openMarkReturned(vendorId) {
+  returnVendorId = vendorId;
+  tallyItems = [];
   showOverlay(`
     <div class="confirm-icon">✅📦</div>
+    <div style="font-size:12px;color:#6b7280;margin-bottom:8px">Tally what's coming back today — anything not tallied stays outstanding</div>
     <div id="mr-count" style="font-size:13px;color:#6b7280;margin-bottom:8px"></div>
     <div class="catalog-grid" id="mr-grid"></div>
     <div class="confirm-actions" style="margin-top:14px">
@@ -316,30 +390,26 @@ function openMarkReturned(id) {
   updateTallyCount('mr');
 }
 async function submitReturn() {
-  const id = returnShipmentId;
+  const vendorId = returnVendorId;
+  const itemsToReturn = tallyItems.filter(it => it.qty > 0);
   closeOverlay();
+  if (!itemsToReturn.length) { showToast('⚠️ Nothing tallied'); return; }
   try {
-    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}?key=${encodeURIComponent(staffKey)}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
-      body: JSON.stringify({ action: 'return', items_returned: tallyItems })
+    const res = await fetch(`${BOT_URL}/vendor-shipments/return?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
+      body: JSON.stringify({ vendor_id: vendorId, items_returned: itemsToReturn })
     });
     const data = await res.json();
     if (data.success) { showToast('✅'); loadData(); }
     else showToast('⚠️');
   } catch (e) { showToast('⚠️'); }
 }
-function markResend(id) {
-  fetch(`${BOT_URL}/vendor-shipments/${id}?key=${encodeURIComponent(staffKey)}`, {
-    method: 'PATCH', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
-    body: JSON.stringify({ action: 'resend' })
-  }).then(r=>r.json()).then(d=>{ if(d.success){showToast('🔁');loadData();} else showToast('⚠️'); }).catch(()=>showToast('⚠️'));
-}
 
 // ── ISSUE REPORTING ────────────────────────────────────────────
-let issueShipmentId = null;
+let issueVendorId = null;
 let issueReason = null;
-function openReportIssue(id) {
-  issueShipmentId = id;
+function openReportIssue(vendorId) {
+  issueVendorId = vendorId;
   showOverlay(`
     <div class="confirm-icon">⚠️</div>
     <div class="reason-grid">
@@ -367,10 +437,10 @@ function pickIssueReason(reason) {
   });
 }
 async function submitIssueReport() {
-  const id = issueShipmentId, reason = issueReason, photoBase64 = window._pendingPhotoData;
+  const vendorId = issueVendorId, reason = issueReason, photoBase64 = window._pendingPhotoData;
   closeOverlay();
   try {
-    const res = await fetch(`${BOT_URL}/vendor-shipments/${id}/report-issue?key=${encodeURIComponent(staffKey)}`, {
+    const res = await fetch(`${BOT_URL}/vendors/${vendorId}/report-issue?key=${encodeURIComponent(staffKey)}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-staff-key': staffKey },
       body: JSON.stringify({ reason, photoBase64 })
     });
