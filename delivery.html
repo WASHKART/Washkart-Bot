@@ -62,6 +62,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .pay-method-btn{padding:22px 0;border:2px solid #e5e7eb;border-radius:16px;font-size:22px;font-weight:800;background:#f9fafb;}
 .pay-method-btn.cash{color:#12a4da;}
 .pay-method-btn.upi{color:#2563eb;}
+.catalog-tabs{display:flex;gap:8px;justify-content:center;margin:10px 0;}
+.catalog-tab{width:44px;height:44px;border-radius:12px;border:2px solid #e5e7eb;background:#f9fafb;font-size:22px;}
+.catalog-tab.active{background:#e0f2fe;border-color:#12a4da;}
+.catalog-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:220px;overflow-y:auto;margin-bottom:8px;}
+.catalog-item{position:relative;padding:12px 4px;border:2px solid #e5e7eb;border-radius:14px;background:#f9fafb;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.catalog-item:active{background:#e0f2fe;border-color:#12a4da;}
+.catalog-icon{font-size:26px;}
+.catalog-name{font-size:10px;font-weight:700;color:#374151;}
+.tally-qty-badge{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#12a4da;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;}
+.tally-summary-row{display:flex;justify-content:space-between;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:6px;font-size:13px;}
 .photo-preview{width:100%;border-radius:14px;margin-bottom:12px;max-height:200px;object-fit:cover;}
 
 .toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(17,24,39,.95);color:#fff;padding:30px 40px;border-radius:20px;font-size:50px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:200;}
@@ -91,6 +101,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
     <button class="tab active" id="tab-pickup" onclick="switchTab('pickup')">
       🧺⬆️
       <span class="tab-count" id="count-pickup" style="display:none">0</span>
+    </button>
+    <button class="tab" id="tab-inprogress" onclick="switchTab('inprogress')">
+      🔄
+      <span class="tab-count" id="count-inprogress" style="display:none">0</span>
     </button>
     <button class="tab" id="tab-delivery" onclick="switchTab('delivery')">
       📦⬇️
@@ -123,6 +137,101 @@ let staffKey = sessionStorage.getItem('wk_staff_key') || '';
 let activeTab = 'pickup';
 let allPickups = [];
 let photoOrderId = null;
+
+// ── ITEM CATALOG (ported from Counter) — used for the mandatory tally review before
+// every delivery, so a Counter miscount can be caught before it reaches the customer.
+const ITEM_ICONS = {
+  shirt:'👔',pant:'👖',trouser:'👖',jeans:'👖',tshirt:'👕',top:'👚',kurta:'👘',kurti:'👘',
+  blouse:'👚',salwar:'👗',saree:'🥻',lehenga:'👗',blazer:'🧥',jacket:'🧥',overcoat:'🧥',
+  sweater:'🧶',dupatta:'🧣',shawl:'🧣',anarkali:'👗',suit:'🤵',dress:'👗',gown:'👗',
+  sherwani:'🥻',towel:'🧻',sneaker:'👟',shoe:'👞',canvas:'👟',bedsheet:'🛏️',blanket:'🛌',
+  curtain:'🪟',bag:'👜',helmet:'🪖',carpet:'🧹',toy:'🧸',
+};
+const BASIC_CLOTHES = ['shirt','pant','trouser','jeans','tshirt','top'];
+const RAW_ITEM_PRICES = {};
+
+// Bavdhan-only Normal Iron rates — lower than standard Steam Iron rates. Defaults to
+// Normal unless Steam is specifically requested, since that's the actual real-world rule.
+const NORMAL_IRON_RATES = {
+  shirt:10, pant:10, trouser:10, jeans:10, tshirt:10, top:10,
+  kurta:10, kurti:10, dupatta:10, saree:60, lehenga:60, blazer:100, shawl:40, anarkali:20,
+};
+// Items ironing actually distinguishes beyond the basic "Clothes" bucket — the real
+// paper-and-marker categories, not the full multi-service catalog.
+const IRON_SPECIAL_ITEMS = ['saree','bedsheet','blazer','kurta','shawl','dupatta','anarkali','lehenga','suit','jacket','overcoat','sweater','dress','gown','sherwani'];
+let ITEM_CATALOG = {};
+function buildItemCatalog() {
+  ITEM_CATALOG = {};
+  Object.entries(RAW_ITEM_PRICES).forEach(([item, prices]) => {
+    if (BASIC_CLOTHES.includes(item)) return;
+    Object.entries(prices).forEach(([svc, price]) => {
+      if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+      ITEM_CATALOG[svc].push({ name: item.charAt(0).toUpperCase()+item.slice(1), price, icon: ITEM_ICONS[item] || '🧺' });
+    });
+  });
+  const basicSvcSet = new Set();
+  BASIC_CLOTHES.forEach(item => Object.keys(RAW_ITEM_PRICES[item] || {}).forEach(svc => basicSvcSet.add(svc)));
+  basicSvcSet.forEach(svc => {
+    const price = RAW_ITEM_PRICES['shirt']?.[svc];
+    if (price !== undefined) {
+      if (!ITEM_CATALOG[svc]) ITEM_CATALOG[svc] = [];
+      ITEM_CATALOG[svc].unshift({ name: 'Clothes', price, icon: '👕' });
+    }
+  });
+}
+async function loadItemPrices() {
+  try {
+    const res = await fetch(`${BOT_URL}/item-prices`);
+    const data = await res.json();
+    Object.assign(RAW_ITEM_PRICES, data);
+    buildItemCatalog();
+  } catch (e) { console.error('Failed to load item prices:', e); }
+}
+loadItemPrices();
+const SVC_LIST = [
+  {key:'dryclean', icon:'👔', label:'Dry Clean'}, {key:'iron', icon:'🔥', label:'Iron'},
+  {key:'laundry', icon:'🧺', label:'Laundry'}, {key:'shoes', icon:'👟', label:'Shoes'},
+  {key:'specialty', icon:'✨', label:'Special'},
+];
+let activeTallyTab = 'dryclean';
+function renderPickerTabs(tabsElId, gridElId, itemsArray, onChange) {
+  const el = document.getElementById(tabsElId);
+  if (!el) return;
+  el.innerHTML = SVC_LIST.map(s=>`<button class="catalog-tab ${s.key===activeTallyTab?'active':''}" data-svc="${s.key}">${s.icon}</button>`).join('');
+  [...el.children].forEach(btn => {
+    btn.onclick = () => { activeTallyTab = btn.dataset.svc; renderPickerTabs(tabsElId, gridElId, itemsArray, onChange); renderPickerGrid(gridElId, itemsArray, onChange); };
+  });
+}
+function renderPickerGrid(gridElId, itemsArray, onChange) {
+  const el = document.getElementById(gridElId);
+  if (!el) return;
+  const items = ITEM_CATALOG[activeTallyTab] || [];
+  el.innerHTML = items.map(it=>{
+    const existing = itemsArray.find(ti=>ti.name===it.name && ti.price===it.price);
+    const qty = existing ? existing.qty : 0;
+    return `<button class="catalog-item" data-name="${it.name.replace(/"/g,'&quot;')}" data-price="${it.price}">
+      <span class="catalog-icon">${it.icon}</span>
+      <span class="catalog-name">${it.name}</span>
+      ${qty>0?`<span class="tally-qty-badge">${qty}</span>`:''}
+    </button>`;
+  }).join('');
+  [...el.children].forEach(btn => {
+    btn.onclick = () => {
+      const name = btn.dataset.name, price = Number(btn.dataset.price);
+      const existing = itemsArray.find(ti=>ti.name===name && ti.price===price);
+      if (existing) {
+        const typed = prompt(`Quantity for ${name}:`, existing.qty);
+        const n = parseInt(typed);
+        if (!isNaN(n) && n >= 0) { if (n === 0) itemsArray.splice(itemsArray.indexOf(existing),1); else existing.qty = n; }
+      } else {
+        itemsArray.push({ name, qty: 1, price });
+      }
+      renderPickerGrid(gridElId, itemsArray, onChange);
+      onChange();
+    };
+  });
+}
+
 let photoMode = null; // 'left_outside' | 'upi_proof'
 
 const SVC_ICON = { dryclean: '👔', iron: '🔥', laundry: '🧺', shoes: '👟', specialty: '✨', mixed: '🧺' };
@@ -191,6 +300,7 @@ async function sendSubscriptionToServer(subscription) {
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById('tab-pickup').className = 'tab' + (tab === 'pickup' ? ' active' : '');
+  document.getElementById('tab-inprogress').className = 'tab' + (tab === 'inprogress' ? ' active' : '');
   document.getElementById('tab-delivery').className = 'tab' + (tab === 'delivery' ? ' active' : '');
   render();
 }
@@ -206,16 +316,41 @@ async function loadData() {
 
 function render() {
   const pickupList = allPickups.filter(p => p.status === 'pending' && p.needs_delivery !== false);
+  const inProgressList = allPickups.filter(p => (p.status === 'picked' || p.status === 'inprogress') && p.needs_delivery !== false);
   const deliveryList = allPickups.filter(p => p.status === 'outfordelivery' && p.needs_delivery !== false);
 
   const pc = document.getElementById('count-pickup');
+  const ic = document.getElementById('count-inprogress');
   const dc = document.getElementById('count-delivery');
   if (pickupList.length) { pc.style.display = 'flex'; pc.textContent = pickupList.length; } else pc.style.display = 'none';
+  if (inProgressList.length) { ic.style.display = 'flex'; ic.textContent = inProgressList.length; } else ic.style.display = 'none';
   if (deliveryList.length) { dc.style.display = 'flex'; dc.textContent = deliveryList.length; } else dc.style.display = 'none';
 
-  const items = activeTab === 'pickup' ? pickupList : deliveryList;
+  const items = activeTab === 'pickup' ? pickupList : activeTab === 'inprogress' ? inProgressList : deliveryList;
   const list = document.getElementById('list');
   if (!items.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+
+  if (activeTab === 'inprogress') {
+    // Pure visibility — this is Counter's job to tally and process, delivery guy just
+    // gets to see progress on what he personally handed off.
+    list.innerHTML = items.map(p => {
+      const svcIcon = SVC_ICON[p.service_type] || '🧺';
+      const hasTally = Array.isArray(p.items) && p.items.length;
+      const tallySummary = hasTally ? p.items.map(it=>`${it.qty}x ${it.name}`).join(', ') : null;
+      return `<div class="card">
+        <div class="card-head">
+          <span class="slot-icon">${svcIcon}</span>
+          <span class="order-id">${p.order_id}</span>
+        </div>
+        <div class="card-body">
+          <div class="cust-name">${p.name || 'Walk-in'}</div>
+          <div class="address-row"><div class="address-text">${p.address || 'Walk-in'}</div></div>
+          ${hasTally ? `<div class="notes-text" style="color:#0369a1;background:#f0f9ff">📦 ${tallySummary}</div>` : `<div class="notes-text" style="color:#92400e;background:#fffbeb">⏳ Not yet tallied</div>`}
+        </div>
+      </div>`;
+    }).join('');
+    return;
+  }
 
   list.innerHTML = items.map(p => {
     const slotIcon = (p.slot || '').includes('Morning') ? '🌅' : '🌆';
@@ -285,6 +420,7 @@ async function doFail(orderId, stage) {
 }
 
 let pendingPieceCount = null;
+let deliveryTallyItems = [];
 function askSuccess(orderId, stage, amount, paymentStatus, amountPaid) {
   amountPaid = amountPaid || 0;
   if (stage === 'pickup') {
@@ -297,25 +433,174 @@ function askSuccess(orderId, stage, amount, paymentStatus, amountPaid) {
     `);
     return;
   }
-  // Delivery — ask piece count first, purely for your own internal tally reference,
-  // before continuing into the existing payment flow.
-  askPieceCount(orderId, amount, paymentStatus, amountPaid);
+  // Delivery — always review the tally first, so a Counter miscount gets caught before
+  // it reaches the customer. Piece count for your records is auto-computed from this,
+  // not asked separately.
+  askTallyReview(orderId, paymentStatus, amountPaid);
 }
-function askPieceCount(orderId, amount, paymentStatus, amountPaid) {
+function askTallyReview(orderId, paymentStatus, amountPaid) {
+  const order = allPickups.find(p => p.order_id === orderId);
+  if (order?.service_type === 'iron') { askIronTally(orderId, paymentStatus, amountPaid); return; }
+  deliveryTallyItems = (order?.items || []).map(it => ({...it}));
+  activeTallyTab = order?.service_type || 'dryclean';
   showOverlay(`
-    <div class="confirm-icon">🔢🧺</div>
-    <div style="font-size:14px;color:#6b7280;margin-bottom:10px">How many pieces are you delivering?</div>
-    <input class="select-input" id="piece-count-input" type="number" inputmode="numeric" placeholder="e.g. 18" autofocus>
+    <div class="confirm-icon">📋🧺</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:8px">Confirm what's actually in hand — adjust if it doesn't match</div>
+    <div id="dt-count" style="font-size:13px;font-weight:700;margin-bottom:6px"></div>
+    <div class="catalog-tabs" id="dt-tabs"></div>
+    <div class="catalog-grid" id="dt-grid"></div>
     <div class="confirm-actions" style="margin-top:10px">
       <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
-      <button class="confirm-btn confirm-yes" onclick="confirmPieceCount('${orderId}',${amount},'${paymentStatus}',${amountPaid})">NEXT ➡️</button>
+      <button class="confirm-btn confirm-yes" onclick="confirmTallyReview('${orderId}','${paymentStatus}',${amountPaid})">✅ CONFIRM</button>
     </div>
   `);
+  updateDeliveryTallyCount();
+  renderPickerTabs('dt-tabs', 'dt-grid', deliveryTallyItems, updateDeliveryTallyCount);
+  renderPickerGrid('dt-grid', deliveryTallyItems, updateDeliveryTallyCount);
 }
-function confirmPieceCount(orderId, amount, paymentStatus, amountPaid) {
-  const val = parseInt(document.getElementById('piece-count-input').value);
-  pendingPieceCount = (!isNaN(val) && val > 0) ? val : null;
-  continueDeliveryFlow(orderId, amount, paymentStatus, amountPaid);
+
+// ── SIMPLIFIED IRONING FLOW — matches the real paper-and-marker process instead of the
+// full multi-tab catalog: Clothes count, optional named specials, or just type the total.
+let ironState = { branch: 'bavdhan', useSteam: false, clothesQty: 0, specials: [] };
+function ironRate(itemKey, useSteam) {
+  const steamRate = RAW_ITEM_PRICES[itemKey]?.iron;
+  if (useSteam) return steamRate || 0;
+  return NORMAL_IRON_RATES[itemKey] !== undefined ? NORMAL_IRON_RATES[itemKey] : (steamRate || 0);
+}
+function askIronTally(orderId, paymentStatus, amountPaid, mode) {
+  mode = mode || 'delivery';
+  const order = allPickups.find(p => p.order_id === orderId);
+  const branch = order?.branch || 'bavdhan';
+  // Reconstruct rough state from any existing tally, defaulting to empty for a fresh count
+  const existingItems = order?.items || [];
+  const clothesEntry = existingItems.find(it => it.name === 'Clothes');
+  ironState = {
+    branch,
+    useSteam: false,
+    clothesQty: clothesEntry ? clothesEntry.qty : 0,
+    specials: existingItems.filter(it => it.name !== 'Clothes').map(it => ({ name: it.name, qty: it.qty })),
+    flatAmount: null,
+    mode,
+  };
+  renderIronTallyOverlay(orderId, paymentStatus, amountPaid);
+}
+function renderIronTallyOverlay(orderId, paymentStatus, amountPaid) {
+  const showToggle = ironState.branch === 'bavdhan';
+  showOverlay(`
+    <div class="confirm-icon">🔥🧺</div>
+    ${showToggle ? `
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="pay-method-btn ${!ironState.useSteam?'cash':''}" style="flex:1" onclick="setIronRateMode(false,'${orderId}','${paymentStatus}',${amountPaid})">Normal Iron</button>
+        <button class="pay-method-btn ${ironState.useSteam?'cash':''}" style="flex:1" onclick="setIronRateMode(true,'${orderId}','${paymentStatus}',${amountPaid})">Steam Iron</button>
+      </div>
+    ` : ''}
+    <div class="form-group" style="text-align:left;margin-bottom:10px">
+      <label style="font-size:12px;font-weight:700;color:#6b7280">Clothes (shirt/pant/etc.)</label>
+      <input class="select-input" type="number" inputmode="numeric" id="iron-clothes-qty" value="${ironState.clothesQty||''}" placeholder="0" oninput="ironState.clothesQty=parseInt(this.value)||0">
+    </div>
+    <div id="iron-specials-list"></div>
+    <button class="left-outside-link" onclick="openAddIronSpecial('${orderId}','${paymentStatus}',${amountPaid})">➕ Add another item</button>
+    <div style="border-top:1px solid #e5e7eb;margin:14px 0 10px;padding-top:10px">
+      <label style="font-size:12px;font-weight:700;color:#6b7280">Or just type the total</label>
+      <input class="select-input" type="number" inputmode="numeric" id="iron-flat-amount" placeholder="₹ amount (overrides items above)" value="${ironState.flatAmount||''}" oninput="ironState.flatAmount=parseInt(this.value)||null">
+    </div>
+    <div class="confirm-actions">
+      <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
+      <button class="confirm-btn confirm-yes" onclick="confirmIronTally('${orderId}','${paymentStatus}',${amountPaid})">✅ CONFIRM</button>
+    </div>
+  `);
+  renderIronSpecialsList(orderId, paymentStatus, amountPaid);
+}
+function setIronRateMode(useSteam, orderId, paymentStatus, amountPaid) {
+  ironState.useSteam = useSteam;
+  renderIronTallyOverlay(orderId, paymentStatus, amountPaid);
+}
+function renderIronSpecialsList(orderId, paymentStatus, amountPaid) {
+  const el = document.getElementById('iron-specials-list');
+  if (!el) return;
+  el.innerHTML = ironState.specials.map((s,i) => `
+    <div class="tally-summary-row">
+      <span>${s.name} x ${s.qty}</span>
+      <button style="border:none;background:none;color:#dc2626;font-weight:800" onclick="removeIronSpecial(${i},'${orderId}','${paymentStatus}',${amountPaid})">✕</button>
+    </div>
+  `).join('');
+}
+function openAddIronSpecial(orderId, paymentStatus, amountPaid) {
+  const items = IRON_SPECIAL_ITEMS.map(key => ({ key, label: key.charAt(0).toUpperCase()+key.slice(1) }));
+  showOverlay(`
+    <div class="confirm-icon">➕</div>
+    <div class="catalog-grid" style="grid-template-columns:repeat(3,1fr)">
+      ${items.map(it=>`<button class="catalog-item" onclick="pickIronSpecial('${it.key}','${it.label}','${orderId}','${paymentStatus}',${amountPaid})"><span class="catalog-name">${it.label}</span></button>`).join('')}
+    </div>
+    <button class="confirm-back-link" onclick="renderIronTallyOverlay('${orderId}','${paymentStatus}',${amountPaid})">↩️ BACK</button>
+  `);
+}
+function pickIronSpecial(key, label, orderId, paymentStatus, amountPaid) {
+  const typed = prompt(`How many ${label}?`, '1');
+  const qty = parseInt(typed);
+  if (!isNaN(qty) && qty > 0) {
+    const existing = ironState.specials.find(s => s.key === key);
+    if (existing) existing.qty = qty;
+    else ironState.specials.push({ key, name: label, qty });
+  }
+  renderIronTallyOverlay(orderId, paymentStatus, amountPaid);
+}
+function removeIronSpecial(idx, orderId, paymentStatus, amountPaid) {
+  ironState.specials.splice(idx, 1);
+  renderIronTallyOverlay(orderId, paymentStatus, amountPaid);
+}
+async function confirmIronTally(orderId, paymentStatus, amountPaid) {
+  let finalAmount, finalItems, pieceCount;
+  if (ironState.flatAmount && ironState.flatAmount > 0) {
+    // Typed total wins outright — no item breakdown behind it, by design (speed over detail).
+    finalAmount = ironState.flatAmount;
+    finalItems = [{ name: 'Iron (custom amount)', qty: 1, price: finalAmount }];
+    pieceCount = ironState.clothesQty + ironState.specials.reduce((s,it)=>s+it.qty,0) || null;
+  } else {
+    const clothesPrice = ironRate('shirt', ironState.useSteam);
+    const items = [];
+    if (ironState.clothesQty > 0) items.push({ name: 'Clothes', qty: ironState.clothesQty, price: clothesPrice });
+    ironState.specials.forEach(s => {
+      items.push({ name: s.name, qty: s.qty, price: ironRate(s.key || s.name.toLowerCase(), ironState.useSteam) });
+    });
+    finalItems = items;
+    finalAmount = items.reduce((sum,it)=>sum+it.qty*it.price, 0);
+    pieceCount = items.reduce((sum,it)=>sum+it.qty, 0) || null;
+  }
+  pendingPieceCount = pieceCount;
+  closeOverlay();
+  try {
+    await fetch(`${BOT_URL}/pickups/${orderId}/tally?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: finalItems })
+    });
+  } catch (e) { /* proceed anyway */ }
+  if (ironState.mode === 'leftoutside') {
+    openCameraWithPreview(() => submitPhoto());
+  } else {
+    continueDeliveryFlow(orderId, finalAmount, paymentStatus, amountPaid);
+  }
+}
+
+function updateDeliveryTallyCount() {
+  const el = document.getElementById('dt-count');
+  if (!el) return;
+  const totalQty = deliveryTallyItems.reduce((s,it)=>s+it.qty,0);
+  const totalAmount = deliveryTallyItems.reduce((s,it)=>s+it.qty*it.price,0);
+  el.textContent = totalQty ? `${totalQty} pieces — ₹${totalAmount}` : 'No items';
+}
+async function confirmTallyReview(orderId, paymentStatus, amountPaid) {
+  const pieceCount = deliveryTallyItems.reduce((s,it)=>s+it.qty, 0);
+  const newAmount = deliveryTallyItems.reduce((s,it)=>s+it.qty*it.price, 0);
+  pendingPieceCount = pieceCount > 0 ? pieceCount : null;
+  closeOverlay();
+  try {
+    await fetch(`${BOT_URL}/pickups/${orderId}/tally?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: deliveryTallyItems })
+    });
+  } catch (e) { /* proceed anyway — the tally save failing shouldn't block delivery */ }
+  continueDeliveryFlow(orderId, newAmount || 0, paymentStatus, amountPaid);
 }
 function continueDeliveryFlow(orderId, amount, paymentStatus, amountPaid) {
   if (amount > 0 && paymentStatus !== 'paid') {
@@ -404,20 +689,35 @@ function startLeftOutsidePhoto(orderId) {
   photoOrderId = orderId;
   photoMode = 'left_outside';
   closeOverlay();
+  const order = allPickups.find(p => p.order_id === orderId);
+  if (order?.service_type === 'iron') { askIronTally(orderId, null, 0, 'leftoutside'); return; }
+  deliveryTallyItems = (order?.items || []).map(it => ({...it}));
+  activeTallyTab = order?.service_type || 'dryclean';
   showOverlay(`
-    <div class="confirm-icon">🔢🧺</div>
-    <div style="font-size:14px;color:#6b7280;margin-bottom:10px">How many pieces are you leaving?</div>
-    <input class="select-input" id="piece-count-input" type="number" inputmode="numeric" placeholder="e.g. 18" autofocus>
+    <div class="confirm-icon">📋🧺</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:8px">Confirm what you're leaving — adjust if it doesn't match</div>
+    <div id="dt-count" style="font-size:13px;font-weight:700;margin-bottom:6px"></div>
+    <div class="catalog-tabs" id="dt-tabs"></div>
+    <div class="catalog-grid" id="dt-grid"></div>
     <div class="confirm-actions" style="margin-top:10px">
       <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ BACK</button>
-      <button class="confirm-btn confirm-yes" onclick="confirmPieceCountThenPhoto()">NEXT ➡️</button>
+      <button class="confirm-btn confirm-yes" onclick="confirmLeftOutsideTally('${orderId}')">✅ CONFIRM</button>
     </div>
   `);
+  updateDeliveryTallyCount();
+  renderPickerTabs('dt-tabs', 'dt-grid', deliveryTallyItems, updateDeliveryTallyCount);
+  renderPickerGrid('dt-grid', deliveryTallyItems, updateDeliveryTallyCount);
 }
-function confirmPieceCountThenPhoto() {
-  const val = parseInt(document.getElementById('piece-count-input').value);
-  pendingPieceCount = (!isNaN(val) && val > 0) ? val : null;
+async function confirmLeftOutsideTally(orderId) {
+  const pieceCount = deliveryTallyItems.reduce((s,it)=>s+it.qty, 0);
+  pendingPieceCount = pieceCount > 0 ? pieceCount : null;
   closeOverlay();
+  try {
+    await fetch(`${BOT_URL}/pickups/${orderId}/tally?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: deliveryTallyItems })
+    });
+  } catch (e) { /* proceed anyway */ }
   openCameraWithPreview(() => submitPhoto());
 }
 function startUpiPhoto(orderId) {
