@@ -102,10 +102,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       🧺⬆️
       <span class="tab-count" id="count-pickup" style="display:none">0</span>
     </button>
-    <button class="tab" id="tab-inprogress" onclick="switchTab('inprogress')">
-      🔄
-      <span class="tab-count" id="count-inprogress" style="display:none">0</span>
-    </button>
     <button class="tab" id="tab-delivery" onclick="switchTab('delivery')">
       📦⬇️
       <span class="tab-count" id="count-delivery" style="display:none">0</span>
@@ -300,7 +296,6 @@ async function sendSubscriptionToServer(subscription) {
 function switchTab(tab) {
   activeTab = tab;
   document.getElementById('tab-pickup').className = 'tab' + (tab === 'pickup' ? ' active' : '');
-  document.getElementById('tab-inprogress').className = 'tab' + (tab === 'inprogress' ? ' active' : '');
   document.getElementById('tab-delivery').className = 'tab' + (tab === 'delivery' ? ' active' : '');
   render();
 }
@@ -316,41 +311,19 @@ async function loadData() {
 
 function render() {
   const pickupList = allPickups.filter(p => p.status === 'pending' && p.needs_delivery !== false);
-  const inProgressList = allPickups.filter(p => (p.status === 'picked' || p.status === 'inprogress') && p.needs_delivery !== false);
-  const deliveryList = allPickups.filter(p => p.status === 'outfordelivery' && p.needs_delivery !== false);
+  // Merged — Counter's separate "mark ready" step wasn't reliably happening in practice,
+  // so anything picked up and not yet delivered shows here with full actions available,
+  // rather than sitting invisible in a view-only queue waiting on someone else.
+  const deliveryList = allPickups.filter(p => ['picked','inprogress','outfordelivery'].includes(p.status) && p.needs_delivery !== false);
 
   const pc = document.getElementById('count-pickup');
-  const ic = document.getElementById('count-inprogress');
   const dc = document.getElementById('count-delivery');
   if (pickupList.length) { pc.style.display = 'flex'; pc.textContent = pickupList.length; } else pc.style.display = 'none';
-  if (inProgressList.length) { ic.style.display = 'flex'; ic.textContent = inProgressList.length; } else ic.style.display = 'none';
   if (deliveryList.length) { dc.style.display = 'flex'; dc.textContent = deliveryList.length; } else dc.style.display = 'none';
 
-  const items = activeTab === 'pickup' ? pickupList : activeTab === 'inprogress' ? inProgressList : deliveryList;
+  const items = activeTab === 'pickup' ? pickupList : deliveryList;
   const list = document.getElementById('list');
   if (!items.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
-
-  if (activeTab === 'inprogress') {
-    // Pure visibility — this is Counter's job to tally and process, delivery guy just
-    // gets to see progress on what he personally handed off.
-    list.innerHTML = items.map(p => {
-      const svcIcon = SVC_ICON[p.service_type] || '🧺';
-      const hasTally = Array.isArray(p.items) && p.items.length;
-      const tallySummary = hasTally ? p.items.map(it=>`${it.qty}x ${it.name}`).join(', ') : null;
-      return `<div class="card">
-        <div class="card-head">
-          <span class="slot-icon">${svcIcon}</span>
-          <span class="order-id">${p.order_id}</span>
-        </div>
-        <div class="card-body">
-          <div class="cust-name">${p.name || 'Walk-in'}</div>
-          <div class="address-row"><div class="address-text">${p.address || 'Walk-in'}</div></div>
-          ${hasTally ? `<div class="notes-text" style="color:#0369a1;background:#f0f9ff">📦 ${tallySummary}</div>` : `<div class="notes-text" style="color:#92400e;background:#fffbeb">⏳ Not yet tallied</div>`}
-        </div>
-      </div>`;
-    }).join('');
-    return;
-  }
 
   list.innerHTML = items.map(p => {
     const slotIcon = (p.slot || '').includes('Morning') ? '🌅' : '🌆';
