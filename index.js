@@ -2851,10 +2851,22 @@ app.post("/pickups/:orderId/tally", async (req, res) => {
 
     if (markReady && prevOrder.phone && prevOrder.status !== "outfordelivery") {
       const brSlug = prevOrder.branch || "bavdhan";
+      const br = getBranchBySlug(brSlug) || DEFAULT_BRANCH;
       let numId = getBranchNumId(brSlug);
       if (numId === "BANER_NUMBER_ID") numId = "1136879376186203";
       await sendMessage(prevOrder.phone, `🚚 Your order is on the way!\n\nOrder: ${orderId}`, numId);
       sendPushToRole("delivery", "📦⬇️ New Delivery", `${prevOrder.name || orderId} — ${prevOrder.address || "-"}`).catch(()=>{});
+      // Same dynamic payment QR as the status endpoint sends — keeps behavior consistent
+      // regardless of which path actually triggered the outfordelivery transition.
+      const finalAmount = updateData.amount || prevOrder.amount || 0;
+      if (finalAmount > 0) {
+        try {
+          await delay(600);
+          const qrBuffer = await generateUpiQrBuffer(br.upi, "Washkart", finalAmount - (Number(prevOrder.amount_paid)||0), orderId);
+          const qrMediaId = await uploadMediaImage(qrBuffer, "payment-qr.png", numId);
+          await sendImage(prevOrder.phone, qrMediaId, `Scan to pay Rs ${finalAmount - (Number(prevOrder.amount_paid)||0)} - Washkart ${br.name}`, numId);
+        } catch (e) { console.error("[QR] tally markReady send failed:", e.message); }
+      }
     }
     res.json({ success: true, amount: updateData.amount || prevOrder.amount || 0, status: updateData.status || prevOrder.status });
   } catch (e) { res.status(500).json({ error: e.message }); }
