@@ -173,6 +173,18 @@ async function generateUpiQrBuffer(upiId, payeeName, amount, note) {
   return await QRCode.toBuffer(upiUri, { width: 500, margin: 2 });
 }
 
+// Sends a payment QR right after an invoice, pre-filled with whatever's still owed —
+// only if there's actually a balance due, so a fully-paid invoice doesn't get one.
+async function sendInvoicePaymentQr(b, br, numId) {
+  const remaining = (b.amount || 0) - (Number(b.amount_paid) || 0);
+  if (b.payment_status === "paid" || remaining <= 0) return;
+  try {
+    const qrBuffer = await generateUpiQrBuffer(br.upi, "Washkart", remaining, b.order_id);
+    const qrMediaId = await uploadMediaImage(qrBuffer, "payment-qr.png", numId);
+    await sendImage(b.phone, qrMediaId, `Scan to pay Rs ${remaining} for ${b.order_id}`, numId);
+  } catch (e) { console.error("[invoice QR] send failed:", e.message); }
+}
+
 async function appendOrderPhoto(orderId, url, kind, caption) {
   try {
     const rows = await dbSelect("bookings", `order_id=eq.${orderId}`);
@@ -2618,6 +2630,7 @@ app.post("/bookings/:orderId/send-invoice", async (req,res) => {
           { type: "header", parameters: [{ type: "document", document: { id: mediaId, filename } }] },
           numId
         );
+        await sendInvoicePaymentQr(b, br, numId);
         return res.json({success:true, format:"template_pdf"});
       } catch (templateErr) {
         console.error("[invoice] Template send failed, trying free-form PDF:", templateErr?.response?.data || templateErr.message);
@@ -2625,6 +2638,7 @@ app.post("/bookings/:orderId/send-invoice", async (req,res) => {
       // Fallback 1: free-form document message (only works within the 24h window)
       try {
         await sendDocument(b.phone, mediaId, filename, `Invoice - Washkart ${br.name}`, numId);
+        await sendInvoicePaymentQr(b, br, numId);
         return res.json({success:true, format:"pdf"});
       } catch (docErr) {
         console.error("[invoice] Free-form document also failed:", docErr?.response?.data || docErr.message);
@@ -2634,6 +2648,7 @@ app.post("/bookings/:orderId/send-invoice", async (req,res) => {
     // Final fallback: plain text invoice
     const text = buildInvoiceText(b, br);
     const ok = await sendMessage(b.phone, text, numId, true);
+    await sendInvoicePaymentQr(b, br, numId);
     return res.json({success:ok, format:"text", fallback:true});
   } catch (e) { res.status(500).json({error:e.message}); }
 });
