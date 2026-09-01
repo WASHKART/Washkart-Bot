@@ -216,7 +216,9 @@ async function loadData() {
     const res = await fetch(`${BOT_URL}/pickups?key=${encodeURIComponent(staffKey)}`);
     if (res.status === 401) { sessionStorage.removeItem('wk_staff_key'); location.reload(); return; }
     allPickups = await res.json();
-    render();
+    // Don't wipe the Add Amount tab out from under someone mid-typing — the periodic
+    // refresh still updates the underlying data, it just won't force a re-render here.
+    if (activeTab !== 'amount') render();
   } catch (e) { console.error(e); }
 }
 
@@ -432,6 +434,7 @@ function submitPartialAmount(orderId, remaining) {
 function askRemindNow(orderId) {
   showOverlay(`
     <div class="confirm-icon">💰📤</div>
+    <div style="font-size:14px;color:#374151;margin-bottom:10px;text-align:center">Send the customer a payment reminder now?</div>
     <div class="confirm-actions">
       <button class="confirm-btn confirm-cancel" onclick="closeOverlay()">↩️ NO</button>
       <button class="confirm-btn confirm-yes" onclick="doRemind('${orderId}')">✅ YES</button>
