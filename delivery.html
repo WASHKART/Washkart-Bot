@@ -111,6 +111,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
       <span class="tab-count" id="count-delivery" style="display:none">0</span>
     </button>
   </div>
+  <div style="padding:10px 16px 0"><input class="select-input" id="search-box" type="text" placeholder="🔍 Search by name or address" oninput="render()" style="margin:0"></div>
   <div class="list" id="list"></div>
   <div class="bottom-bar">
     <a class="bottom-btn" href="tel:+919552552167">📞 CALL OWNER</a>
@@ -237,11 +238,14 @@ function render() {
   if (amountList.length) { ac.style.display = 'flex'; ac.textContent = amountList.length; } else ac.style.display = 'none';
   if (deliveryList.length) { dc.style.display = 'flex'; dc.textContent = deliveryList.length; } else dc.style.display = 'none';
 
-  if (activeTab === 'amount') { renderAmountTab(amountList); return; }
+  const searchTerm = (document.getElementById('search-box')?.value || '').trim().toLowerCase();
+  const matchesSearch = p => !searchTerm || (p.name||'').toLowerCase().includes(searchTerm) || (p.address||'').toLowerCase().includes(searchTerm);
 
-  const items = activeTab === 'pickup' ? pickupList : deliveryList;
+  if (activeTab === 'amount') { renderAmountTab(amountList.filter(matchesSearch)); return; }
+
+  const items = (activeTab === 'pickup' ? pickupList : deliveryList).filter(matchesSearch);
   const list = document.getElementById('list');
-  if (!items.length) { list.innerHTML = `<div class="empty">🎉</div>`; return; }
+  if (!items.length) { list.innerHTML = `<div class="empty">${searchTerm ? '🔍' : '🎉'}</div>`; return; }
 
   list.innerHTML = items.map(p => {
     const slotIcon = (p.slot || '').includes('Morning') ? '🌅' : '🌆';
