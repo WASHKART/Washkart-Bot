@@ -1138,6 +1138,8 @@ function populateMsgDropdown() {
   // which threw and made loadData() think every successful fetch had failed.)
 }
 
+let recentlyModified = {}; // orderId -> { field: value, expiresAt } — protects a just-made
+// change from being clobbered by the next 30s poll if the write hasn't fully settled yet
 async function loadData() {
   if(loadRetryTimer) { clearTimeout(loadRetryTimer); loadRetryTimer=null; }
   const bp = activeBranch !== 'all' ? '?branch=' + activeBranch : '';
@@ -1166,6 +1168,15 @@ async function loadData() {
       needs_delivery: b.needs_delivery !== false,
       photos: Array.isArray(b.photos) ? b.photos : [],
     }; });
+    // Apply any recently-made local changes that might not have propagated to this
+    // fetch yet, so a just-confirmed "Mark Paid" can't get overwritten by stale data.
+    var now = Date.now();
+    Object.keys(recentlyModified).forEach(function(orderId) {
+      var pin = recentlyModified[orderId];
+      if (pin.expiresAt < now) { delete recentlyModified[orderId]; return; }
+      var b = allBookings.find(function(x){ return x.id === orderId; });
+      if (b) Object.assign(b, pin.fields);
+    });
     allCustomers = cRes ? await cRes.json().catch(function(){return[];}) : [];
     allRatings   = rRes ? await rRes.json().catch(function(){return[];}) : [];
     allLeads     = lRes ? await lRes.json().catch(function(){return[];}) : [];
@@ -1539,8 +1550,12 @@ function updateDeliveryDate(id, dateInputValue) {
 function updatePaymentStatus(id,ps) {
   const b=allBookings.find(x=>x.id===id); if(!b) return;
   b.payment_status=ps;
-  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,payment_status:ps,payment_method:ps==='paid'?(b.payment_method||'manual'):b.payment_method})})
-  .then(()=>{toast(`Payment ${ps}`);updateAll();}).catch(()=>toast('Failed','error'));
+  const paymentMethod = ps==='paid'?(b.payment_method||'manual'):b.payment_method;
+  fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,payment_status:ps,payment_method:paymentMethod})})
+  .then(()=>{
+    recentlyModified[id] = { fields: { payment_status: ps, payment_method: paymentMethod }, expiresAt: Date.now() + 20000 };
+    toast(`Payment ${ps}`);updateAll();
+  }).catch(()=>toast('Failed','error'));
 }
 function sendPaymentReminder(id) {
   const b=allBookings.find(x=>x.id===id);
