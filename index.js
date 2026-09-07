@@ -3582,6 +3582,7 @@ app.get("/delivery", (req, res) => res.sendFile(path.join(__dirname, "delivery.h
 app.get("/sw.js", (req, res) => res.sendFile(path.join(__dirname, "sw.js")));
 
 app.get("/dashboard",      (req,res)=>res.sendFile(path.join(__dirname,"dashboard.html")));
+app.get("/chatleads",      (req,res)=>res.sendFile(path.join(__dirname,"chatleads.html")));
 app.get("/ping", (req,res)=>res.json({
   status:"ok",
   time: new Date().toISOString(),
