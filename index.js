@@ -2786,6 +2786,8 @@ app.get("/pickups", async (req, res) => {
       // Only a genuine pickup/delivery FAILURE or an "uncollected" flag blocks staff actions.
       // A missing-address note is informational only.
       flagged: (b.notes || "").includes("[STAFF FLAG:FAIL]") || (b.notes || "").includes("[STAFF FLAG:UNCOLLECTED]"),
+      bag_count: b.bag_count || 1,
+      print_piece_count: b.print_piece_count || 1,
     }));
     res.json(safe);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -2849,7 +2851,7 @@ app.post("/pickups/:orderId/status", async (req, res) => {
 app.post("/pickups/:orderId/tally", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    const { items, markReady } = req.body;
+    const { items, markReady, bag_count, print_piece_count } = req.body;
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "No items provided" });
     const orderId = req.params.orderId;
 
@@ -2861,6 +2863,11 @@ app.post("/pickups/:orderId/tally", async (req, res) => {
     // Saving the tally never forces a status change by itself — only markReady does that.
     const updateData = { items };
     if (itemsTotal > 0) updateData.amount = itemsTotal;
+    // bag_count (Iron — one tag per physical bag) and print_piece_count (Laundry — one
+    // tag per piece) only apply to their respective services, but are accepted generically
+    // here so the counter UI doesn't need to special-case which field name to send.
+    if (bag_count !== undefined) updateData.bag_count = Math.max(1, parseInt(bag_count) || 1);
+    if (print_piece_count !== undefined) updateData.print_piece_count = Math.max(1, parseInt(print_piece_count) || 1);
     if (markReady) {
       updateData.status = "outfordelivery";
       if (prevOrder.service_type && !prevOrder.delivery_date) {
