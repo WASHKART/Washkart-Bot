@@ -80,6 +80,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .catalog-name{font-size:10px;font-weight:700;color:#374151;}
 .tally-qty-badge{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;background:#12a4da;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;}
 .item-count-note{font-size:12px;color:#6b7280;margin-top:4px;}
+.tagcount-row{display:flex;align-items:center;justify-content:center;gap:14px;background:#eff6ff;border:2px solid #bae6fd;border-radius:14px;padding:10px 14px;margin:10px 0;}
+.tagcount-label{font-size:13px;font-weight:700;color:#0c4a6e;}
+.tagcount-btn{width:38px;height:38px;border-radius:50%;border:none;background:#12a4da;color:#fff;font-size:20px;font-weight:800;}
+.tagcount-val{font-size:22px;font-weight:800;min-width:28px;text-align:center;}
 
 .photo-preview{width:100%;border-radius:14px;margin-bottom:12px;max-height:180px;object-fit:cover;}
 .pay-method-grid{display:flex;flex-direction:column;gap:10px;}
@@ -251,6 +255,8 @@ function render() {
 
   list.innerHTML = items.map(p => {
     const summary = itemsSummary(p.items);
+    const tagCountNote = p.service_type === 'iron' && p.bag_count > 1 ? `🛍️ ${p.bag_count} bags`
+      : p.service_type === 'laundry' && p.print_piece_count > 1 ? `🏷️ ${p.print_piece_count} pieces to tag` : '';
     let actionsHtml;
     if (p.flagged) {
       actionsHtml = `<div class="flagged-banner">🚩 WAITING<br>📞 CALLED</div>`;
@@ -273,6 +279,7 @@ function render() {
       <div class="card-body">
         <div class="cust-name">${p.name || 'Walk-in'}</div>
         ${summary ? `<div class="items-summary">📦 ${summary}</div>` : `<div class="address-text">Not tallied yet</div>`}
+        ${tagCountNote ? `<div class="items-summary">${tagCountNote}</div>` : ''}
         ${p.notes ? `<div class="notes-text">📝 ${p.notes}</div>` : ''}
         <button class="print-btn-inline" onclick="requestReprint('${p.order_id}')">🖨️ REPRINT TAG</button>
       </div>
@@ -282,8 +289,16 @@ function render() {
 }
 
 async function requestReprint(orderId) {
+  const order = allPickups.find(p => p.order_id === orderId);
+  const suggested = order?.service_type === 'iron' ? (order.bag_count||1) : order?.service_type === 'laundry' ? (order.print_piece_count||1) : 1;
+  const typed = prompt('How many tags to print?', suggested);
+  if (typed === null) return;
+  const count = Math.max(1, parseInt(typed) || 1);
   try {
-    const res = await fetch(`${BOT_URL}/pickups/${orderId}/reprint?key=${encodeURIComponent(staffKey)}`, { method: 'POST' });
+    const res = await fetch(`${BOT_URL}/pickups/${orderId}/reprint?key=${encodeURIComponent(staffKey)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count })
+    });
     const data = await res.json();
     if (data.success) showToast('🖨️✅');
     else showToast('⚠️');
@@ -303,7 +318,7 @@ function renderPickerTabs(tabsElId, gridElId, itemsArray, onChange) {
   if (!el) return;
   el.innerHTML = SVC_LIST.map(s=>`<button class="catalog-tab ${s.key===activeTallyTab?'active':''}" data-svc="${s.key}">${s.icon}</button>`).join('');
   [...el.children].forEach(btn => {
-    btn.onclick = () => { activeTallyTab = btn.dataset.svc; renderPickerTabs(tabsElId, gridElId, itemsArray, onChange); renderPickerGrid(gridElId, itemsArray, onChange); };
+    btn.onclick = () => { activeTallyTab = btn.dataset.svc; renderPickerTabs(tabsElId, gridElId, itemsArray, onChange); renderPickerGrid(gridElId, itemsArray, onChange); if (document.getElementById('tally-tagcount')) renderTagCountStepper(); };
   });
 }
 function renderPickerGrid(gridElId, itemsArray, onChange) {
@@ -338,28 +353,67 @@ function renderPickerGrid(gridElId, itemsArray, onChange) {
 
 let tallyOrderId = null;
 let tallyItems = [];
+let tallyBagCount = 1;
+let tallyPieceCount = 1;
 function openTally(orderId) {
   tallyOrderId = orderId;
   const existingOrder = allPickups.find(p => p.order_id === orderId);
   tallyItems = (existingOrder?.items || []).map(it => ({...it}));
+  tallyBagCount = existingOrder?.bag_count || 1;
+  tallyPieceCount = existingOrder?.print_piece_count || 1;
   // Open directly on the order's known service tab instead of always defaulting to
   // Dry Clean — saves a tap on every single order that isn't dry clean (most ironing
   // orders, for instance), which was real friction compared to just messaging.
   const validTabs = ['dryclean','iron','laundry','shoes','specialty'];
   activeTallyTab = validTabs.includes(existingOrder?.service_type) ? existingOrder.service_type : 'dryclean';
+  renderTallyOverlay();
+  updateTallyCount();
+  renderPickerTabs('tally-tabs', 'tally-grid', tallyItems, updateTallyCount);
+  renderPickerGrid('tally-grid', tallyItems, updateTallyCount);
+}
+function renderTallyOverlay() {
   showOverlay(`
     <div class="item-count-note" id="tally-count"></div>
     <div class="catalog-tabs" id="tally-tabs"></div>
     <div class="catalog-grid" id="tally-grid"></div>
+    <div id="tally-tagcount"></div>
     <div class="confirm-actions" style="margin-top:14px">
       <button class="confirm-btn confirm-cancel" onclick="submitTally(false)">💾 SAVE</button>
       <button class="confirm-btn confirm-yes" onclick="submitTally(true)">✅ READY</button>
     </div>
     <button class="confirm-back-link" onclick="closeOverlay()">↩️ CANCEL</button>
   `);
-  updateTallyCount();
-  renderPickerTabs('tally-tabs', 'tally-grid', tallyItems, updateTallyCount);
-  renderPickerGrid('tally-grid', tallyItems, updateTallyCount);
+  renderTagCountStepper();
+}
+// Ironing tags print one per physical BAG (not per garment) — a customer's clothes
+// might be dropped off in 2-3 separate bags, each needing its own tag. Laundry tags
+// print one per PIECE, separate from the kg-based billing amount. Only shown for the
+// service where it's actually meaningful — Dry Clean/Shoes/Specialty print one tag total.
+function renderTagCountStepper() {
+  const el = document.getElementById('tally-tagcount');
+  if (!el) return;
+  if (activeTallyTab === 'iron') {
+    el.innerHTML = `<div class="tagcount-row">
+      <span class="tagcount-label">🛍️ Bags</span>
+      <button class="tagcount-btn" onclick="adjustTagCount(-1)">−</button>
+      <span class="tagcount-val" id="tagcount-display">${tallyBagCount}</span>
+      <button class="tagcount-btn" onclick="adjustTagCount(1)">+</button>
+    </div>`;
+  } else if (activeTallyTab === 'laundry') {
+    el.innerHTML = `<div class="tagcount-row">
+      <span class="tagcount-label">🏷️ Pieces to tag</span>
+      <button class="tagcount-btn" onclick="adjustTagCount(-1)">−</button>
+      <span class="tagcount-val" id="tagcount-display">${tallyPieceCount}</span>
+      <button class="tagcount-btn" onclick="adjustTagCount(1)">+</button>
+    </div>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+function adjustTagCount(delta) {
+  if (activeTallyTab === 'iron') tallyBagCount = Math.max(1, tallyBagCount + delta);
+  else if (activeTallyTab === 'laundry') tallyPieceCount = Math.max(1, tallyPieceCount + delta);
+  renderTagCountStepper();
 }
 function updateTallyCount() {
   const el = document.getElementById('tally-count');
@@ -370,10 +424,13 @@ function updateTallyCount() {
 async function submitTally(markReady) {
   if (!tallyItems.length) { showToast('⚠️'); return; }
   closeOverlay();
+  const body = { items: tallyItems, markReady };
+  if (activeTallyTab === 'iron') body.bag_count = tallyBagCount;
+  if (activeTallyTab === 'laundry') body.print_piece_count = tallyPieceCount;
   try {
     const res = await fetch(`${BOT_URL}/pickups/${tallyOrderId}/tally?key=${encodeURIComponent(staffKey)}`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ items: tallyItems, markReady })
+      body: JSON.stringify(body)
     });
     const data = await res.json();
     if (data.success) { showToast(markReady ? '✅' : '💾'); loadData(); }
