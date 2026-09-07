@@ -712,6 +712,21 @@ tr.overdue td{background:#fef2f2;}
         </div>
         <div style="height:1rem"></div>
         <div class="card"><div class="card-header"><div class="card-title">Orders by Day of Week</div></div><div class="card-body" id="a-dayofweek"></div></div>
+
+        <div style="height:1.5rem"></div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:.8rem">Customer Trends</div>
+        <div class="grid-2" style="margin-bottom:1rem">
+          <div class="card"><div class="card-header"><div class="card-title">Repeat Rate Over Time</div></div><div class="card-body" id="a-repeat-trend"></div></div>
+          <div class="card"><div class="card-header"><div class="card-title">Order Frequency Distribution</div></div><div class="card-body" id="a-freq-dist"></div></div>
+        </div>
+        <div class="card" style="margin-bottom:1rem">
+          <div class="card-header"><div class="card-title">Cohort Retention</div><span style="font-size:11px;color:var(--muted)">% of each signup month still ordering in later months</span></div>
+          <div class="table-wrap"><table id="a-cohort-table"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title">Top Repeat Customers</div></div>
+          <div id="a-top-customers"></div>
+        </div>
       </div>
 
       <!-- ═══ RATINGS ═══ -->
@@ -1549,13 +1564,15 @@ function updateDeliveryDate(id, dateInputValue) {
 }
 function updatePaymentStatus(id,ps) {
   const b=allBookings.find(x=>x.id===id); if(!b) return;
-  b.payment_status=ps;
   const paymentMethod = ps==='paid'?(b.payment_method||'manual'):b.payment_method;
   fetch(`${BOT_URL}/bookings/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:b.status,payment_status:ps,payment_method:paymentMethod})})
-  .then(()=>{
+  .then(r=>r.json().then(data=>({ok:r.ok,data})))
+  .then(({ok,data})=>{
+    if(!ok || data.error){ toast(data.error||'Payment update failed — check server logs','error'); renderOrders(); renderPayments(); return; }
+    b.payment_status=ps;
     recentlyModified[id] = { fields: { payment_status: ps, payment_method: paymentMethod }, expiresAt: Date.now() + 20000 };
-    toast(`Payment ${ps}`);updateAll();
-  }).catch(()=>toast('Failed','error'));
+    toast(`Payment ${ps} ✓`);updateAll();
+  }).catch(()=>toast('Network error — is server awake?','error'));
 }
 function sendPaymentReminder(id) {
   const b=allBookings.find(x=>x.id===id);
@@ -1948,18 +1965,51 @@ async function saveCustomerEdit(phone) {
     } else toast(data.error||'Failed','error');
   } catch(e) { toast('Network error','error'); }
 }
+// Computes ordering frequency for one customer: average days between consecutive
+// orders, and how many days since their most recent order compared to that average —
+// used to flag "overdue for a reorder" right in the profile, without a separate report.
+function computeCustomerFrequency(orders) {
+  const dated = orders.filter(o=>o.created_at).map(o=>new Date(o.created_at)).sort((a,b)=>a-b);
+  if (dated.length < 2) return { avgDays:null, sinceLastDays:null, overdue:false };
+  const gaps = [];
+  for (let i=1;i<dated.length;i++) gaps.push((dated[i]-dated[i-1])/86400000);
+  const avgDays = gaps.reduce((s,g)=>s+g,0)/gaps.length;
+  const sinceLastDays = (Date.now()-dated[dated.length-1])/86400000;
+  return { avgDays, sinceLastDays, overdue: sinceLastDays > avgDays*1.5 };
+}
+// Renders a compact horizontal timeline — one dot per order, colored by status,
+// oldest to newest, with the date on hover.
+function renderOrderTimeline(orders) {
+  const chrono = [...orders].filter(o=>o.created_at).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+  if (!chrono.length) return '<div style="font-size:12px;color:var(--muted)">No dated orders yet</div>';
+  const colors = {pending:'#f59e0b',picked:'#2563eb',inprogress:'#7c3aed',outfordelivery:'#ea580c',delivered:'#12a4da',cancelled:'#dc2626'};
+  return `<div style="display:flex;align-items:center;gap:3px;overflow-x:auto;padding:6px 2px">
+    ${chrono.map((o,i)=>`<div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
+      <div title="${o.id} — ${o.date||'Walk-in'} — ${STATUS_LABELS[o.status]||o.status}" style="width:10px;height:10px;border-radius:50%;background:${colors[o.status]||'#9ca3af'};cursor:default"></div>
+      ${i<chrono.length-1?'<div style="width:16px;height:1px;background:var(--border)"></div>':''}
+    </div>`).join('')}
+  </div>`;
+}
 function openCustomerProfile(phone) {
   const c=allCustomers.find(x=>x.phone===phone);
   const orders=allBookings.filter(b=>b.phone===phone).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const totalSpent=orders.filter(b=>b.payment_status==='paid').reduce((s,b)=>s+(b.amount||0),0);
   const currentOrder = orders.find(b=>!['delivered','cancelled'].includes(b.status));
   const lastOrder = orders.find(b=>b.status==='delivered') || orders[0];
+  const freq = computeCustomerFrequency(orders);
   document.getElementById('profile-title').textContent=c?.name||phone;
   document.getElementById('profile-body').innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;margin-bottom:1rem">
       <div style="text-align:center;padding:.8rem;background:var(--green-light);border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--green)">${orders.length}</div><div style="font-size:11px;color:var(--muted)">Orders</div></div>
       <div style="text-align:center;padding:.8rem;background:#eff6ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--blue)">Rs ${totalSpent.toLocaleString('en-IN')}</div><div style="font-size:11px;color:var(--muted)">Total Spent</div></div>
       <div style="text-align:center;padding:.8rem;background:#f5f3ff;border-radius:8px"><div style="font-size:22px;font-weight:700;color:var(--purple)">${c?.branch||'bavdhan'}</div><div style="font-size:11px;color:var(--muted)">Branch</div></div>
+    </div>
+    <div style="margin-bottom:1rem;padding:.7rem .9rem;background:var(--bg);border-radius:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600">Order History &amp; Frequency</div>
+        ${freq.avgDays?`<div style="font-size:11px;${freq.overdue?'color:var(--red);font-weight:600':'color:var(--muted)'}">${freq.overdue?'⚠️ ':''}Orders every ~${Math.round(freq.avgDays)}d${freq.overdue?` — ${Math.round(freq.sinceLastDays)}d since last`:''}</div>`:'<div style="font-size:11px;color:var(--muted)">Not enough orders yet for a pattern</div>'}
+      </div>
+      ${renderOrderTimeline(orders)}
     </div>
     <div style="margin-bottom:1rem" id="profile-contact-view">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
@@ -2515,6 +2565,116 @@ function renderAnalytics() {
   const dayCounts=Array(7).fill(0);
   allBookings.forEach(b=>{if(b.created_at)dayCounts[new Date(b.created_at).getDay()]++;});
   document.getElementById('a-dayofweek').innerHTML=barChart(days.map((d,i)=>({label:d,val:dayCounts[i],color:i===4?'var(--red)':'var(--green)'})),true);
+  renderRepeatTrend();
+  renderFreqDistribution();
+  renderCohortTable();
+  renderTopCustomers();
+}
+
+// ── CUSTOMER TRENDS ───────────────────────────────────────────────
+// Groups every booking by the calendar month it was placed, and for each month
+// works out what share came from a phone number that had already ordered before
+// that month began — i.e. genuine repeat business, not new customers.
+function renderRepeatTrend() {
+  const byPhoneFirstOrder = {};
+  allBookings.forEach(b=>{
+    if(!b.created_at) return;
+    const t=new Date(b.created_at).getTime();
+    if(!byPhoneFirstOrder[b.phone]||t<byPhoneFirstOrder[b.phone]) byPhoneFirstOrder[b.phone]=t;
+  });
+  const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const months=[]; const now=new Date();
+  for(let i=5;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({key:monthKey(d),label:d.toLocaleDateString('en-IN',{month:'short'})}); }
+  const dataByMonth={};
+  months.forEach(m=>dataByMonth[m.key]={repeat:0,total:0});
+  allBookings.forEach(b=>{
+    if(!b.created_at) return;
+    const d=new Date(b.created_at); const key=monthKey(d);
+    if(!dataByMonth[key]) return;
+    dataByMonth[key].total++;
+    const monthStart=new Date(d.getFullYear(),d.getMonth(),1).getTime();
+    if(byPhoneFirstOrder[b.phone]<monthStart) dataByMonth[key].repeat++;
+  });
+  const el=document.getElementById('a-repeat-trend');
+  if(!el) return;
+  const rows=months.map(m=>{
+    const d=dataByMonth[m.key];
+    const pct=d.total?Math.round(d.repeat/d.total*100):0;
+    return {label:m.label,val:pct,color:'var(--purple)'};
+  });
+  el.innerHTML=barChart(rows,false).replace(/Rs /g,''); // percentages, not currency
+  el.innerHTML+=`<div style="font-size:10px;color:var(--muted);margin-top:6px">% of that month's orders from customers who had ordered before</div>`;
+}
+
+// Buckets customers by their average number of days between orders — shows the
+// natural rhythm of the base at a glance (weekly regulars vs occasional customers).
+function renderFreqDistribution() {
+  const byPhone={};
+  allBookings.forEach(b=>{ if(!b.created_at) return; (byPhone[b.phone]=byPhone[b.phone]||[]).push(new Date(b.created_at)); });
+  const buckets={'<7d':0,'7-14d':0,'14-30d':0,'30d+':0,'One order':0};
+  Object.values(byPhone).forEach(dates=>{
+    if(dates.length<2){ buckets['One order']++; return; }
+    dates.sort((a,b)=>a-b);
+    const gaps=[]; for(let i=1;i<dates.length;i++) gaps.push((dates[i]-dates[i-1])/86400000);
+    const avg=gaps.reduce((s,g)=>s+g,0)/gaps.length;
+    if(avg<7) buckets['<7d']++; else if(avg<14) buckets['7-14d']++; else if(avg<30) buckets['14-30d']++; else buckets['30d+']++;
+  });
+  const el=document.getElementById('a-freq-dist');
+  if(!el) return;
+  const rows=Object.entries(buckets).map(([k,v])=>({label:k,val:v,color:k==='One order'?'#9ca3af':'var(--blue)'}));
+  el.innerHTML=rows.some(r=>r.val>0)?barChart(rows,true):'<div class="empty">Not enough repeat data yet</div>';
+}
+
+// Classic cohort table: rows = the month a customer first ordered, columns = months
+// since then, cells = % of that cohort that placed at least one order in that month.
+function renderCohortTable() {
+  const el=document.getElementById('a-cohort-table');
+  if(!el) return;
+  const byPhoneOrders={};
+  allBookings.forEach(b=>{ if(!b.created_at) return; (byPhoneOrders[b.phone]=byPhoneOrders[b.phone]||[]).push(new Date(b.created_at)); });
+  const phones=Object.keys(byPhoneOrders);
+  if(phones.length<3){ el.innerHTML='<tr><td style="padding:1rem;color:var(--muted)">Not enough order history yet for a cohort view</td></tr>'; return; }
+  const monthKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const cohortOf={};
+  phones.forEach(p=>{ const first=byPhoneOrders[p].sort((a,b)=>a-b)[0]; cohortOf[p]=monthKey(first); });
+  const cohortMonths=[...new Set(Object.values(cohortOf))].sort().slice(-6); // last 6 signup cohorts
+  const maxSpan=6; // months of retention to show
+  let html='<thead><tr><th>Signup Month</th><th>Customers</th>'+Array.from({length:maxSpan},(_,i)=>`<th>M${i}</th>`).join('')+'</tr></thead><tbody>';
+  cohortMonths.forEach(cm=>{
+    const cohortPhones=phones.filter(p=>cohortOf[p]===cm);
+    const [cy,cmo]=cm.split('-').map(Number);
+    let row=`<tr><td style="font-family:monospace;font-size:12px">${cm}</td><td>${cohortPhones.length}</td>`;
+    for(let i=0;i<maxSpan;i++){
+      const targetDate=new Date(cy,cmo-1+i,1);
+      if(targetDate>new Date()){ row+='<td style="color:var(--muted)">—</td>'; continue; }
+      const targetKey=monthKey(targetDate);
+      const active=cohortPhones.filter(p=>byPhoneOrders[p].some(d=>monthKey(d)===targetKey)).length;
+      const pct=cohortPhones.length?Math.round(active/cohortPhones.length*100):0;
+      const shade=pct===0?'#f3f4f6':pct<30?'#fef3c7':pct<70?'#bae6fd':'#7dd3fc';
+      row+=`<td style="background:${shade};text-align:center;font-size:12px">${pct}%</td>`;
+    }
+    row+='</tr>';
+    html+=row;
+  });
+  html+='</tbody>';
+  el.innerHTML=html;
+}
+
+function renderTopCustomers() {
+  const el=document.getElementById('a-top-customers');
+  if(!el) return;
+  const byPhone={};
+  allBookings.forEach(b=>{
+    if(!byPhone[b.phone]) byPhone[b.phone]={count:0,spent:0,name:b.name};
+    byPhone[b.phone].count++;
+    if(b.payment_status==='paid') byPhone[b.phone].spent+=(b.amount||0);
+  });
+  const top=Object.entries(byPhone).filter(([,v])=>v.count>1).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
+  if(!top.length){ el.innerHTML='<div class="empty">No repeat customers yet</div>'; return; }
+  el.innerHTML=top.map(([phone,v])=>`<div style="padding:.6rem 1.2rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+    <div><div style="font-weight:500;font-size:13px">${v.name||'Unknown'}</div><div style="font-size:11px;color:var(--muted);font-family:monospace">${phone}</div></div>
+    <div style="text-align:right"><div style="font-size:13px;font-weight:600">${v.count} orders</div><div style="font-size:11px;color:var(--green)">Rs ${v.spent.toLocaleString('en-IN')}</div></div>
+  </div>`).join('');
 }
 
 // ── RATINGS ───────────────────────────────────────────────────────
@@ -2834,7 +2994,6 @@ function printTag(orderId) {
   <div class="bold large">${b.id}</div>
   <div class="line"></div>
   <div class="field"><b>Name:</b> ${b.name}</div>
-  <div class="field"><b>Ph:</b> ${b.phone}</div>
   <div class="field"><b>Addr:</b> ${(b.address||'Walk-in').slice(0,60)}</div>
   <div class="line"></div>
   <div class="bold">${(b.service_type||'TO BE ASSIGNED').toUpperCase()}</div>
