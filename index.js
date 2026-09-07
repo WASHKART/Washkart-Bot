@@ -970,6 +970,25 @@ function safeNumId(numId) {
   return (!numId || numId === "BANER_NUMBER_ID") ? "1136879376186203" : numId;
 }
 
+// Sends a free-form booking alert, and falls back to the approved "new_booking_alert"
+// template if that fails — which is almost always because the recipient (admin/owner)
+// hasn't messaged the bot in 24h, closing WhatsApp's free-form messaging window.
+// Requires the "new_booking_alert" template to be created and approved in Meta Business
+// Suite first (Utility category, body: "New Booking - {{1}}\n\nOrder: {{2}}\nName: {{3}}\n
+// Phone: {{4}}\nAddress: {{5}}\nDate: {{6}} | Slot: {{7}}"). Until it's approved, this
+// silently falls back to the old free-form-only behavior (template send just fails too).
+async function notifyAdminWithFallback(to, msg, templateParams, nid) {
+  const ok = await sendMessage(to, msg, nid);
+  if (ok) return true;
+  try {
+    await sendTemplateMessage(to, "new_booking_alert", "en", templateParams, null, nid);
+    return true;
+  } catch (e) {
+    console.error(`[notifyAdmin] template fallback also failed for ${to}:`, e?.response?.data || e.message);
+    return false;
+  }
+}
+
 async function notifyAdmin(booking, branch, phoneNumberId) {
   const br = branch || DEFAULT_BRANCH;
   const src = booking.source ? ` [${booking.source}]` : "";
@@ -977,13 +996,14 @@ async function notifyAdmin(booking, branch, phoneNumberId) {
   const notesLine = booking.notes ? `\nNotes: ${booking.notes}` : "";
   const msg = `New Booking${src} - ${br.name}\n\nOrder: ${booking.orderId}\nName: ${booking.name}\nPhone: +${booking.phone}\nAddress: ${booking.address || "Walk-in"}${societyLine}\nDate: ${booking.date || "-"}\nSlot: ${booking.slot || "-"}${notesLine}`;
   const nid = safeNumId(phoneNumberId);
-  const sentToAdmin = await sendMessage(br.admin, msg, nid);
+  const templateParams = [br.name, booking.orderId, booking.name, `+${booking.phone}`, booking.address || "Walk-in", booking.date || "-", booking.slot || "-"];
+  const sentToAdmin = await notifyAdminWithFallback(br.admin, msg, templateParams, nid);
   let sentToOwner = true;
-  if (br.admin !== OWNER_NUMBER) sentToOwner = await sendMessage(OWNER_NUMBER, msg, nid);
+  if (br.admin !== OWNER_NUMBER) sentToOwner = await notifyAdminWithFallback(OWNER_NUMBER, msg, templateParams, nid);
   if (!sentToAdmin && !sentToOwner) {
-    console.error(`[notifyAdmin] BOTH admin and owner notifications FAILED for order ${booking.orderId}. Likely cause: 24h WhatsApp window closed for both numbers. Nobody was notified of this booking.`);
+    console.error(`[notifyAdmin] BOTH admin and owner notifications FAILED for order ${booking.orderId} (free-form and template both failed — template may not be approved yet).`);
   } else if (!sentToAdmin) {
-    console.error(`[notifyAdmin] Branch admin notification FAILED for order ${booking.orderId} (owner was notified as backup). Admin may be outside the 24h WhatsApp window.`);
+    console.error(`[notifyAdmin] Branch admin notification FAILED for order ${booking.orderId} (owner was notified as backup).`);
   }
   return sentToAdmin || sentToOwner;
 }
@@ -3177,23 +3197,27 @@ app.post("/pickups/walkin", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Staff requests a manual reprint (backup in case auto-print is slow/missed). Sets a flag
-// the local print agent checks on its normal poll cycle — the cloud server can't talk to
-// the shop laptop's printer directly, so this is the bridge between the two.
+// Staff requests a manual reprint (backup in case auto-print is slow/missed, or extra
+// tags needed for multiple bags/pieces). Sets a count the local print agent checks on
+// its normal poll cycle — the cloud server can't talk to the shop laptop's printer
+// directly, so this is the bridge between the two. Count replaces the old boolean flag
+// so staff can request exactly as many tags as they need (e.g. 2 of 5 piece tags lost),
+// not just "reprint once".
 app.post("/pickups/:orderId/reprint", async (req, res) => {
   if (!checkStaffAuth(req, res)) return;
   try {
-    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested: true });
-    res.json({ success: true });
+    const count = Math.max(1, parseInt(req.body?.count) || 1);
+    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested_count: count });
+    res.json({ success: true, count });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Called by the local print agent after it successfully reprints, to clear the flag.
+// Called by the local print agent after it successfully reprints, to clear the count.
 // No staff auth — this is the agent itself, using the same unauthenticated pattern it
 // already uses for GET /bookings.
 app.post("/bookings/:orderId/clear-reprint", async (req, res) => {
   try {
-    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested: false });
+    await dbUpdate("bookings", `order_id=eq.${req.params.orderId}`, { reprint_requested_count: 0 });
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
